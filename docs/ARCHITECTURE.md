@@ -2,8 +2,8 @@
 
 ## Technical Architecture
 
-**Version:** 0.1
-**Status:** Proposed architecture
+**Version:** 0.2
+**Status:** Accepted architecture
 **Based on:** PRD v0.2
 **Architecture style:** Modular monolith
 **Primary application:** Web
@@ -1034,24 +1034,33 @@ Structured content will be stored as versioned JSONB.
 
 Example conceptually:
 
-```text
+```json
 {
   "schemaVersion": 1,
   "blocks": [...]
 }
 ```
 
-Why JSONB instead of relational `content_blocks` and `signals` tables?
+The canonical content document has three semantic layers:
 
-Because editor documents:
+```text
+Structured Content
+├── Script
+├── Performance Direction
+└── Edit Direction
+```
 
-* change frequently,
-* have nested ordering,
-* contain heterogeneous block types,
-* are naturally manipulated as a document,
-* would otherwise require excessive relational churn.
+These are not three independent documents.
 
-This is one of the few places where JSONB is the appropriate canonical representation.
+The Script contains what the creator says or communicates.
+
+Performance Direction describes how the creator should perform the relevant part of the Script while recording.
+
+Edit Direction describes how the resulting footage should be edited during post-production.
+
+Performance Direction and Edit Direction must remain associated with the relevant Script content.
+
+The exact internal block/direction schema is intentionally deferred until the structured-editor phase.
 
 ---
 
@@ -1077,63 +1086,166 @@ Do not silently change the interpretation of old content documents.
 
 ---
 
-# 37. Production Signals
+# 37. Production Direction Model
 
-Production signals live inside the structured document representation.
+**Production Direction** is the umbrella term for two distinct categories:
 
-They are structured objects.
+```text
+Production Direction
+├── Performance Direction
+└── Edit Direction
+```
+
+## Performance Direction
+
+Performance Direction describes how the creator should physically or vocally perform a part of the Script.
+
+Examples may include:
+
+* pause
+* long pause
+* walk
+* step toward camera
+* sit
+* stand
+* gesture
+* point
+* direct eye contact
+* look away
+* facial expression
+* voice emphasis
+* whisper
+* energy change
+* object interaction
+* position change
+
+Example:
+
+```text
+SCRIPT
+"Most people are wearing their blazer wrong."
+
+PERFORMANCE DIRECTION
+- look directly at camera
+- step toward camera
+- pause after "wrong"
+```
+
+## Edit Direction
+
+Edit Direction describes what should happen during post-production.
+
+Examples may include:
+
+* zoom in
+* zoom out
+* cut
+* image overlay
+* video overlay
+* B-roll
+* screenshot
+* text overlay
+* sound effect
+* music cue
+* transition
+* picture-in-picture
+* speed change
+* frame hold
+* emphasis treatment
+
+Example:
+
+```text
+SCRIPT
+"Most people are wearing their blazer wrong."
+
+EDIT DIRECTION
+- quick zoom on "wrong"
+- impact sound
+- show reference image after sentence
+```
+
+Both categories are structured data.
+
+They must not exist only as markers embedded inside Script text.
+
+---
+
+# 38. Production Direction Taxonomy
+
+The distinction between Performance Direction and Edit Direction is accepted.
+
+However, the exact V1 direction taxonomy is intentionally deferred until the structured-editor phase.
+
+Before Phase 5, we will define a deliberately small canonical set of:
+
+### Performance Direction types
+
+Potential categories include:
+
+- timing / pause
+- movement
+- position
+- gaze
+- gesture
+- expression
+- voice
+- object interaction
+
+### Edit Direction types
+
+Potential categories include:
+
+- zoom
+- cut
+- image overlay
+- video overlay
+- B-roll
+- text
+- sound effect
+- transition
+- emphasis
+
+The exact allowed values, parameters, and constraints must be defined in the Phase 5 specification.
+
+Codex must not independently invent dozens of production-direction types.
+
+---
+
+# 39. Direction Anchoring
+
+Performance Directions and Edit Directions must remain connected to the Script segment they describe.
 
 Conceptually:
 
 ```text
-Block
-├── text
-└── signals
-    ├── pause
-    ├── zoom
-    └── overlay
+Block #1
+
+Script
+└── "Most people are wearing their blazer wrong."
+
+Performance Directions
+├── direct eye contact
+├── step forward
+└── pause after "wrong"
+
+Edit Directions
+├── zoom on "wrong"
+├── impact sound
+└── image overlay after sentence
 ```
 
-They must not exist only as special strings such as:
+The exact anchoring representation is intentionally deferred until Phase 5.
 
-```text
-[ZOOM HERE]
-```
+Potential anchor concepts may include:
 
-The editor may render them visually inline, but the underlying representation remains structured.
+* entire Script block
+* text span
+* word or phrase cue
+* before/after block
+* relative timing
 
----
-
-# 38. Production Signal Taxonomy
-
-The exact V1 signal taxonomy remains intentionally unresolved.
-
-Before implementing the editor phase, we will define:
-
-* canonical signal types,
-* allowed parameters,
-* anchor behavior,
-* asset relationships.
-
-This requires a phase specification or ADR.
-
-Codex must not invent the taxonomy.
-
----
-
-# 39. Content Types
-
-The PRD requires two content types, but their actual meanings remain unresolved.
-
-Architecture therefore supports:
-
-```text
-content_type
-```
-
-as a domain concept but does **not** define its final allowed values yet.
-
-The content generation/editor phase must not begin until we resolve this product requirement.
+Codex must not invent the final anchoring schema before the relevant phase specification.
 
 ---
 
@@ -1538,24 +1650,40 @@ The UI should derive available functionality from capabilities rather than assum
 
 ---
 
-# 55. Initial Social Platform Direction
+# 55. Social Provider Implementation Order Is Deferred
 
-Implementation order should be:
+Better Content V1 requires real social analytics synchronization.
 
-1. Instagram
-2. TikTok
-3. YouTube
+However, the architecture does not permanently define which social provider must be implemented first.
 
-because Instagram aligns most directly with the target short-form creator workflow.
+We intentionally do not lock:
 
-However, each provider implementation requires its own provider-specific ADR/specification immediately before implementation because:
+```text
+Instagram → TikTok → YouTube
+```
 
-* APIs change,
-* scopes change,
-* account eligibility changes,
-* application review requirements change.
+or any other fixed provider order.
 
-No social provider integration should be coded from assumptions preserved months earlier in this architecture document.
+At the beginning of the Social Connections phase, the Product Architect / Technical Lead must research the current official provider APIs and compare:
+
+* API availability
+* required permissions/scopes
+* application-review requirements
+* development/test access
+* supported account types
+* available analytics
+* rate limits
+* implementation complexity
+* reliability
+* strategic relevance to Better Content users
+
+Only after that review will the first provider and implementation order be approved.
+
+Codex must not choose the first social platform independently.
+
+V1 must support at least one real social platform end-to-end for automatic analytics synchronization.
+
+Additional providers depend on current feasibility and approved phase scope.
 
 ---
 
@@ -2815,13 +2943,17 @@ These must be resolved before their relevant implementation phases.
 
 ## Product-level
 
-### Two content types
+### Exact V1 Performance Direction taxonomy
 
-Still undefined.
+The semantic category is defined, but the exact supported actions and parameters are deferred until Phase 5.
 
-### V1 production signal taxonomy
+### Exact V1 Edit Direction taxonomy
 
-Still undefined.
+The semantic category is defined, but the exact supported actions and parameters are deferred until Phase 5.
+
+### Direction anchoring schema
+
+We must define exactly how Performance Directions and Edit Directions attach to Script blocks, spans, phrases, or timing cues.
 
 ---
 
@@ -2829,27 +2961,31 @@ Still undefined.
 
 ### Initial AI provider/model
 
-Requires AI ADR.
+Deferred until the AI implementation phase.
 
 ### Asset storage provider
 
-Requires asset-phase decision.
+Deferred until the asset phase.
+
+### First social platform implementation
+
+Explicitly deferred until the Social Connections phase.
+
+The Product Architect / Technical Lead will research current official platform APIs and recommend the provider order at that time.
+
+Codex must not decide this independently.
+
+### Exact social API scopes
+
+Must be verified immediately before implementing each provider.
+
+### Content editor library
+
+Do not select TipTap, Lexical, or another editor framework until the structured-editor phase.
 
 ### Hosting provider
 
 Not required for initial architecture.
-
-### Exact social API scopes
-
-Must be verified immediately before each provider integration.
-
-### Instagram analytics implementation details
-
-Must be based on current Meta API access and review requirements when that phase begins.
-
-### Content editor library
-
-Do not select TipTap/Lexical/etc. until the structured editor phase.
 
 ---
 
@@ -2917,27 +3053,32 @@ Implement:
 
 ## Phase 4 — Content Generation
 
-Before implementation we must resolve the two content types.
-
-Then implement:
-
 * contents
 * content drafts
 * content versions
-* generation from idea
+* generation from accepted/saved idea
+* Script generation
 * version lineage
 * draft editing basics
 
+Performance Direction and Edit Direction generation may be introduced only to the extent explicitly defined in the approved phase specification.
+
 ---
 
-## Phase 5 — Structured Editor + Production Signals
+## Phase 5 — Structured Editor + Production Direction
 
-Before implementation we must resolve the V1 signal taxonomy.
+Before implementation, explicitly approve:
+
+- canonical V1 Performance Direction taxonomy
+- canonical V1 Edit Direction taxonomy
+- direction anchoring model
 
 Then implement:
 
-* structured document editor
-* production signals
+- structured editor
+- Script layer
+- Performance Direction layer
+- Edit Direction layer
 * optimistic concurrency
 * accepted snapshot
 * version history

@@ -58,6 +58,29 @@ Examples:
 
 A future normalized analytics layer may be added, but raw provider semantics must remain available.
 
+## Provider Implementation Order
+
+The first supported social provider is intentionally **not selected by this ADR**.
+
+The implementation order must be decided immediately before the Social Connections phase based on current official provider conditions.
+
+The Product Architect / Technical Lead will compare:
+
+- API availability
+- OAuth/scopes
+- app-review requirements
+- test access
+- supported account types
+- analytics availability
+- rate limits
+- implementation complexity
+- reliability
+- strategic relevance
+
+Codex must not independently choose the first provider.
+
+V1 must support at least one real provider end-to-end for automatic analytics synchronization.
+
 ## Consequences
 
 ### Positive

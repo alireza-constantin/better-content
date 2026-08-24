@@ -1,4 +1,4 @@
-# ADR-004: Store Structured Editor Documents as Versioned JSONB
+# ADR-004: Store Structured Content as Versioned JSONB With Script, Performance Direction, and Edit Direction
 
 - **Status:** Accepted
 - **Date:** 2026-08-24
@@ -6,9 +6,41 @@
 
 ## Context
 
-Better Content is not a plain-text writing tool. Content may contain ordered blocks, text, production signals, timing information, asset references, and future heterogeneous editor elements.
+Better Content is not a plain-text writing tool.
 
-A fully relational representation of every block and signal would create large amounts of schema churn and ordering complexity. A single opaque text field would make structured production instructions impossible to reason about safely.
+A Reel/content document must represent three related semantic layers:
+
+1. **Script** — what the creator says or communicates.
+2. **Performance Direction** — how the creator performs the Script while recording.
+3. **Edit Direction** — how the recorded footage should be edited in post-production.
+
+Examples of Performance Direction include:
+
+- pause
+- walking or changing position
+- sitting or standing
+- gestures
+- gaze
+- expression
+- vocal emphasis
+- object interaction
+
+Examples of Edit Direction include:
+
+- zoom
+- cut
+- image/video overlay
+- B-roll
+- screenshot
+- text
+- sound effect
+- transition
+- picture-in-picture
+- timing/emphasis treatment
+
+A fully relational representation of every block and every direction would create substantial ordering and schema complexity.
+
+A single opaque text field would prevent Better Content from understanding production intent structurally.
 
 ## Decision
 
@@ -19,15 +51,47 @@ Conceptually:
 ```json
 {
   "schemaVersion": 1,
-  "blocks": []
+  "blocks": [
+    {
+      "id": "block-id",
+      "script": {
+        "text": "Most people are wearing their blazer wrong."
+      },
+      "performanceDirections": [],
+      "editDirections": []
+    }
+  ]
 }
 ```
 
+This example is conceptual and does not freeze the final editor schema.
+
+The semantic model is:
+
+```text
+Structured Content
+├── Script
+├── Performance Direction
+└── Edit Direction
+```
+
+Performance Direction and Edit Direction are not separate content types.
+
+They are structured direction layers associated with the same Script.
+
+The umbrella term **Production Direction** refers to:
+
+```text
+Production Direction
+├── Performance Direction
+└── Edit Direction
+```
+
+Performance and Edit Directions must remain associated with the relevant Script content.
+
+The exact anchoring representation and exact V1 direction taxonomy are deferred until Phase 5.
+
 Both mutable drafts and immutable content versions store the structured document.
-
-Production signals are structured objects inside the document model.
-
-The exact signal taxonomy and content-type-specific block schema will be defined before the editor implementation phase.
 
 ## Schema evolution
 
@@ -46,7 +110,7 @@ Old documents must never silently change meaning.
 - Natural fit for ordered, nested editor data.
 - Easier editor evolution.
 - Fewer relational writes for document editing.
-- Production signals remain structured.
+- Production Directions remain structured.
 - Historical versions remain self-contained.
 
 ### Negative
@@ -61,10 +125,14 @@ All persisted documents must pass an application schema validator before being a
 
 ## Rejected alternatives
 
-### Plain text with markers such as `[ZOOM]`
+### Plain text with markers such as `[ZOOM]` or `[WALK]`
 
 Rejected because markers are not a reliable canonical data representation.
 
-### Fully relational blocks/signals from V1
+### Separate Performance Content and Edit Content entities
+
+Rejected because Performance Direction and Edit Direction describe the same underlying Script rather than separate content.
+
+### Fully relational editor blocks/directions in V1
 
 Rejected because it introduces unnecessary relational complexity for a document-shaped domain.

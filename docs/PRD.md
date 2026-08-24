@@ -470,23 +470,54 @@ status.
 
 ---
 
-# 19. Content Types
+# 19. Script and Production Direction
 
-The product requirement includes support for **two different content types/modes**.
+Better Content content has one core Script with two categories of structured Production Direction.
 
-The exact definition has not yet been finalized.
+```text
+Content
+├── Script
+├── Performance Direction
+└── Edit Direction
+```
 
-This is an intentional open requirement.
+## Script
 
-Before implementing the Content Generation phase, we must explicitly define:
+Represents what the creator says or communicates.
 
-* what the two types are,
-* what structure each uses,
-* how users choose between them,
-* whether they support different production signals,
-* whether they use different AI generation behavior.
+## Performance Direction
 
-Codex must not invent this product definition independently.
+Represents how the creator should physically or vocally perform the relevant Script content while recording.
+
+Examples include:
+
+* pause
+* movement
+* posture/position
+* gesture
+* gaze
+* expression
+* vocal delivery
+* object interaction
+
+## Edit Direction
+
+Represents how the recorded footage should be edited.
+
+Examples include:
+
+* zoom
+* cut
+* image/video overlay
+* B-roll
+* text
+* sound
+* transition
+* visual emphasis
+
+Performance Direction and Edit Direction are not separate content types.
+
+They are structured production instructions associated with the same Script.
 
 ---
 
@@ -512,14 +543,17 @@ Structured content allows production instructions to reference specific parts of
 
 ---
 
-# 21. Production Signals
+# 21. Production Directions
 
-The content editor must support production/editing instructions.
+The content editor must support Performance Direction and Edit Direction.
 
-Examples include:
+Performance Direction includes instructions for how the creator performs the Script while recording, such as:
 
 * Pause
 * Long pause
+
+Edit Direction includes post-production instructions, such as:
+
 * Zoom in
 * Zoom out
 * Image overlay
@@ -531,15 +565,15 @@ Examples include:
 * Sound effect
 * Transition
 
-The exact canonical V1 signal list will be intentionally limited.
+The exact canonical V1 direction list will be intentionally limited.
 
 We should not attempt to recreate an entire professional video editing application in V1.
 
 ---
 
-# 22. Production Signals Are Structured Data
+# 22. Production Directions Are Structured Data
 
-Production instructions must not exist only as strings embedded into the script.
+Production Directions must not exist only as strings embedded into the Script.
 
 Avoid treating this as the canonical representation:
 
@@ -552,10 +586,10 @@ The system should instead represent:
 ```text
 Content Block
       +
-Production Signal
+Production Direction
 ```
 
-The UI may visually display signals inline.
+The UI may visually display directions inline.
 
 The underlying data must remain structured.
 
@@ -1500,19 +1534,23 @@ V1 avoids unnecessary distributed architecture.
 
 The following items require explicit decisions before their implementation phases.
 
-## A. Two Content Types
+## A. Production Direction Taxonomy
 
-We need to define exactly what the two requested content types mean.
+The distinction between Performance Direction and Edit Direction is resolved.
 
-## B. Production Signal Taxonomy
+Before implementing the structured editor, we must define the exact V1 direction types, parameters, and anchoring behavior.
 
-We need the canonical V1 list and behavior.
+## B. Direction Anchoring
 
-## C. Initial Social Platforms
+We need the canonical V1 anchoring behavior for Performance Direction and Edit Direction.
 
-We need to determine which platform integrations are realistic for V1 analytics.
+## C. Initial Social Platform Implementation
 
-We should not commit to supporting every network simultaneously.
+Automatic social analytics remains a V1 requirement.
+
+The first provider and implementation order are intentionally deferred until the Social Connections phase.
+
+At that time, current official provider APIs, permissions, app-review requirements, available metrics, test access, rate limits, and implementation complexity must be reviewed before choosing the first platform.
 
 ## D. Analytics Refresh Strategy
 
