@@ -3,7 +3,7 @@
 ## Product Requirements Document
 
 **Version:** 0.2
-**Status:** Draft for approval
+**Status:** Approved for V1
 **Product stage:** V1 definition
 
 ---
@@ -167,7 +167,7 @@ Generate Content
       ↓
 Edit Content
       ↓
-Add Production Signals
+Add Performance / Edit Directions
       ↓
 Draft
       ↓
@@ -198,7 +198,7 @@ V1 consists of the following main product areas:
 4. Idea management
 5. AI content generation
 6. Structured content editing
-7. Production signals
+7. Production Direction
 8. Content lifecycle
 9. Publishing queue
 10. External publication registration
@@ -458,7 +458,7 @@ AI content generation should consider at minimum:
 * source idea
 * Content DNA
 * content language
-* requested content type
+* requested content format
 * user instructions
 * relevant generation configuration
 
@@ -597,7 +597,7 @@ The underlying data must remain structured.
 
 # 23. References and Assets
 
-Production signals may reference assets.
+Production Directions, especially Edit Directions, may reference assets.
 
 Examples:
 
@@ -607,7 +607,7 @@ Examples:
 * B-roll reference
 * visual example
 
-V1 needs the architectural ability to associate assets/references with content signals.
+V1 needs the architectural ability to associate assets/references with relevant Production Directions.
 
 A complete digital asset management platform is outside V1.
 
@@ -620,8 +620,8 @@ Users must be able to:
 * view generated content,
 * edit AI-generated text,
 * add/remove structured sections where supported,
-* add production signals,
-* edit production signals,
+* add Performance Directions and Edit Directions,
+* edit Performance Directions and Edit Directions,
 * save their work.
 
 Human edits should remain distinguishable from the originally generated output where practical.
@@ -1075,7 +1075,7 @@ Future analysis may answer questions such as:
 * Which AI hooks does the creator usually rewrite?
 * Which words do they remove?
 * Which sections do they shorten?
-* Which production signals do they change?
+* Which Performance Directions or Edit Directions do they change?
 * Which AI-generated structures survive to publication?
 
 V1 architecture must avoid destroying this information.
@@ -1159,7 +1159,7 @@ V1 is successful when a creator can complete this complete workflow without deve
 5. Choose an idea.
 6. Generate content from the idea.
 7. Edit the generated content.
-8. Add supported production signals.
+8. Add supported Performance Directions and Edit Directions.
 9. Save the content as Draft.
 10. Accept a specific content version.
 11. See the item enter the publishing queue.
@@ -1211,7 +1211,7 @@ Better Content is not attempting to replace:
 * Premiere Pro
 * DaVinci Resolve
 
-Production signals describe editing intent.
+Production Directions describe performance and editing intent; they do not perform full video editing.
 
 ## Complex Team Collaboration
 
@@ -1484,9 +1484,14 @@ Historical generations retain their originating DNA version.
 
 The lineage must never be lost.
 
-## Decision 7 — Production signals are structured
+## Decision 7 — Production Directions are structured
 
-They are not merely annotations embedded in plain text.
+Better Content distinguishes:
+
+* Performance Direction
+* Edit Direction
+
+Both are structured data associated with the Script rather than merely annotations embedded in plain text.
 
 ## Decision 8 — Content is versioned
 
@@ -1538,11 +1543,21 @@ The following items require explicit decisions before their implementation phase
 
 The distinction between Performance Direction and Edit Direction is resolved.
 
-Before implementing the structured editor, we must define the exact V1 direction types, parameters, and anchoring behavior.
+Before implementing the structured editor, we must define the exact V1 Performance Direction and Edit Direction types, parameters, and constraints.
 
 ## B. Direction Anchoring
 
-We need the canonical V1 anchoring behavior for Performance Direction and Edit Direction.
+We need to define how Performance Directions and Edit Directions attach to relevant Script content.
+
+Potential anchors may include:
+
+* an entire Script block
+* a text span
+* a word or phrase cue
+* before/after a block
+* relative timing
+
+The exact model will be approved before the structured-editor phase.
 
 ## C. Initial Social Platform Implementation
 
@@ -1558,18 +1573,20 @@ We need rules for how often publications are synchronized based on age and platf
 
 ## E. AI Provider Strategy
 
-We need to define:
+Before implementing AI generation, we need to select and define:
 
-* provider abstraction
-* model selection
-* structured output
-* retries
-* errors
+* initial AI provider
+* default model(s)
+* provider-specific structured-output implementation
+* retry/failure policy
 * token/cost tracking
+* latency/cost expectations
+
+The provider-neutral application boundary itself is already established by architecture.
 
 ## F. Content Editor Data Structure
 
-We must define how blocks, text, signals, timing, and references are represented.
+We must finalize how Script blocks, Performance Directions, Edit Directions, timing, references, and direction anchors are represented within the structured document schema.
 
 ## G. Publishing Queue UX
 
