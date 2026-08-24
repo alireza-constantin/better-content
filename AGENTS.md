@@ -1133,3 +1133,41 @@ When uncertain whether something belongs in the current phase:
 > **Do less, preserve the architecture, and raise the question.**
 
 Do not expand scope merely because an additional feature appears easy to implement.
+
+---
+
+## Agent skills
+
+### Issue tracker
+
+Issues are tracked as local Markdown files under `.scratch/<feature>/`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The default five-role triage label vocabulary is used. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+This is a single-context repository. See `docs/agents/domain.md`.
+
+## Phase Implementation Workflow
+
+Multi-session implementation phases should be decomposed into implementation tickets before coding begins.
+
+For local development, implementation tickets may be stored using the configured local ticket tracker under `.scratch/<phase>/issues/`.
+
+The approved phase specification remains the source of truth. Tickets are execution artifacts and may not redefine product requirements, architecture, Accepted ADRs, or phase scope.
+
+Ticket decomposition must be reviewed before implementation begins.
+
+After approval:
+
+- implement one ticket at a time,
+- respect declared blocking relationships,
+- verify each ticket against its acceptance criteria,
+- run the required tests,
+- perform code review,
+- commit completed ticket work when explicitly authorized,
+- avoid implementing later tickets opportunistically.
+
+After all tickets are complete, perform a phase-wide verification against the original phase specification before the phase is considered complete.
