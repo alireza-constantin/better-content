@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { NextIntlClientProvider } from "next-intl";
-import { getTranslations, setRequestLocale } from "next-intl/server";
+import { getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";
 
 import "../globals.css";
@@ -40,8 +40,6 @@ export default async function LocaleLayout({ children, params }: LocaleLayoutPro
   if (!isAppLocale(locale)) {
     notFound();
   }
-
-  setRequestLocale(locale);
 
   return (
     <html dir={getTextDirection(locale)} lang={locale}>

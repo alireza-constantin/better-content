@@ -4,7 +4,7 @@
 
 **Blocked by:** 01: Bootstrap the root Next.js application and developer baseline.
 
-**Status:** claimed
+**Status:** resolved
 
 ## Phase references
 
@@ -17,12 +17,12 @@ Phase 1 §§25–29, 48–50.
 
 ## Acceptance criteria
 
-- [ ] Locale-prefixed routing supports `en` and `fa`, with English as the default locale.
-- [ ] Translation messages exist for both locales and all visible UI delivered by this ticket is localized.
-- [ ] English renders with `lang="en"` and LTR direction; Persian renders with `lang="fa"` and RTL direction.
-- [ ] A minimal locale switcher changes locales without losing the current logical route.
-- [ ] Base layout uses direction-aware styling and avoids physical left/right assumptions where logical equivalents apply.
-- [ ] The base UI is responsive and keyboard-accessible.
+- [x] Locale-prefixed routing supports `en` and `fa`, with English as the default locale.
+- [x] Translation messages exist for both locales and all visible UI delivered by this ticket is localized.
+- [x] English renders with `lang="en"` and LTR direction; Persian renders with `lang="fa"` and RTL direction.
+- [x] A minimal locale switcher changes locales without losing the current logical route.
+- [x] Base layout uses direction-aware styling and avoids physical left/right assumptions where logical equivalents apply.
+- [x] The base UI is responsive and keyboard-accessible.
 
 ## Verification
 

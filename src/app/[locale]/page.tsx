@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { getTranslations, setRequestLocale } from "next-intl/server";
+import { getTranslations } from "next-intl/server";
 
 import { LocaleSwitcher } from "@/components/shell/locale-switcher";
 import { isAppLocale } from "@/i18n/routing";
@@ -14,8 +14,6 @@ export default async function LocaleHomePage({ params }: LocaleHomePageProps) {
   if (!isAppLocale(locale)) {
     notFound();
   }
-
-  setRequestLocale(locale);
 
   const t = await getTranslations({ locale, namespace: "HomePage" });
 

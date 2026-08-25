@@ -1190,3 +1190,39 @@ Tickets are execution artifacts and do not override:
 Ticket status, blocker relationships, and implementation notes should be committed when they materially change.
 
 Do not delete or regenerate existing .scratch ticket directories unless explicitly instructed. Preserve ticket history and statuses.
+
+
+## Unexpected Errors, Warnings, and Regressions
+
+Do not continue blindly when implementation reveals an unexpected error,
+warning, regression, deprecation, security concern, or documentation conflict.
+
+First determine whether the issue:
+
+- was introduced by the current or most recent ticket,
+- existed before the current work,
+- blocks the current ticket's acceptance criteria,
+- affects security or data integrity,
+- conflicts with an Accepted architectural decision.
+
+If the current ticket introduced the issue and it is within that ticket's
+scope, fix it before starting the next ticket and rerun the relevant
+acceptance criteria.
+
+Build failures, type errors, failing required tests, runtime failures,
+security defects, data-integrity risks, and unresolved architecture conflicts
+are blocking.
+
+New framework/library deprecations should normally be corrected when a
+supported replacement exists and the correction remains within current scope.
+Do not suppress warnings merely to make validation appear clean.
+
+Pre-existing unrelated issues should be preserved and reported rather than
+opportunistically refactored unless they block the current task.
+
+If fixing an issue requires changing product scope, architecture, an Accepted
+ADR, or phase boundaries, stop that portion of implementation and request an
+architectural decision.
+
+After a corrective change, rerun the affected ticket's verification before
+continuing.
