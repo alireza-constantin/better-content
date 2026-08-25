@@ -109,7 +109,6 @@ V1 uses:
 * Drizzle ORM
 * shadcn/ui
 * Better Auth
-* Bun
 
 Additional supporting libraries may be introduced where they solve a defined problem.
 
