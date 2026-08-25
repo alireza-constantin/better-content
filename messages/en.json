@@ -8,11 +8,38 @@
     "title": "Start with the interface language that feels natural to you.",
     "description": "Better Content is being prepared as a focused workspace for creators.",
     "interfaceLanguage": "Interface language.",
-    "languageNote": "It changes the application UI, not the language of the content you create."
+    "languageNote": "It changes the application UI, not the language of the content you create.",
+    "signIn": "Sign in",
+    "signUp": "Create account"
   },
   "LocaleSwitcher": {
     "label": "Choose interface language",
     "english": "English",
     "persian": "فارسی"
+  },
+  "Auth": {
+    "eyebrow": "Your creator workspace",
+    "signUpTitle": "Set up your workspace.",
+    "signInTitle": "Welcome back.",
+    "signUpDescription": "Create a secure account to begin using Better Content.",
+    "signInDescription": "Sign in to continue to your creator workspace.",
+    "nameLabel": "Name",
+    "emailLabel": "Email address",
+    "passwordLabel": "Password",
+    "passwordHint": "Use at least 8 characters.",
+    "invalidName": "Enter your name.",
+    "invalidEmail": "Enter a valid email address.",
+    "password": "Use a password between 8 and 128 characters.",
+    "accountExists": "An account already exists for this email address.",
+    "invalidCredentials": "The email address or password is incorrect.",
+    "generic": "We could not complete that request. Please try again.",
+    "submitting": "Please wait…",
+    "signUpAction": "Create account",
+    "signInAction": "Sign in",
+    "hasAccount": "Already have an account?",
+    "needsAccount": "New to Better Content?",
+    "signedInAs": "Signed in as {name}",
+    "signOut": "Sign out",
+    "signingOut": "Signing out…"
   }
 }

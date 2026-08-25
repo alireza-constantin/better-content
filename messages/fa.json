@@ -8,11 +8,38 @@
     "title": "با زبانی شروع کنید که کار با آن برایتان طبیعی است.",
     "description": "Better Content در حال آماده‌سازی یک فضای کاری متمرکز برای سازندگان محتوا است.",
     "interfaceLanguage": "زبان رابط کاربری.",
-    "languageNote": "این انتخاب فقط رابط برنامه را تغییر می‌دهد، نه زبان محتوایی که می‌سازید."
+    "languageNote": "این انتخاب فقط رابط برنامه را تغییر می‌دهد، نه زبان محتوایی که می‌سازید.",
+    "signIn": "ورود",
+    "signUp": "ساخت حساب"
   },
   "LocaleSwitcher": {
     "label": "انتخاب زبان رابط کاربری",
     "english": "English",
     "persian": "فارسی"
+  },
+  "Auth": {
+    "eyebrow": "فضای کاری شما برای تولید محتوا",
+    "signUpTitle": "فضای کاری‌تان را بسازید.",
+    "signInTitle": "خوش برگشتید.",
+    "signUpDescription": "برای شروع استفاده از Better Content یک حساب امن بسازید.",
+    "signInDescription": "برای ادامه کار در فضای تولید محتوای خود وارد شوید.",
+    "nameLabel": "نام",
+    "emailLabel": "نشانی ایمیل",
+    "passwordLabel": "رمز عبور",
+    "passwordHint": "حداقل ۸ نویسه وارد کنید.",
+    "invalidName": "نام خود را وارد کنید.",
+    "invalidEmail": "یک نشانی ایمیل معتبر وارد کنید.",
+    "password": "رمز عبور باید بین ۸ تا ۱۲۸ نویسه باشد.",
+    "accountExists": "برای این نشانی ایمیل حسابی وجود دارد.",
+    "invalidCredentials": "نشانی ایمیل یا رمز عبور درست نیست.",
+    "generic": "انجام این درخواست ممکن نشد. دوباره تلاش کنید.",
+    "submitting": "لطفاً صبر کنید…",
+    "signUpAction": "ساخت حساب",
+    "signInAction": "ورود",
+    "hasAccount": "حساب دارید؟",
+    "needsAccount": "تازه به Better Content آمده‌اید؟",
+    "signedInAs": "واردشده با {name}",
+    "signOut": "خروج",
+    "signingOut": "در حال خروج…"
   }
 }

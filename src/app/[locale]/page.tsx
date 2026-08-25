@@ -1,8 +1,11 @@
 import { notFound } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 
+import { SignOutButton } from "@/components/auth/sign-out-button";
 import { LocaleSwitcher } from "@/components/shell/locale-switcher";
+import { Link } from "@/i18n/navigation";
 import { isAppLocale } from "@/i18n/routing";
+import { getServerSession } from "@/lib/auth/server";
 
 type LocaleHomePageProps = {
   params: Promise<{ locale: string }>;
@@ -15,7 +18,10 @@ export default async function LocaleHomePage({ params }: LocaleHomePageProps) {
     notFound();
   }
 
-  const t = await getTranslations({ locale, namespace: "HomePage" });
+  const [t, session] = await Promise.all([
+    getTranslations({ locale, namespace: "HomePage" }),
+    getServerSession(),
+  ]);
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-5 py-6 sm:px-8 sm:py-8">
@@ -23,7 +29,21 @@ export default async function LocaleHomePage({ params }: LocaleHomePageProps) {
         <span className="text-sm font-semibold tracking-[0.14em] text-foreground uppercase">
           Better Content
         </span>
-        <LocaleSwitcher />
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          <LocaleSwitcher />
+          {session ? (
+            <SignOutButton userName={session.user.name} />
+          ) : (
+            <div className="flex items-center gap-3 text-sm font-medium">
+              <Link className="text-muted-foreground hover:text-foreground" href="/sign-in">
+                {t("signIn")}
+              </Link>
+              <Link className="rounded-lg bg-primary px-3 py-2 text-primary-foreground hover:bg-primary/80" href="/sign-up">
+                {t("signUp")}
+              </Link>
+            </div>
+          )}
+        </div>
       </header>
 
       <section className="flex flex-1 items-center py-16 sm:py-24">

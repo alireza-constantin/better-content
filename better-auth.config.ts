@@ -4,6 +4,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 
 import { parseServerEnvironment } from "./src/lib/env/schema";
+import { emailAndPasswordOptions, validateUserName } from "./src/lib/auth/options";
 
 const environment = parseServerEnvironment(process.env);
 const pool = new Pool({ connectionString: environment.DATABASE_URL });
@@ -15,4 +16,8 @@ export const auth = betterAuth({
   database: drizzleAdapter(database, {
     provider: "pg",
   }),
+  emailAndPassword: emailAndPasswordOptions,
+  user: {
+    validateUserInfo: ({ user, source }) => validateUserName(user, source),
+  },
 });
