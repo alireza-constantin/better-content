@@ -1171,3 +1171,22 @@ After approval:
 - avoid implementing later tickets opportunistically.
 
 After all tickets are complete, perform a phase-wide verification against the original phase specification before the phase is considered complete.
+
+## Shared Local Ticket Tracker
+
+Implementation tickets are stored under:
+
+`.scratch/<phase>/issues/`
+
+Although the tracker is called "Local Markdown", Better Content commits these ticket files to Git so implementation state can be shared across development machines.
+
+Tickets are execution artifacts and do not override:
+
+- PRD
+- Architecture
+- Accepted ADRs
+- approved phase specifications
+
+Ticket status, blocker relationships, and implementation notes should be committed when they materially change.
+
+Do not delete or regenerate existing .scratch ticket directories unless explicitly instructed. Preserve ticket history and statuses.
