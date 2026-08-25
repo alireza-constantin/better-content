@@ -1,0 +1,18 @@
+{
+  "Metadata": {
+    "title": "Better Content",
+    "description": "A focused foundation for your creator workspace."
+  },
+  "HomePage": {
+    "eyebrow": "Creator workspace",
+    "title": "Start with the interface language that feels natural to you.",
+    "description": "Better Content is being prepared as a focused workspace for creators.",
+    "interfaceLanguage": "Interface language.",
+    "languageNote": "It changes the application UI, not the language of the content you create."
+  },
+  "LocaleSwitcher": {
+    "label": "Choose interface language",
+    "english": "English",
+    "persian": "فارسی"
+  }
+}
