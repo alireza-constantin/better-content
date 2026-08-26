@@ -4,7 +4,7 @@
 
 **Blocked by:** 04: Deliver localized email/password authentication.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 ## Phase references
 
@@ -16,12 +16,12 @@ Phase 1 §§18–19, 21–22, 30–31, 35, 38–39, 48–50, 56.
 
 ## Acceptance criteria
 
-- [ ] One workspace application service gets or creates the default workspace idempotently and transactionally, including the owner membership.
-- [ ] Repeated or ordinary concurrent provisioning cannot create duplicate default workspaces or memberships.
-- [ ] Protected application pages validate the session on the server and redirect unauthenticated users to the locale-appropriate sign-in page.
-- [ ] Workspace access checks authenticated membership; client-provided workspace identifiers alone cannot authorize access.
-- [ ] The minimal responsive authenticated shell includes Better Content identity, current user, workspace context where useful, dashboard navigation, locale switching, and sign-out.
-- [ ] The dashboard proves authentication, workspace provisioning, localization, and direction behavior without showing fake future features or metrics.
+- [x] One workspace application service gets or creates the default workspace idempotently and transactionally, including the owner membership.
+- [x] Repeated or ordinary concurrent provisioning cannot create duplicate default workspaces or memberships.
+- [x] Protected application pages validate the session on the server and redirect unauthenticated users to the locale-appropriate sign-in page.
+- [x] Workspace access checks authenticated membership; client-provided workspace identifiers alone cannot authorize access.
+- [x] The minimal responsive authenticated shell includes Better Content identity, current user, workspace context where useful, dashboard navigation, locale switching, and sign-out.
+- [x] The dashboard proves authentication, workspace provisioning, localization, and direction behavior without showing fake future features or metrics.
 
 ## Verification
 

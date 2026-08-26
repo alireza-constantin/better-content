@@ -4,7 +4,7 @@
 
 **Blocked by:** 05: Provision the default workspace and protect the dashboard.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 ## Phase references
 
@@ -17,11 +17,11 @@ Phase 1 §§35–40, 48–50, 52–53.
 
 ## Acceptance criteria
 
-- [ ] Critical Playwright coverage proves sign-up, authenticated dashboard entry, sign-out, subsequent protected-dashboard denial, and locale behavior.
-- [ ] Cross-cutting authorization/security verification confirms server-side sessions and membership checks, server-only secrets, validated inputs, and non-sensitive logging.
-- [ ] Accessibility, responsive, and RTL/LTR reviews cover authentication screens and the authenticated shell.
-- [ ] Test isolation is verified so automation uses a dedicated test database and cannot destructively clean production data.
-- [ ] Existing ticket-level tests remain passing; this ticket adds only cross-cutting hardening coverage rather than deferring foundational tests to the end.
+- [x] Critical Playwright coverage proves sign-up, authenticated dashboard entry, sign-out, subsequent protected-dashboard denial, and locale behavior.
+- [x] Cross-cutting authorization/security verification confirms server-side sessions and membership checks, server-only secrets, validated inputs, and non-sensitive logging.
+- [x] Accessibility, responsive, and RTL/LTR reviews cover authentication screens and the authenticated shell.
+- [x] Test isolation is verified so automation uses a dedicated test database and cannot destructively clean production data.
+- [x] Existing ticket-level tests remain passing; this ticket adds only cross-cutting hardening coverage rather than deferring foundational tests to the end.
 
 ## Verification
 
