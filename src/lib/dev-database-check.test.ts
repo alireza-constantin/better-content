@@ -90,6 +90,16 @@ describe("development database readiness", () => {
     expect(result.message).toContain("DATABASE_URL");
   });
 
+  it("normalizes IPv6 localhost before checking the configured port", async () => {
+    const result = await checkDatabaseReadiness({
+      DATABASE_URL: "postgresql://postgres:postgres@[::1]:5432/better_content",
+    });
+
+    expect(result).toMatchObject({ code: "INVALID_CONFIGURATION" });
+    expect(result.message).toContain("5432");
+    expect(result.message).toContain("5433");
+  });
+
   it("reports missing Better Content schema and migration history", async () => {
     const query = vi.fn(async (statement: string) => {
       if (statement.includes("current_database")) {
@@ -103,6 +113,21 @@ describe("development database readiness", () => {
 
     expect(result).toMatchObject({ code: "SCHEMA_MISSING" });
     expect(result.message).toContain("npm run db:migrate");
+  });
+
+  it("classifies a connection failure during identity validation as unreachable", async () => {
+    const query = vi.fn(async (statement: string) => {
+      if (statement.includes("current_database")) {
+        throw Object.assign(new Error("connection reset"), { code: "ECONNRESET" });
+      }
+
+      return { rows: [] };
+    });
+
+    const result = await checkDatabaseReadiness(developmentEnvironment, clientFactory(query));
+
+    expect(result).toMatchObject({ code: "UNREACHABLE" });
+    expect(result.message).toContain("npm run db:up");
   });
 
   it("accepts a migrated Better Content database", async () => {

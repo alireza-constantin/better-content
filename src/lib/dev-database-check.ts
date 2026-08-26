@@ -90,7 +90,7 @@ function parseDatabaseTarget(connectionString: string | undefined): DatabaseTarg
 
     return {
       database,
-      host: url.hostname,
+      host: url.hostname.replace(/^\[|\]$/g, "").toLowerCase(),
       port: url.port || "5432",
     };
   } catch {
@@ -171,11 +171,7 @@ function localPortConfigurationFailure(
     return failure("INVALID_CONFIGURATION", "BETTER_CONTENT_DB_PORT must be a valid TCP port number.");
   }
 
-  if (
-    (target.host === "localhost" || target.host === "127.0.0.1" || target.host === "::1") &&
-    target.database === "better_content" &&
-    target.port !== configuredPort
-  ) {
+  if (["localhost", "127.0.0.1", "::1"].includes(target.host) && target.port !== configuredPort) {
     return failure(
       "INVALID_CONFIGURATION",
       "DATABASE_URL targets localhost:" +
