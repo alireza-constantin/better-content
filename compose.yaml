@@ -8,8 +8,8 @@ services:
       # Development-only credential. Never use this value in production.
       POSTGRES_PASSWORD: postgres
     ports:
-      # Defaults to the standard local port; override POSTGRES_HOST_PORT if it is occupied.
-      - "${POSTGRES_HOST_PORT:-5432}:5432"
+      # Defaults to the Better Content local port; override when needed.
+      - "${BETTER_CONTENT_DB_PORT:-5433}:5432"
     volumes:
       - better-content-postgres-data:/var/lib/postgresql
     healthcheck:
