@@ -27,6 +27,7 @@ export type DatabaseCheckCode =
   | "INVALID_CONFIGURATION"
   | "UNREACHABLE"
   | "DATABASE_NOT_FOUND"
+  | "DATABASE_IDENTITY_MISMATCH"
   | "SCHEMA_MISSING"
   | "DATABASE_ERROR";
 
@@ -160,6 +161,34 @@ function connectionFailure(error: unknown, target: DatabaseTarget): DatabaseChec
   );
 }
 
+function localPortConfigurationFailure(
+  environment: Readonly<Record<string, string | undefined>>,
+  target: DatabaseTarget,
+): DatabaseCheckResult | undefined {
+  const configuredPort = environment.BETTER_CONTENT_DB_PORT?.trim() || "5433";
+
+  if (!/^\d+$/.test(configuredPort) || Number(configuredPort) < 1 || Number(configuredPort) > 65535) {
+    return failure("INVALID_CONFIGURATION", "BETTER_CONTENT_DB_PORT must be a valid TCP port number.");
+  }
+
+  if (
+    (target.host === "localhost" || target.host === "127.0.0.1" || target.host === "::1") &&
+    target.database === "better_content" &&
+    target.port !== configuredPort
+  ) {
+    return failure(
+      "INVALID_CONFIGURATION",
+      "DATABASE_URL targets localhost:" +
+        target.port +
+        ", but Better Content development PostgreSQL uses localhost:" +
+        configuredPort +
+        ". Update DATABASE_URL and retry.",
+    );
+  }
+
+  return undefined;
+}
+
 function schemaFailure(missingTables: readonly string[], missingMigrationHistory: boolean): DatabaseCheckResult {
   const missing = [...missingTables];
 
@@ -185,6 +214,12 @@ export async function checkDatabaseReadiness(
     return target;
   }
 
+  const portConfigurationFailure = localPortConfigurationFailure(environment, target);
+
+  if (portConfigurationFailure) {
+    return portConfigurationFailure;
+  }
+
   const client = clientFactory(environment.DATABASE_URL!);
 
   try {
@@ -194,7 +229,19 @@ export async function checkDatabaseReadiness(
   }
 
   try {
-    await client.query("SELECT current_database()");
+    const currentDatabaseResult = await client.query("SELECT current_database()");
+    const currentDatabase = String(currentDatabaseResult.rows[0]?.current_database ?? "");
+
+    if (currentDatabase.toLowerCase() !== target.database.toLowerCase()) {
+      return failure(
+        "DATABASE_IDENTITY_MISMATCH",
+        "DATABASE_URL requested database \"" +
+          target.database +
+          "\", but PostgreSQL connected to \"" +
+          (currentDatabase || "an unknown database") +
+          "\". Check DATABASE_URL and retry.",
+      );
+    }
 
     const tableResult = await client.query(
       [

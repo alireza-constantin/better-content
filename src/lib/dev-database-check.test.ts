@@ -63,6 +63,33 @@ describe("development database readiness", () => {
     expect(result.message).toContain("DATABASE_URL");
   });
 
+  it("reports when PostgreSQL connects to a different database than requested", async () => {
+    const query = vi.fn(async (statement: string) => {
+      if (statement.includes("current_database")) {
+        return { rows: [{ current_database: "postgres" }] };
+      }
+
+      return { rows: [] };
+    });
+
+    const result = await checkDatabaseReadiness(developmentEnvironment, clientFactory(query));
+
+    expect(result).toMatchObject({ code: "DATABASE_IDENTITY_MISMATCH" });
+    expect(result.message).toContain("postgres");
+    expect(result.message).not.toContain("postgres:postgres");
+  });
+
+  it("reports when the local port override and DATABASE_URL disagree", async () => {
+    const result = await checkDatabaseReadiness({
+      ...developmentEnvironment,
+      BETTER_CONTENT_DB_PORT: "5544",
+    });
+
+    expect(result).toMatchObject({ code: "INVALID_CONFIGURATION" });
+    expect(result.message).toContain("5544");
+    expect(result.message).toContain("DATABASE_URL");
+  });
+
   it("reports missing Better Content schema and migration history", async () => {
     const query = vi.fn(async (statement: string) => {
       if (statement.includes("current_database")) {

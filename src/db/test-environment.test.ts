@@ -8,7 +8,7 @@ describe("test database configuration", () => {
   it("accepts a dedicated test database that differs from production", () => {
     expect(
       getTestDatabaseUrl({
-        DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/better_content",
+        DATABASE_URL: "postgresql://postgres:postgres@localhost:5433/better_content",
         TEST_DATABASE_URL: testDatabaseUrl,
       }),
     ).toBe(testDatabaseUrl);

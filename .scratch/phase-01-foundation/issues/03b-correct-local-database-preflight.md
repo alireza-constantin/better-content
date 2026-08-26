@@ -42,3 +42,7 @@ Verified healthy startup on 5433, development migration, successful
 `db:check`, registration and login, actionable preflight failure while the
 database was stopped, recovery after `db:up`, persistence across
 `db:down`/`db:up`, 32 passing tests, lint, typecheck, build, and diff checks.
+
+The corrective review also verifies that the connected database identity
+matches `DATABASE_URL` and that a configured `BETTER_CONTENT_DB_PORT` agrees
+with the local database URL before PostgreSQL is contacted.
