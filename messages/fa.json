@@ -41,5 +41,17 @@
     "signedInAs": "واردشده با {name}",
     "signOut": "خروج",
     "signingOut": "در حال خروج…"
+  },
+  "ApplicationShell": {
+    "productName": "Better Content",
+    "skipToContent": "پرش به محتوای اصلی",
+    "dashboard": "داشبورد",
+    "workspace": "فضای کاری",
+    "personalWorkspace": "فضای کاری شخصی"
+  },
+  "Dashboard": {
+    "eyebrow": "فضای کاری شما برای تولید محتوا",
+    "title": "پایهٔ کار شما آماده است.",
+    "description": "حساب کاربری و فضای کاری شخصی شما محافظت شده و برای گام بعدی آماده‌اند."
   }
 }

@@ -1,5 +1,6 @@
 node_modules/
 .next/
+.next-e2e/
 out/
 coverage/
 playwright-report/
@@ -8,3 +9,4 @@ test-results/
 .env
 .env.local
 .env.*.local
+.playwright-cli/

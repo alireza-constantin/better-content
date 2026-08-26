@@ -5,13 +5,14 @@ import { Pool } from "pg";
 
 import { parseServerEnvironment } from "./src/lib/env/schema";
 import { emailAndPasswordOptions, validateUserName } from "./src/lib/auth/options";
+import { getAuthOriginConfiguration } from "./src/lib/auth/origin";
 
 const environment = parseServerEnvironment(process.env);
 const pool = new Pool({ connectionString: environment.DATABASE_URL });
 const database = drizzle({ client: pool });
 
 export const auth = betterAuth({
-  baseURL: environment.BETTER_AUTH_URL,
+  ...getAuthOriginConfiguration(environment.BETTER_AUTH_URL),
   secret: environment.BETTER_AUTH_SECRET,
   database: drizzleAdapter(database, {
     provider: "pg",

@@ -17,6 +17,15 @@ describe("server environment validation", () => {
     expect(() => parseServerEnvironment({ ...validEnvironment, DATABASE_URL: undefined })).toThrow();
   });
 
+  it("requires Better Auth to use an application origin", () => {
+    expect(() =>
+      parseServerEnvironment({
+        ...validEnvironment,
+        BETTER_AUTH_URL: "http://localhost:3000/api/auth",
+      }),
+    ).toThrow("Expected an HTTP(S) application origin");
+  });
+
   it("rejects server secrets exposed through NEXT_PUBLIC_ variables", () => {
     expect(() =>
       parseServerEnvironment({

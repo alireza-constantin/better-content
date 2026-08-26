@@ -10,12 +10,13 @@ import * as schema from "@/db/schema";
 import { getTestDatabaseUrl } from "@/db/test-environment";
 
 import { emailAndPasswordOptions, validateUserName } from "./options";
+import { getAuthOriginConfiguration } from "./origin";
 
 const baseUrl = "http://localhost:3000";
 const pool = new Pool({ connectionString: getTestDatabaseUrl(process.env) });
 const database = drizzle({ client: pool, schema });
 const auth = betterAuth({
-  baseURL: baseUrl,
+  ...getAuthOriginConfiguration(baseUrl),
   secret: "test-only-better-auth-secret-that-is-long-enough",
   database: drizzleAdapter(database, {
     provider: "pg",
@@ -41,9 +42,10 @@ async function callAuth(
     body?: Record<string, unknown>;
     cookies?: Headers;
     method?: "GET" | "POST";
+    origin?: string;
   }> = {},
 ): Promise<Response> {
-  const headers = new Headers({ origin: baseUrl });
+  const headers = new Headers({ origin: options.origin ?? baseUrl });
 
   if (options.cookies?.get("cookie")) {
     headers.set("cookie", options.cookies.get("cookie")!);
@@ -98,6 +100,29 @@ afterAll(async () => {
 });
 
 describe("email/password authentication", () => {
+  it("accepts the canonical local browser origin and rejects a different origin", async () => {
+    const canonicalOrigin = await callAuth("/sign-up/email", {
+      body: {
+        name: "Creator",
+        email: "canonical-origin@example.com",
+        password: "secure-password",
+      },
+    });
+    const differentOrigin = await callAuth("/sign-up/email", {
+      body: {
+        name: "Creator",
+        email: "different-origin@example.com",
+        password: "secure-password",
+      },
+      origin: "http://127.0.0.1:3000",
+    });
+    const payload = (await differentOrigin.json()) as AuthResponse;
+
+    expect(canonicalOrigin.status).toBe(200);
+    expect(differentOrigin.status).toBe(403);
+    expect(payload.code).toBe("INVALID_ORIGIN");
+  });
+
   it("creates an account and an authenticated session on sign-up", async () => {
     const response = await callAuth("/sign-up/email", {
       body: {

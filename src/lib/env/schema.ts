@@ -4,10 +4,26 @@ const postgresUrl = z.url().refine((value) => value.startsWith("postgres://") ||
   message: "Expected a PostgreSQL connection URL.",
 });
 
+const applicationOrigin = z
+  .url()
+  .refine((value) => {
+    const url = new URL(value);
+
+    return (
+      (url.protocol === "http:" || url.protocol === "https:") &&
+      url.username === "" &&
+      url.password === "" &&
+      url.pathname === "/" &&
+      url.search === "" &&
+      url.hash === ""
+    );
+  }, "Expected an HTTP(S) application origin without a path, query, fragment, or credentials.")
+  .transform((value) => new URL(value).origin);
+
 const serverEnvironmentSchema = z.object({
   DATABASE_URL: postgresUrl,
   BETTER_AUTH_SECRET: z.string().min(32),
-  BETTER_AUTH_URL: z.url(),
+  BETTER_AUTH_URL: applicationOrigin,
 });
 
 const serverOnlyEnvironmentKeys = ["DATABASE_URL", "BETTER_AUTH_SECRET"] as const;

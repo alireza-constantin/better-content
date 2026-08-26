@@ -10,7 +10,7 @@ import {
 } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { useTranslations } from "next-intl";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 type AuthMode = "sign-in" | "sign-up";
 
@@ -41,6 +41,9 @@ export function AuthForm({ mode }: AuthFormProps) {
   const [fieldErrors, setFieldErrors] = useState<AuthFormErrors>({});
   const [formError, setFormError] = useState<AuthErrorMessageKey>();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const emailInputRef = useRef<HTMLInputElement>(null);
+  const passwordInputRef = useRef<HTMLInputElement>(null);
   const isSignUp = mode === "sign-up";
 
   function updateValue(field: keyof FormValues, value: string) {
@@ -61,6 +64,13 @@ export function AuthForm({ mode }: AuthFormProps) {
 
     if (Object.keys(validationErrors).length > 0) {
       setFieldErrors(validationErrors);
+      const firstInvalidInput = validationErrors.name
+        ? nameInputRef.current
+        : validationErrors.email
+          ? emailInputRef.current
+          : passwordInputRef.current;
+
+      firstInvalidInput?.focus();
       return;
     }
 
@@ -84,7 +94,7 @@ export function AuthForm({ mode }: AuthFormProps) {
         return;
       }
 
-      router.replace("/");
+      router.replace("/dashboard");
     } catch {
       setFormError(getAuthenticationErrorMessage(mode, undefined));
     } finally {
@@ -111,6 +121,7 @@ export function AuthForm({ mode }: AuthFormProps) {
             id="auth-name"
             name="name"
             onChange={(event) => updateValue("name", event.target.value)}
+            ref={nameInputRef}
             type="text"
             value={values.name}
           />
@@ -137,6 +148,8 @@ export function AuthForm({ mode }: AuthFormProps) {
           inputMode="email"
           name="email"
           onChange={(event) => updateValue("email", event.target.value)}
+          ref={emailInputRef}
+          spellCheck={false}
           type="email"
           value={values.email}
         />
@@ -161,6 +174,7 @@ export function AuthForm({ mode }: AuthFormProps) {
           id="auth-password"
           name="password"
           onChange={(event) => updateValue("password", event.target.value)}
+          ref={passwordInputRef}
           type="password"
           value={values.password}
         />

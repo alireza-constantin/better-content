@@ -41,5 +41,17 @@
     "signedInAs": "Signed in as {name}",
     "signOut": "Sign out",
     "signingOut": "Signing out…"
+  },
+  "ApplicationShell": {
+    "productName": "Better Content",
+    "skipToContent": "Skip to main content",
+    "dashboard": "Dashboard",
+    "workspace": "Workspace",
+    "personalWorkspace": "Personal workspace"
+  },
+  "Dashboard": {
+    "eyebrow": "Your creator workspace",
+    "title": "Your foundation is ready.",
+    "description": "Your account and personal workspace are protected and ready for the next step."
   }
 }

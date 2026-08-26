@@ -47,3 +47,10 @@ The corrective review also verifies that the connected database identity
 matches `DATABASE_URL` and that a configured `BETTER_CONTENT_DB_PORT` agrees
 with the local database URL before PostgreSQL is contacted, including bracketed
 IPv6 localhost URLs.
+
+## Cleanup
+
+Added `.playwright-cli/` to `.gitignore` without ignoring `.scratch/`, replaced
+the custom development launcher with npm's native `predev` lifecycle, and
+removed the redundant launcher. The installed `better-auth` package and pinned
+`auth` CLI are both version 1.7.1 and remain intentionally aligned.

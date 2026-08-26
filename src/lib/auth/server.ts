@@ -10,11 +10,12 @@ import * as schema from "@/db/schema";
 import { getServerEnvironment } from "@/lib/env/server";
 
 import { emailAndPasswordOptions, validateUserName } from "./options";
+import { getAuthOriginConfiguration } from "./origin";
 
 const environment = getServerEnvironment();
 
 export const auth = betterAuth({
-  baseURL: environment.BETTER_AUTH_URL,
+  ...getAuthOriginConfiguration(environment.BETTER_AUTH_URL),
   secret: environment.BETTER_AUTH_SECRET,
   database: drizzleAdapter(db, {
     provider: "pg",
