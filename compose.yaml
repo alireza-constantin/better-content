@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: better_content
+      POSTGRES_USER: postgres
+      # Development-only credential. Never use this value in production.
+      POSTGRES_PASSWORD: postgres
+    ports:
+      # Defaults to the standard local port; override POSTGRES_HOST_PORT if it is occupied.
+      - "${POSTGRES_HOST_PORT:-5432}:5432"
+    volumes:
+      - better-content-postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d better_content"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  better-content-postgres-data:
