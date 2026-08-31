@@ -133,4 +133,10 @@ body {
   html {
     @apply font-sans;
   }
+
+  input:focus-visible,
+  textarea:focus-visible,
+  select:focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2;
+  }
 }

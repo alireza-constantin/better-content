@@ -9,6 +9,7 @@ type ApplicationShellProps = Readonly<{
   productName: string;
   skipToContentLabel: string;
   dashboardLabel: string;
+  contentDnaLabel: string;
   workspaceLabel: string;
   userName: string;
   userEmail: string;
@@ -20,6 +21,7 @@ export function ApplicationShell({
   productName,
   skipToContentLabel,
   dashboardLabel,
+  contentDnaLabel,
   workspaceLabel,
   userName,
   userEmail,
@@ -50,9 +52,12 @@ export function ApplicationShell({
       </header>
 
       <main className="flex flex-1 flex-col py-8 sm:py-12" id="main-content" tabIndex={-1}>
-        <nav aria-label={dashboardLabel} className="mb-8 border-s-2 border-primary ps-4">
+        <nav aria-label={dashboardLabel} className="mb-8 flex flex-wrap gap-x-4 gap-y-2 border-s-2 border-primary ps-4">
           <Link className="text-sm font-medium text-foreground underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" href="/dashboard">
             {dashboardLabel}
+          </Link>
+          <Link className="text-sm font-medium text-foreground underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" href="/content-dna">
+            {contentDnaLabel}
           </Link>
         </nav>
         {children}
