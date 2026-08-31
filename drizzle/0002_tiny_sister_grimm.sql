@@ -1,0 +1,1 @@
+ALTER TABLE "content_dna_versions" ADD CONSTRAINT "content_dna_versions_version_number_positive" CHECK ("content_dna_versions"."version_number" > 0);

@@ -1,13 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
 
 import { getE2eDatabaseUrl } from "./src/db/e2e-environment";
-import { loadLocalEnvironment } from "./scripts/local-environment";
-
-const localEnvironment = loadLocalEnvironment();
-
-if (!localEnvironment.ok) {
-  throw new Error(localEnvironment.message);
-}
 
 // Validate before starting a server that can reset test state. The server does
 // the same validation immediately before it connects to PostgreSQL.
@@ -38,7 +31,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "node --import tsx ./scripts/start-e2e-server.ts",
+    command: "node --env-file-if-exists=.env.local --import tsx ./scripts/start-e2e-server.ts",
     env: {
       ...process.env,
       PLAYWRIGHT_PORT: String(port),

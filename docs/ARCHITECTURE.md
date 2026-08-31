@@ -559,7 +559,7 @@ This gives us both data integrity and easier future state evolution.
 Core tables:
 
 ```text
-content_dna_profiles
+content_dna
 content_dna_versions
 ```
 
@@ -568,12 +568,14 @@ Relationship:
 ```text
 Workspace
    ↓
-DNA Profile
+ Content DNA
    ↓
-DNA Versions
+ immutable Content DNA Versions
+    ↓
+ one current version
 ```
 
-`content_dna_profiles` represents the stable identity of the creator's DNA.
+`content_dna` represents the stable, workspace-owned container for the creator's DNA.
 
 `content_dna_versions` represents immutable historical versions.
 
@@ -586,13 +588,13 @@ Saving a meaningful DNA change creates a new immutable version.
 Example:
 
 ```text
-DNA Profile
+Content DNA
 ├── Version 1
 ├── Version 2
 └── Version 3 ← current
 ```
 
-The profile stores or resolves its active/current version.
+Content DNA stores or resolves its active/current version.
 
 Old versions remain immutable.
 
@@ -614,27 +616,9 @@ Ideas generated last month
 
 # 19. DNA Storage
 
-Known V1 fields should use typed database fields rather than putting the entire profile into an unstructured prompt blob.
+Content DNA version bodies are schema-versioned, application-validated JSONB snapshots, as defined by ADR-013.
 
-Examples:
-
-* creator description
-* target audience
-* primary topics
-* tone
-* goals
-* preferred formats
-* preferred languages
-* preferred style
-* topics to avoid
-* approaches to avoid
-* additional instructions
-
-Lists can use PostgreSQL arrays or appropriately structured JSON where necessary.
-
-The AI prompt is constructed from these domain fields.
-
-The prompt itself is not the canonical Content DNA.
+Stable relational identity, workspace ownership, lineage, sequential versioning, current-version reference, author, and timestamp concerns remain relational columns.
 
 ---
 
