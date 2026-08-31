@@ -3,13 +3,6 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import { resetE2eDatabase } from "./e2e-database";
-import { loadLocalEnvironment } from "./local-environment";
-
-const localEnvironment = loadLocalEnvironment();
-
-if (!localEnvironment.ok) {
-  throw new Error(localEnvironment.message);
-}
 
 const databaseUrl = await resetE2eDatabase(process.env);
 const port = process.env.PLAYWRIGHT_PORT ?? "3100";

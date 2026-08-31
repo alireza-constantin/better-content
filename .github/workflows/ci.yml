@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: better_content
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d better_content"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/better_content
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/better_content_test
+      E2E_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/better_content_e2e_test
+      BETTER_AUTH_SECRET: ci-only-better-auth-secret-that-is-long-enough
+      BETTER_AUTH_URL: http://127.0.0.1:3100
+
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run db:migrate
+      - run: PGPASSWORD=postgres psql --host=localhost --username=postgres --dbname=postgres --command="CREATE DATABASE better_content_test"
+      - run: npm run db:migrate:test
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run test
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e

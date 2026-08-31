@@ -1,15 +1,6 @@
 import { checkDatabaseReadiness } from "../src/lib/dev-database-check";
-import { loadLocalEnvironment } from "./local-environment";
 
 async function main(): Promise<void> {
-  const environment = loadLocalEnvironment();
-
-  if (!environment.ok) {
-    console.error("Database check failed: " + environment.message);
-    process.exitCode = 1;
-    return;
-  }
-
   const result = await checkDatabaseReadiness();
 
   if (!result.ok) {

@@ -35,10 +35,16 @@ export default async function LocaleHomePage({ params }: LocaleHomePageProps) {
             <SignOutButton userName={session.user.name} />
           ) : (
             <div className="flex items-center gap-3 text-sm font-medium">
-              <Link className="text-muted-foreground hover:text-foreground" href="/sign-in">
+              <Link
+                className="text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                href="/sign-in"
+              >
                 {t("signIn")}
               </Link>
-              <Link className="rounded-lg bg-primary px-3 py-2 text-primary-foreground hover:bg-primary/80" href="/sign-up">
+              <Link
+                className="rounded-lg bg-primary px-3 py-2 text-primary-foreground hover:bg-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                href="/sign-up"
+              >
                 {t("signUp")}
               </Link>
             </div>
