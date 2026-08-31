@@ -47,7 +47,9 @@ describe("development database readiness", () => {
   });
 
   it("reports when the configured database does not exist", async () => {
-    const error = Object.assign(new Error('database "better_content" does not exist'), { code: "3D000" });
+    const error = Object.assign(new Error('database "better_content" does not exist'), {
+      code: "3D000",
+    });
     const factory = () => ({
       connect: vi.fn(async () => {
         throw error;

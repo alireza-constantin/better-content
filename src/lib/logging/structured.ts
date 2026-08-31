@@ -1,6 +1,13 @@
 import type { ApplicationErrorCode } from "@/lib/errors/app-error";
 
-const logContextKeys = ["requestId", "userId", "workspaceId", "module", "operation", "errorCode"] as const;
+const logContextKeys = [
+  "requestId",
+  "userId",
+  "workspaceId",
+  "module",
+  "operation",
+  "errorCode",
+] as const;
 
 export type LogContext = Readonly<{
   requestId?: string;

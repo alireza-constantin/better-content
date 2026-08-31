@@ -106,16 +106,23 @@ export function createContentDnaApplicationService(
   dependencies: ContentDnaApplicationServiceDependencies = {},
 ): Readonly<{
   getCurrentContentDna(input: Readonly<{ workspaceId: string }>): Promise<CurrentContentDnaDto>;
-  listContentDnaVersions(input: Readonly<{ workspaceId: string }>): Promise<readonly ContentDnaVersionDto[]>;
-  getContentDnaVersion(input: Readonly<{ workspaceId: string; versionId: string }>): Promise<ContentDnaVersionDto>;
+  listContentDnaVersions(
+    input: Readonly<{ workspaceId: string }>,
+  ): Promise<readonly ContentDnaVersionDto[]>;
+  getContentDnaVersion(
+    input: Readonly<{ workspaceId: string; versionId: string }>,
+  ): Promise<ContentDnaVersionDto>;
   saveContentDna(input: SaveContentDnaInput): Promise<ContentDnaVersionDto>;
 }> {
   const database = dependencies.database ?? db;
-  const getAuthenticatedUserId = dependencies.getAuthenticatedUserId ?? getServerAuthenticatedUserId;
+  const getAuthenticatedUserId =
+    dependencies.getAuthenticatedUserId ?? getServerAuthenticatedUserId;
   const serviceLogger = dependencies.logger ?? logger;
 
   return {
-    async getCurrentContentDna({ workspaceId }: Readonly<{ workspaceId: string }>): Promise<CurrentContentDnaDto> {
+    async getCurrentContentDna({
+      workspaceId,
+    }: Readonly<{ workspaceId: string }>): Promise<CurrentContentDnaDto> {
       const userId = await getAuthenticatedUserId();
 
       if (!userId) {
@@ -130,7 +137,10 @@ export function createContentDnaApplicationService(
         .from(contentDna)
         .innerJoin(
           contentDnaVersions,
-          and(eq(contentDna.id, contentDnaVersions.contentDnaId), eq(contentDna.currentVersionId, contentDnaVersions.id)),
+          and(
+            eq(contentDna.id, contentDnaVersions.contentDnaId),
+            eq(contentDna.currentVersionId, contentDnaVersions.id),
+          ),
         )
         .where(eq(contentDna.workspaceId, validatedWorkspaceId));
 
@@ -143,7 +153,9 @@ export function createContentDnaApplicationService(
       return { status: currentVersion.readiness, currentVersion };
     },
 
-    async listContentDnaVersions({ workspaceId }: Readonly<{ workspaceId: string }>): Promise<readonly ContentDnaVersionDto[]> {
+    async listContentDnaVersions({
+      workspaceId,
+    }: Readonly<{ workspaceId: string }>): Promise<readonly ContentDnaVersionDto[]> {
       const userId = await getAuthenticatedUserId();
 
       if (!userId) {
@@ -160,7 +172,9 @@ export function createContentDnaApplicationService(
         .where(eq(contentDna.workspaceId, validatedWorkspaceId))
         .orderBy(desc(contentDnaVersions.versionNumber));
 
-      return versions.map(({ container, version }) => toVersionDto(version, version.id === container.currentVersionId));
+      return versions.map(({ container, version }) =>
+        toVersionDto(version, version.id === container.currentVersionId),
+      );
     },
 
     async getContentDnaVersion({
@@ -181,7 +195,12 @@ export function createContentDnaApplicationService(
         .select({ container: contentDna, version: contentDnaVersions })
         .from(contentDnaVersions)
         .innerJoin(contentDna, eq(contentDnaVersions.contentDnaId, contentDna.id))
-        .where(and(eq(contentDna.workspaceId, validatedWorkspaceId), eq(contentDnaVersions.id, validatedVersionId)));
+        .where(
+          and(
+            eq(contentDna.workspaceId, validatedWorkspaceId),
+            eq(contentDnaVersions.id, validatedVersionId),
+          ),
+        );
 
       if (!result) {
         throw new ApplicationError("NOT_FOUND", "The Content DNA version was not found.");
@@ -190,7 +209,11 @@ export function createContentDnaApplicationService(
       return toVersionDto(result.version, result.version.id === result.container.currentVersionId);
     },
 
-    async saveContentDna({ workspaceId, baseVersionId, payload }: SaveContentDnaInput): Promise<ContentDnaVersionDto> {
+    async saveContentDna({
+      workspaceId,
+      baseVersionId,
+      payload,
+    }: SaveContentDnaInput): Promise<ContentDnaVersionDto> {
       const userId = await getAuthenticatedUserId();
 
       if (!userId) {
@@ -204,7 +227,9 @@ export function createContentDnaApplicationService(
 
       try {
         const saved = await database.transaction(async (transaction) => {
-          await transaction.execute(sql`select pg_advisory_xact_lock(hashtextextended(${validatedWorkspaceId}, 0))`);
+          await transaction.execute(
+            sql`select pg_advisory_xact_lock(hashtextextended(${validatedWorkspaceId}, 0))`,
+          );
           await requireWorkspaceOwner(userId, validatedWorkspaceId, transaction);
 
           const [container] = await transaction
@@ -239,7 +264,10 @@ export function createContentDnaApplicationService(
               .returning();
 
             if (!version) {
-              throw new ApplicationError("INTERNAL_ERROR", "Content DNA version creation did not return a version.");
+              throw new ApplicationError(
+                "INTERNAL_ERROR",
+                "Content DNA version creation did not return a version.",
+              );
             }
 
             return toVersionDto(version, true);
@@ -252,10 +280,18 @@ export function createContentDnaApplicationService(
           const [currentVersion] = await transaction
             .select()
             .from(contentDnaVersions)
-            .where(and(eq(contentDnaVersions.id, container.currentVersionId), eq(contentDnaVersions.contentDnaId, container.id)));
+            .where(
+              and(
+                eq(contentDnaVersions.id, container.currentVersionId),
+                eq(contentDnaVersions.contentDnaId, container.id),
+              ),
+            );
 
           if (!currentVersion) {
-            throw new ApplicationError("INTERNAL_ERROR", "Content DNA current-version state is unavailable.");
+            throw new ApplicationError(
+              "INTERNAL_ERROR",
+              "Content DNA current-version state is unavailable.",
+            );
           }
 
           const normalizedCurrentPayload = parseContentDnaPayload(currentVersion.payload);
@@ -276,7 +312,10 @@ export function createContentDnaApplicationService(
             .returning();
 
           if (!version) {
-            throw new ApplicationError("INTERNAL_ERROR", "Content DNA version creation did not return a version.");
+            throw new ApplicationError(
+              "INTERNAL_ERROR",
+              "Content DNA version creation did not return a version.",
+            );
           }
 
           await transaction

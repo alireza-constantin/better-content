@@ -54,9 +54,7 @@ export default async function LocaleHomePage({ params }: LocaleHomePageProps) {
 
       <section className="flex flex-1 items-center py-16 sm:py-24">
         <div className="max-w-2xl border-s-4 border-primary ps-6 sm:ps-8">
-          <p className="text-sm font-medium tracking-wide text-muted-foreground">
-            {t("eyebrow")}
-          </p>
+          <p className="text-sm font-medium tracking-wide text-muted-foreground">{t("eyebrow")}</p>
           <h1 className="mt-4 text-balance text-4xl font-semibold tracking-tight text-foreground sm:text-6xl">
             {t("title")}
           </h1>

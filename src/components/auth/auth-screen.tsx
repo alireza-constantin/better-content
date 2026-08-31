@@ -15,7 +15,10 @@ export function AuthScreen({ mode }: AuthScreenProps) {
     <main className="mx-auto grid min-h-screen w-full max-w-6xl grid-cols-1 gap-10 px-5 py-6 sm:px-8 sm:py-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-center lg:gap-16">
       <section className="self-start lg:self-center">
         <header className="flex items-center justify-between gap-4 border-b border-border pb-5">
-          <Link className="text-sm font-semibold tracking-[0.14em] text-foreground uppercase focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" href="/">
+          <Link
+            className="text-sm font-semibold tracking-[0.14em] text-foreground uppercase focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            href="/"
+          >
             Better Content
           </Link>
         </header>
@@ -31,11 +34,17 @@ export function AuthScreen({ mode }: AuthScreenProps) {
         </div>
       </section>
 
-      <section className="w-full rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-8" aria-label={isSignUp ? t("signUpTitle") : t("signInTitle")}>
+      <section
+        className="w-full rounded-2xl border border-border bg-card p-5 shadow-sm sm:p-8"
+        aria-label={isSignUp ? t("signUpTitle") : t("signInTitle")}
+      >
         <AuthForm mode={mode} />
         <p className="mt-6 border-t border-border pt-5 text-sm text-muted-foreground">
           {isSignUp ? t("hasAccount") : t("needsAccount")}{" "}
-          <Link className="font-medium text-foreground underline underline-offset-4 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" href={isSignUp ? "/sign-in" : "/sign-up"}>
+          <Link
+            className="font-medium text-foreground underline underline-offset-4 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            href={isSignUp ? "/sign-in" : "/sign-up"}
+          >
             {isSignUp ? t("signInAction") : t("signUpAction")}
           </Link>
         </p>

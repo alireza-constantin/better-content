@@ -24,12 +24,16 @@ async function ensureE2eDatabase(databaseUrl: string): Promise<void> {
     throw new Error("E2E_DATABASE_URL must use a simple database name ending in _test.");
   }
 
-  const maintenanceClient = new Client({ connectionString: getMaintenanceDatabaseUrl(databaseUrl) });
+  const maintenanceClient = new Client({
+    connectionString: getMaintenanceDatabaseUrl(databaseUrl),
+  });
 
   await maintenanceClient.connect();
 
   try {
-    const result = await maintenanceClient.query("SELECT 1 FROM pg_database WHERE datname = $1", [databaseName]);
+    const result = await maintenanceClient.query("SELECT 1 FROM pg_database WHERE datname = $1", [
+      databaseName,
+    ]);
 
     if (result.rowCount === 0) {
       await maintenanceClient.query(`CREATE DATABASE "${databaseName}"`);
@@ -53,7 +57,9 @@ export async function resetE2eDatabase(environment: EnvironmentValues): Promise<
 
   try {
     await migrate(database, { migrationsFolder: "drizzle" });
-    await database.execute('TRUNCATE TABLE "workspace_members", "workspaces", "session", "account", "verification", "user" CASCADE');
+    await database.execute(
+      'TRUNCATE TABLE "workspace_members", "workspaces", "session", "account", "verification", "user" CASCADE',
+    );
   } finally {
     await pool.end();
   }

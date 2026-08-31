@@ -12,7 +12,9 @@ async function signUp(page: Page, email: string) {
   await page.getByRole("button", { name: "Create account" }).click();
   await expect(page).toHaveURL(/\/en\/dashboard$/);
 
-  const sessionCookie = (await page.context().cookies()).find((cookie) => cookie.name === "better-auth.session_token");
+  const sessionCookie = (await page.context().cookies()).find(
+    (cookie) => cookie.name === "better-auth.session_token",
+  );
 
   expect(sessionCookie).toMatchObject({
     httpOnly: true,
@@ -21,7 +23,9 @@ async function signUp(page: Page, email: string) {
   });
 }
 
-test("sign-up provisions a workspace, persists the session, switches locale, and signs out", async ({ page }) => {
+test("sign-up provisions a workspace, persists the session, switches locale, and signs out", async ({
+  page,
+}) => {
   await signUp(page, emailFor("sign-up"));
 
   await expect(page.getByText("Workspace:")).toBeVisible();
@@ -46,7 +50,9 @@ test("sign-up provisions a workspace, persists the session, switches locale, and
   await expect(page).toHaveURL(/\/fa\/sign-in$/);
 });
 
-test("protected routes redirect in English and Persian without a redirect loop", async ({ page }) => {
+test("protected routes redirect in English and Persian without a redirect loop", async ({
+  page,
+}) => {
   const protectedRouteResponse = await page.goto("/en/dashboard");
   await expect(page).toHaveURL(/\/en\/sign-in$/);
   await expect(page.getByRole("heading", { name: "Welcome back." })).toBeVisible();
@@ -58,7 +64,9 @@ test("protected routes redirect in English and Persian without a redirect loop",
   await expect(page.getByRole("heading", { name: "خوش برگشتید." })).toBeVisible();
 });
 
-test("an existing user can sign in and invalid credentials show a safe localized error", async ({ page }) => {
+test("an existing user can sign in and invalid credentials show a safe localized error", async ({
+  page,
+}) => {
   const email = emailFor("sign-in");
 
   await signUp(page, email);
@@ -74,5 +82,7 @@ test("an existing user can sign in and invalid credentials show a safe localized
   await page.getByLabel("Email address").fill(email);
   await page.getByLabel("Password").fill("not-the-right-password");
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByText("The email address or password is incorrect.", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("The email address or password is incorrect.", { exact: true }),
+  ).toBeVisible();
 });

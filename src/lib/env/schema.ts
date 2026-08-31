@@ -1,8 +1,10 @@
 import { z } from "zod";
 
-const postgresUrl = z.url().refine((value) => value.startsWith("postgres://") || value.startsWith("postgresql://"), {
-  message: "Expected a PostgreSQL connection URL.",
-});
+const postgresUrl = z
+  .url()
+  .refine((value) => value.startsWith("postgres://") || value.startsWith("postgresql://"), {
+    message: "Expected a PostgreSQL connection URL.",
+  });
 
 const applicationOrigin = z
   .url()

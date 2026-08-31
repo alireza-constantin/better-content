@@ -14,7 +14,9 @@ describe("server environment validation", () => {
   });
 
   it("rejects missing required configuration", () => {
-    expect(() => parseServerEnvironment({ ...validEnvironment, DATABASE_URL: undefined })).toThrow();
+    expect(() =>
+      parseServerEnvironment({ ...validEnvironment, DATABASE_URL: undefined }),
+    ).toThrow();
   });
 
   it("requires Better Auth to use an application origin", () => {

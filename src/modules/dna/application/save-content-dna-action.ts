@@ -1,14 +1,30 @@
 "use server";
 
 import { ApplicationError } from "@/lib/errors/app-error";
-import { getCurrentContentDna, saveContentDna, type ContentDnaVersionDto, type CurrentContentDnaDto } from "@/modules/dna/application";
+import {
+  getCurrentContentDna,
+  saveContentDna,
+  type ContentDnaVersionDto,
+  type CurrentContentDnaDto,
+} from "@/modules/dna/application";
 
 export type SaveContentDnaActionResult =
   | Readonly<{ ok: true; version: ContentDnaVersionDto }>
-  | Readonly<{ ok: false; code: "CONFLICT" | "VALIDATION_ERROR" | "UNAUTHORIZED" | "FORBIDDEN" | "NOT_FOUND" | "INTERNAL_ERROR" }>;
+  | Readonly<{
+      ok: false;
+      code:
+        | "CONFLICT"
+        | "VALIDATION_ERROR"
+        | "UNAUTHORIZED"
+        | "FORBIDDEN"
+        | "NOT_FOUND"
+        | "INTERNAL_ERROR";
+    }>;
 
 /** Browser-facing adapter; authorization and canonical validation remain in the application service. */
-export async function saveContentDnaAction(input: Readonly<{ workspaceId: string; baseVersionId: string | null; payload: unknown }>): Promise<SaveContentDnaActionResult> {
+export async function saveContentDnaAction(
+  input: Readonly<{ workspaceId: string; baseVersionId: string | null; payload: unknown }>,
+): Promise<SaveContentDnaActionResult> {
   try {
     return { ok: true, version: await saveContentDna(input) };
   } catch (error) {
@@ -21,10 +37,11 @@ export async function saveContentDnaAction(input: Readonly<{ workspaceId: string
 }
 
 export type LoadCurrentContentDnaActionResult =
-  | Readonly<{ ok: true; current: CurrentContentDnaDto }>
-  | Readonly<{ ok: false }>;
+  Readonly<{ ok: true; current: CurrentContentDnaDto }> | Readonly<{ ok: false }>;
 
-export async function loadCurrentContentDnaAction(workspaceId: string): Promise<LoadCurrentContentDnaActionResult> {
+export async function loadCurrentContentDnaAction(
+  workspaceId: string,
+): Promise<LoadCurrentContentDnaActionResult> {
   try {
     return { ok: true, current: await getCurrentContentDna({ workspaceId }) };
   } catch {

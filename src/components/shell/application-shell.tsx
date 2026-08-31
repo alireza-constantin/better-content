@@ -37,11 +37,15 @@ export function ApplicationShell({
       </a>
       <header className="flex flex-col gap-5 border-b border-border pb-5 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-          <Link className="text-sm font-semibold tracking-[0.14em] text-foreground uppercase focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" href="/dashboard">
+          <Link
+            className="text-sm font-semibold tracking-[0.14em] text-foreground uppercase focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            href="/dashboard"
+          >
             {productName}
           </Link>
           <p className="text-sm text-muted-foreground">
-            <span className="font-medium text-foreground">{workspaceLabel}:</span> {workspaceContext}
+            <span className="font-medium text-foreground">{workspaceLabel}:</span>{" "}
+            {workspaceContext}
           </p>
         </div>
 
@@ -52,11 +56,20 @@ export function ApplicationShell({
       </header>
 
       <main className="flex flex-1 flex-col py-8 sm:py-12" id="main-content" tabIndex={-1}>
-        <nav aria-label={dashboardLabel} className="mb-8 flex flex-wrap gap-x-4 gap-y-2 border-s-2 border-primary ps-4">
-          <Link className="text-sm font-medium text-foreground underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" href="/dashboard">
+        <nav
+          aria-label={dashboardLabel}
+          className="mb-8 flex flex-wrap gap-x-4 gap-y-2 border-s-2 border-primary ps-4"
+        >
+          <Link
+            className="text-sm font-medium text-foreground underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            href="/dashboard"
+          >
             {dashboardLabel}
           </Link>
-          <Link className="text-sm font-medium text-foreground underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" href="/content-dna">
+          <Link
+            className="text-sm font-medium text-foreground underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            href="/content-dna"
+          >
             {contentDnaLabel}
           </Link>
         </nav>

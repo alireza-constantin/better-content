@@ -34,7 +34,9 @@ async function createUser(email: string): Promise<typeof schema.user.$inferSelec
   return createdUser;
 }
 
-async function countRows(table: typeof schema.workspaces | typeof schema.workspaceMembers): Promise<number> {
+async function countRows(
+  table: typeof schema.workspaces | typeof schema.workspaceMembers,
+): Promise<number> {
   const [result] = await database.select({ value: count() }).from(table);
 
   return result?.value ?? 0;
@@ -102,10 +104,14 @@ describe("workspace membership authorization", () => {
     const otherUser = await createUser("workspace-other@example.com");
     const workspace = await getOrCreateDefaultWorkspace(owner.id, database);
 
-    await expect(requireWorkspaceMembership(owner.id, workspace.id, database)).resolves.toMatchObject({
+    await expect(
+      requireWorkspaceMembership(owner.id, workspace.id, database),
+    ).resolves.toMatchObject({
       id: workspace.id,
     });
-    await expect(requireWorkspaceMembership(otherUser.id, workspace.id, database)).rejects.toMatchObject({
+    await expect(
+      requireWorkspaceMembership(otherUser.id, workspace.id, database),
+    ).rejects.toMatchObject({
       code: "FORBIDDEN",
     } satisfies Partial<ApplicationError>);
   });

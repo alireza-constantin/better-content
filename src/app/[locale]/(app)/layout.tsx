@@ -12,7 +12,10 @@ type ProtectedApplicationLayoutProps = Readonly<{
   params: Promise<{ locale: string }>;
 }>;
 
-export default async function ProtectedApplicationLayout({ children, params }: ProtectedApplicationLayoutProps) {
+export default async function ProtectedApplicationLayout({
+  children,
+  params,
+}: ProtectedApplicationLayoutProps) {
   const { locale } = await params;
 
   if (!isAppLocale(locale)) {

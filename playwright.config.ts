@@ -8,7 +8,8 @@ getE2eDatabaseUrl(process.env);
 
 const port = 3100;
 const baseURL = `http://127.0.0.1:${port}`;
-const browserChannel = process.env.PLAYWRIGHT_BROWSER_CHANNEL ?? (process.platform === "win32" ? "chrome" : undefined);
+const browserChannel =
+  process.env.PLAYWRIGHT_BROWSER_CHANNEL ?? (process.platform === "win32" ? "chrome" : undefined);
 
 export default defineConfig({
   testDir: "./e2e",

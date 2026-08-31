@@ -26,7 +26,8 @@ describe("test database configuration", () => {
   it("rejects an equivalent production URL with different URL formatting", () => {
     expect(() =>
       getTestDatabaseUrl({
-        DATABASE_URL: "postgresql://postgres:postgres@LOCALHOST:5433/better_content_test?application_name=app",
+        DATABASE_URL:
+          "postgresql://postgres:postgres@LOCALHOST:5433/better_content_test?application_name=app",
         TEST_DATABASE_URL: testDatabaseUrl,
       }),
     ).toThrow("must not be the same");

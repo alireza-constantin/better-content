@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  getContentDnaReadiness,
-  parseContentDnaPayload,
-} from "./content-dna-payload";
+import { getContentDnaReadiness, parseContentDnaPayload } from "./content-dna-payload";
 
 describe("Content DNA payload snapshot contract", () => {
   it("normalizes canonical absence, line endings, and ordered creator-defined lists", () => {

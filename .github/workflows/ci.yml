@@ -44,6 +44,7 @@ jobs:
       - run: npm run db:migrate
       - run: PGPASSWORD=postgres psql --host=localhost --username=postgres --dbname=postgres --command="CREATE DATABASE better_content_test"
       - run: npm run db:migrate:test
+      - run: npm run format:check
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run test

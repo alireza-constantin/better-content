@@ -69,7 +69,9 @@ function failure(code: Exclude<DatabaseCheckCode, "READY">, message: string): Da
   return { ok: false, code, message };
 }
 
-function parseDatabaseTarget(connectionString: string | undefined): DatabaseTarget | DatabaseCheckResult {
+function parseDatabaseTarget(
+  connectionString: string | undefined,
+): DatabaseTarget | DatabaseCheckResult {
   if (!connectionString?.trim()) {
     return failure(
       "MISSING_CONFIGURATION",
@@ -94,7 +96,10 @@ function parseDatabaseTarget(connectionString: string | undefined): DatabaseTarg
       port: url.port || "5432",
     };
   } catch {
-    return failure("INVALID_CONFIGURATION", "DATABASE_URL is not a valid PostgreSQL connection string.");
+    return failure(
+      "INVALID_CONFIGURATION",
+      "DATABASE_URL is not a valid PostgreSQL connection string.",
+    );
   }
 }
 
@@ -114,7 +119,12 @@ function isUnreachableError(error: unknown): boolean {
     return true;
   }
 
-  if (typeof error !== "object" || error === null || !("message" in error) || typeof error.message !== "string") {
+  if (
+    typeof error !== "object" ||
+    error === null ||
+    !("message" in error) ||
+    typeof error.message !== "string"
+  ) {
     return false;
   }
 
@@ -127,9 +137,9 @@ function connectionFailure(error: unknown, target: DatabaseTarget): DatabaseChec
   if (code === "3D000") {
     return failure(
       "DATABASE_NOT_FOUND",
-      "Configured PostgreSQL database \"" +
+      'Configured PostgreSQL database "' +
         target.database +
-        "\" was not found at " +
+        '" was not found at ' +
         target.host +
         ":" +
         target.port +
@@ -140,24 +150,28 @@ function connectionFailure(error: unknown, target: DatabaseTarget): DatabaseChec
   if (code === "28P01" || code === "28000") {
     return failure(
       "INVALID_CONFIGURATION",
-      "PostgreSQL rejected the configured credentials for database \"" +
+      'PostgreSQL rejected the configured credentials for database "' +
         target.database +
-        "\". Check your local DATABASE_URL.",
+        '". Check your local DATABASE_URL.',
     );
   }
 
   if (isUnreachableError(error)) {
     return failure(
       "UNREACHABLE",
-      "Cannot reach PostgreSQL at " + target.host + ":" + target.port + ". Run npm run db:up and retry.",
+      "Cannot reach PostgreSQL at " +
+        target.host +
+        ":" +
+        target.port +
+        ". Run npm run db:up and retry.",
     );
   }
 
   return failure(
     "DATABASE_ERROR",
-    "Could not connect to the configured PostgreSQL database \"" +
+    'Could not connect to the configured PostgreSQL database "' +
       target.database +
-      "\". Check the local database configuration and retry.",
+      '". Check the local database configuration and retry.',
   );
 }
 
@@ -167,8 +181,15 @@ function localPortConfigurationFailure(
 ): DatabaseCheckResult | undefined {
   const configuredPort = environment.BETTER_CONTENT_DB_PORT?.trim() || "5433";
 
-  if (!/^\d+$/.test(configuredPort) || Number(configuredPort) < 1 || Number(configuredPort) > 65535) {
-    return failure("INVALID_CONFIGURATION", "BETTER_CONTENT_DB_PORT must be a valid TCP port number.");
+  if (
+    !/^\d+$/.test(configuredPort) ||
+    Number(configuredPort) < 1 ||
+    Number(configuredPort) > 65535
+  ) {
+    return failure(
+      "INVALID_CONFIGURATION",
+      "BETTER_CONTENT_DB_PORT must be a valid TCP port number.",
+    );
   }
 
   if (["localhost", "127.0.0.1", "::1"].includes(target.host) && target.port !== configuredPort) {
@@ -185,7 +206,10 @@ function localPortConfigurationFailure(
   return undefined;
 }
 
-function schemaFailure(missingTables: readonly string[], missingMigrationHistory: boolean): DatabaseCheckResult {
+function schemaFailure(
+  missingTables: readonly string[],
+  missingMigrationHistory: boolean,
+): DatabaseCheckResult {
   const missing = [...missingTables];
 
   if (missingMigrationHistory) {
@@ -231,11 +255,11 @@ export async function checkDatabaseReadiness(
     if (currentDatabase.toLowerCase() !== target.database.toLowerCase()) {
       return failure(
         "DATABASE_IDENTITY_MISMATCH",
-        "DATABASE_URL requested database \"" +
+        'DATABASE_URL requested database "' +
           target.database +
-          "\", but PostgreSQL connected to \"" +
+          '", but PostgreSQL connected to "' +
           (currentDatabase || "an unknown database") +
-          "\". Check DATABASE_URL and retry.",
+          '". Check DATABASE_URL and retry.',
       );
     }
 
@@ -250,7 +274,9 @@ export async function checkDatabaseReadiness(
     const presentTables = new Set(
       tableResult.rows.map((row) => String(row.table_schema) + "." + String(row.table_name)),
     );
-    const missingTables = requiredApplicationTables.filter((table) => !presentTables.has("public." + table));
+    const missingTables = requiredApplicationTables.filter(
+      (table) => !presentTables.has("public." + table),
+    );
     const hasMigrationTable = presentTables.has("drizzle." + migrationsTable);
 
     if (missingTables.length > 0 || !hasMigrationTable) {

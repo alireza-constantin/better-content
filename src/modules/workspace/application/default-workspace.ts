@@ -11,7 +11,10 @@ export type Workspace = typeof workspaces.$inferSelect;
 type WorkspaceDatabase = typeof db;
 type WorkspaceQueryDatabase = Pick<WorkspaceDatabase, "select">;
 
-async function findWorkspaceForUser(database: WorkspaceQueryDatabase, userId: string): Promise<Workspace | undefined> {
+async function findWorkspaceForUser(
+  database: WorkspaceQueryDatabase,
+  userId: string,
+): Promise<Workspace | undefined> {
   const [result] = await database
     .select({ workspace: workspaces })
     .from(workspaceMembers)

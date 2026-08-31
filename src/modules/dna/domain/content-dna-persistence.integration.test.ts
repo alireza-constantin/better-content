@@ -32,7 +32,10 @@ async function createUser(email: string): Promise<typeof schema.user.$inferSelec
 }
 
 async function createWorkspace(): Promise<typeof schema.workspaces.$inferSelect> {
-  const [workspace] = await database.insert(schema.workspaces).values({ name: "Workspace" }).returning();
+  const [workspace] = await database
+    .insert(schema.workspaces)
+    .values({ name: "Workspace" })
+    .returning();
 
   if (!workspace) {
     throw new Error("Test workspace creation did not return a workspace.");
@@ -71,7 +74,9 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
-  await database.execute('TRUNCATE TABLE "content_dna_versions", "content_dna", "workspace_members", "workspaces", "user" CASCADE');
+  await database.execute(
+    'TRUNCATE TABLE "content_dna_versions", "content_dna", "workspace_members", "workspaces", "user" CASCADE',
+  );
 });
 
 afterAll(async () => {
@@ -197,7 +202,12 @@ describe("Content DNA persistence invariants", () => {
     await expect(
       database
         .update(schema.contentDnaVersions)
-        .set({ payload: parseContentDnaPayload({ schemaVersion: 1, identity: { creatorOrBrandDescription: "Changed" } }) })
+        .set({
+          payload: parseContentDnaPayload({
+            schemaVersion: 1,
+            identity: { creatorOrBrandDescription: "Changed" },
+          }),
+        })
         .where(eq(schema.contentDnaVersions.id, versionId)),
     ).rejects.toThrow();
 

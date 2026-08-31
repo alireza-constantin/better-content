@@ -7,7 +7,10 @@ const rawContentDnaPayloadSchema = z
     schemaVersion: z.literal(1),
     identity: z.object({ creatorOrBrandDescription: z.string().optional() }).strict().optional(),
     audience: z.object({ targetAudienceDescription: z.string().optional() }).strict().optional(),
-    expertise: z.object({ primaryTopics: z.array(z.string()).optional() }).strict().optional(),
+    expertise: z
+      .object({ primaryTopics: z.array(z.string()).optional() })
+      .strict()
+      .optional(),
     voice: z
       .object({
         toneTraits: z.array(z.string()).optional(),
@@ -15,7 +18,10 @@ const rawContentDnaPayloadSchema = z
       })
       .strict()
       .optional(),
-    goals: z.object({ contentGoals: z.array(z.string()).optional() }).strict().optional(),
+    goals: z
+      .object({ contentGoals: z.array(z.string()).optional() })
+      .strict()
+      .optional(),
     preferences: z
       .object({
         preferredFormats: z.array(z.string()).optional(),
@@ -38,8 +44,14 @@ const rawContentDnaPayloadSchema = z
 const normalizedContentDnaPayloadStorageSchema = z
   .object({
     schemaVersion: z.literal(1),
-    identity: z.object({ creatorOrBrandDescription: z.string().min(1).max(1_500) }).strict().optional(),
-    audience: z.object({ targetAudienceDescription: z.string().min(1).max(1_500) }).strict().optional(),
+    identity: z
+      .object({ creatorOrBrandDescription: z.string().min(1).max(1_500) })
+      .strict()
+      .optional(),
+    audience: z
+      .object({ targetAudienceDescription: z.string().min(1).max(1_500) })
+      .strict()
+      .optional(),
     expertise: z
       .object({ primaryTopics: z.array(z.string().min(1).max(80)).min(1).max(10) })
       .strict()
@@ -51,7 +63,10 @@ const normalizedContentDnaPayloadStorageSchema = z
       })
       .strict()
       .optional(),
-    goals: z.object({ contentGoals: z.array(z.string().min(1).max(120)).min(1).max(5) }).strict().optional(),
+    goals: z
+      .object({ contentGoals: z.array(z.string().min(1).max(120)).min(1).max(5) })
+      .strict()
+      .optional(),
     preferences: z
       .object({
         preferredFormats: z.array(z.string().min(1).max(80)).min(1).max(8).optional(),
@@ -167,7 +182,12 @@ export function parseContentDnaPayload(input: unknown): ContentDnaPayload {
     ...(targetAudienceDescription ? { audience: { targetAudienceDescription } } : {}),
     ...(primaryTopics ? { expertise: { primaryTopics } } : {}),
     ...(toneTraits || preferredStyle
-      ? { voice: { ...(toneTraits ? { toneTraits } : {}), ...(preferredStyle ? { preferredStyle } : {}) } }
+      ? {
+          voice: {
+            ...(toneTraits ? { toneTraits } : {}),
+            ...(preferredStyle ? { preferredStyle } : {}),
+          },
+        }
       : {}),
     ...(contentGoals ? { goals: { contentGoals } } : {}),
     ...(preferredFormats || topicsToAvoid || approachesToAvoid || additionalInstructions
@@ -200,13 +220,13 @@ export function getContentDnaReadiness(payload: ContentDnaPayload): ContentDnaRe
 
   const isReady = Boolean(
     identity?.creatorOrBrandDescription &&
-      audience?.targetAudienceDescription &&
-      expertise?.primaryTopics?.length &&
-      voice?.toneTraits?.length &&
-      goals?.contentGoals?.length &&
-      language?.defaultContentLanguage &&
-      language.contentLanguages?.length &&
-      language.contentLanguages.includes(language.defaultContentLanguage),
+    audience?.targetAudienceDescription &&
+    expertise?.primaryTopics?.length &&
+    voice?.toneTraits?.length &&
+    goals?.contentGoals?.length &&
+    language?.defaultContentLanguage &&
+    language.contentLanguages?.length &&
+    language.contentLanguages.includes(language.defaultContentLanguage),
   );
 
   return isReady ? "AI_READY" : "INCOMPLETE";

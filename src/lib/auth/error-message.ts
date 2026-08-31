@@ -1,10 +1,5 @@
 export type AuthErrorMessageKey =
-  | "accountExists"
-  | "generic"
-  | "invalidCredentials"
-  | "invalidEmail"
-  | "invalidName"
-  | "password";
+  "accountExists" | "generic" | "invalidCredentials" | "invalidEmail" | "invalidName" | "password";
 
 function getErrorCode(error: unknown): string | undefined {
   if (!error || typeof error !== "object" || !("code" in error)) {

@@ -165,7 +165,9 @@ export function AuthForm({ mode }: AuthFormProps) {
           {t("passwordLabel")}
         </label>
         <input
-          aria-describedby={fieldErrors.password ? getFieldErrorId("password") : "auth-password-hint"}
+          aria-describedby={
+            fieldErrors.password ? getFieldErrorId("password") : "auth-password-hint"
+          }
           aria-invalid={Boolean(fieldErrors.password)}
           autoComplete={isSignUp ? "new-password" : "current-password"}
           className={inputClassName}
@@ -179,7 +181,11 @@ export function AuthForm({ mode }: AuthFormProps) {
           value={values.password}
         />
         {fieldErrors.password ? (
-          <p className="mt-2 text-sm text-destructive" id={getFieldErrorId("password")} role="alert">
+          <p
+            className="mt-2 text-sm text-destructive"
+            id={getFieldErrorId("password")}
+            role="alert"
+          >
             {t("password")}
           </p>
         ) : (
@@ -190,7 +196,10 @@ export function AuthForm({ mode }: AuthFormProps) {
       </div>
 
       {formError ? (
-        <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
+        <p
+          className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          role="alert"
+        >
           {t(formError)}
         </p>
       ) : null}

@@ -23,7 +23,10 @@ export function getTestDatabaseUrl(environment: EnvironmentValues): string {
     throw new Error("TEST_DATABASE_URL must identify a dedicated database ending in _test.");
   }
 
-  if (DATABASE_URL && getDatabaseIdentity(DATABASE_URL) === getDatabaseIdentity(TEST_DATABASE_URL)) {
+  if (
+    DATABASE_URL &&
+    getDatabaseIdentity(DATABASE_URL) === getDatabaseIdentity(TEST_DATABASE_URL)
+  ) {
     throw new Error("TEST_DATABASE_URL must not be the same as DATABASE_URL.");
   }
 

@@ -25,10 +25,7 @@ describe("authentication input validation", () => {
 
   it("rejects a blank email/password sign-up name on the server boundary", () => {
     expect(
-      validateUserName(
-        { name: "   " },
-        { action: "create-user", method: "email-password" },
-      ),
+      validateUserName({ name: "   " }, { action: "create-user", method: "email-password" }),
     ).toEqual({ error: "INVALID_NAME" });
   });
 });

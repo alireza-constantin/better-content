@@ -37,15 +37,18 @@ beforeEach(() => {
 });
 
 describe("protected application layout", () => {
-  it.each(["en", "fa"] as const)("redirects unauthenticated /%s/dashboard access to its localized sign-in route", async (locale) => {
-    mocks.getServerSession.mockResolvedValue(null);
+  it.each(["en", "fa"] as const)(
+    "redirects unauthenticated /%s/dashboard access to its localized sign-in route",
+    async (locale) => {
+      mocks.getServerSession.mockResolvedValue(null);
 
-    await expect(
-      ProtectedApplicationLayout({ children: null, params: Promise.resolve({ locale }) }),
-    ).rejects.toThrow(`redirect:/${locale}/sign-in`);
+      await expect(
+        ProtectedApplicationLayout({ children: null, params: Promise.resolve({ locale }) }),
+      ).rejects.toThrow(`redirect:/${locale}/sign-in`);
 
-    expect(mocks.getOrCreateDefaultWorkspace).not.toHaveBeenCalled();
-  });
+      expect(mocks.getOrCreateDefaultWorkspace).not.toHaveBeenCalled();
+    },
+  );
 
   it("provisions the authenticated user's workspace before rendering the dashboard shell", async () => {
     mocks.getServerSession.mockResolvedValue({
@@ -60,7 +63,10 @@ describe("protected application layout", () => {
       name: "Personal workspace",
     });
 
-    const result = await ProtectedApplicationLayout({ children: null, params: Promise.resolve({ locale: "en" }) });
+    const result = await ProtectedApplicationLayout({
+      children: null,
+      params: Promise.resolve({ locale: "en" }),
+    });
 
     expect(mocks.getOrCreateDefaultWorkspace).toHaveBeenCalledWith("user-1");
     expect(result.props).toMatchObject(

@@ -14,20 +14,20 @@ Your responsibility is to implement the currently approved phase correctly.
 
 You may:
 
-* inspect the repository,
-* propose implementation details,
-* identify technical risks,
-* suggest improvements,
-* ask for an architectural decision when one is genuinely unresolved.
+- inspect the repository,
+- propose implementation details,
+- identify technical risks,
+- suggest improvements,
+- ask for an architectural decision when one is genuinely unresolved.
 
 You may not independently redefine:
 
-* product scope,
-* architecture,
-* domain boundaries,
-* technology stack,
-* accepted ADRs,
-* phase boundaries.
+- product scope,
+- architecture,
+- domain boundaries,
+- technology stack,
+- accepted ADRs,
+- phase boundaries.
 
 Architectural authority remains with the Product Architect / Technical Lead.
 
@@ -111,14 +111,14 @@ Do not implement future phases early.
 
 For example, if the current phase is Foundation, do not also implement:
 
-* Content DNA,
-* AI generation,
-* ideas,
-* content editor,
-* social integrations,
-* analytics,
-* publishing,
-* background jobs,
+- Content DNA,
+- AI generation,
+- ideas,
+- content editor,
+- social integrations,
+- analytics,
+- publishing,
+- background jobs,
 
 unless explicitly required by the current phase specification.
 
@@ -136,16 +136,16 @@ Do not introduce technology because it may hypothetically be useful later.
 
 In particular, do not add without an approved architectural reason:
 
-* Redis
-* Kafka
-* Elasticsearch
-* vector databases
-* microservices
-* separate backend services
-* separate analytics services
-* event-streaming infrastructure
-* unnecessary queues
-* premature caching layers
+- Redis
+- Kafka
+- Elasticsearch
+- vector databases
+- microservices
+- separate backend services
+- separate analytics services
+- event-streaming infrastructure
+- unnecessary queues
+- premature caching layers
 
 V1 intentionally favors a modular monolith.
 
@@ -155,19 +155,19 @@ V1 intentionally favors a modular monolith.
 
 Current approved stack:
 
-* Next.js
-* TypeScript
-* PostgreSQL
-* Drizzle ORM
-* shadcn/ui
-* Better Auth
+- Next.js
+- TypeScript
+- PostgreSQL
+- Drizzle ORM
+- shadcn/ui
+- Better Auth
 
 Supporting architecture currently includes:
 
-* `next-intl`
-* Zod
-* Vitest
-* Playwright
+- `next-intl`
+- Zod
+- Vitest
+- Playwright
 
 Do not replace core stack components without an approved ADR.
 
@@ -187,9 +187,9 @@ Before introducing a new runtime dependency, verify:
 
 For a significant dependency, explain:
 
-* why it is needed,
-* what alternatives were considered,
-* where it will be used.
+- why it is needed,
+- what alternatives were considered,
+- where it will be used.
 
 Do not add dependencies for speculative future use.
 
@@ -272,12 +272,12 @@ Production schema changes use reviewed Drizzle migrations.
 
 Rules:
 
-* commit schema changes,
-* generate/commit migrations,
-* review migrations,
-* never manually modify production schema,
-* do not use ad-hoc schema push as the production migration strategy,
-* explicitly review destructive migrations.
+- commit schema changes,
+- generate/commit migrations,
+- review migrations,
+- never manually modify production schema,
+- do not use ad-hoc schema push as the production migration strategy,
+- explicitly review destructive migrations.
 
 Do not remove or rewrite historical migrations after they have become part of shared history unless explicitly instructed.
 
@@ -381,8 +381,8 @@ Do not introduce a conflicting persistent `USED` state.
 
 Content has:
 
-* mutable working state,
-* immutable historical versions.
+- mutable working state,
+- immutable historical versions.
 
 Publishing must always reference an immutable content version.
 
@@ -441,8 +441,8 @@ Do not silently change the meaning of existing stored documents.
 
 The distinction between:
 
-* Performance Direction
-* Edit Direction
+- Performance Direction
+- Edit Direction
 
 is established.
 
@@ -452,11 +452,11 @@ Do not independently invent a large taxonomy.
 
 The approved structured-editor phase specification will define:
 
-* allowed Performance Directions,
-* allowed Edit Directions,
-* parameters,
-* validation,
-* anchoring behavior.
+- allowed Performance Directions,
+- allowed Edit Directions,
+- parameters,
+- validation,
+- anchoring behavior.
 
 ---
 
@@ -468,12 +468,12 @@ However, the final anchor model is intentionally deferred until the editor phase
 
 Possible concepts include:
 
-* Script block,
-* text span,
-* phrase,
-* word cue,
-* before/after location,
-* relative timing.
+- Script block,
+- text span,
+- phrase,
+- word cue,
+- before/after location,
+- relative timing.
 
 Do not lock the final schema before the relevant phase specification.
 
@@ -525,13 +525,13 @@ Platform-specific API behavior must not leak throughout the application.
 
 Provider differences include:
 
-* OAuth,
-* permissions,
-* publication identifiers,
-* metrics,
-* account eligibility,
-* rate limits,
-* failure behavior.
+- OAuth,
+- permissions,
+- publication identifiers,
+- metrics,
+- account eligibility,
+- rate limits,
+- failure behavior.
 
 The application should use capability-aware provider abstractions.
 
@@ -565,12 +565,12 @@ Social OAuth tokens are sensitive credentials.
 
 Rules:
 
-* never store tokens as plaintext,
-* never send refresh tokens to the browser,
-* never log tokens,
-* use approved authenticated encryption,
-* support token expiry/revocation,
-* request minimum required scopes.
+- never store tokens as plaintext,
+- never send refresh tokens to the browser,
+- never log tokens,
+- use approved authenticated encryption,
+- support token expiry/revocation,
+- request minimum required scopes.
 
 Current architecture specifies application-level encrypted credential storage with key versioning.
 
@@ -654,11 +654,11 @@ Do not introduce Redis or another job system without an approved architectural c
 
 Jobs must:
 
-* be retry-safe,
-* be idempotent,
-* avoid storing secrets in payloads,
-* use bounded retries,
-* classify failure types.
+- be retry-safe,
+- be idempotent,
+- avoid storing secrets in payloads,
+- use bounded retries,
+- classify failure types.
 
 ---
 
@@ -690,10 +690,10 @@ AI-generated content must never automatically trigger privileged side effects.
 
 AI runs should preserve operational metadata required for:
 
-* debugging,
-* evaluation,
-* cost analysis,
-* historical traceability.
+- debugging,
+- evaluation,
+- cost analysis,
+- historical traceability.
 
 Do not store hidden model chain-of-thought or private reasoning traces.
 
@@ -740,10 +740,10 @@ Use correct `lang` and `dir` attributes.
 
 Prefer logical layout concepts such as:
 
-* start,
-* end,
-* inline-start,
-* inline-end.
+- start,
+- end,
+- inline-start,
+- inline-end.
 
 Avoid unnecessary left/right assumptions.
 
@@ -759,15 +759,15 @@ Use runtime schemas at application boundaries.
 
 Important validation areas include:
 
-* authentication/authorization,
-* IDs,
-* workspace ownership,
-* workflow transitions,
-* AI responses,
-* publication URLs,
-* structured documents,
-* Production Directions,
-* provider responses.
+- authentication/authorization,
+- IDs,
+- workspace ownership,
+- workflow transitions,
+- AI responses,
+- publication URLs,
+- structured documents,
+- Production Directions,
+- provider responses.
 
 Client validation improves UX but does not replace server validation.
 
@@ -779,10 +779,10 @@ Use database transactions for operations that must remain consistent.
 
 Examples include:
 
-* accepting content,
-* creating immutable versions,
-* registering publications,
-* updating related workflow state.
+- accepting content,
+- creating immutable versions,
+- registering publications,
+- updating related workflow state.
 
 Do not keep a database transaction open while waiting on a slow external API.
 
@@ -837,24 +837,24 @@ Use structured server-side logging.
 
 Useful correlation fields may include:
 
-* request ID,
-* workspace ID,
-* user ID,
-* module,
-* operation,
-* entity ID,
-* AI run ID,
-* publication ID,
-* job ID,
-* error code.
+- request ID,
+- workspace ID,
+- user ID,
+- module,
+- operation,
+- entity ID,
+- AI run ID,
+- publication ID,
+- job ID,
+- error code.
 
 Do not log:
 
-* passwords,
-* secrets,
-* OAuth tokens,
-* refresh tokens,
-* full authorization headers.
+- passwords,
+- secrets,
+- OAuth tokens,
+- refresh tokens,
+- full authorization headers.
 
 ---
 
@@ -872,12 +872,12 @@ For pure domain logic.
 
 For:
 
-* database behavior,
-* authorization,
-* transactions,
-* versioning,
-* jobs,
-* analytics persistence.
+- database behavior,
+- authorization,
+- transactions,
+- versioning,
+- jobs,
+- analytics persistence.
 
 ### End-to-end tests
 
@@ -895,9 +895,9 @@ Automated tests must not depend on real production social accounts.
 
 Provider integrations should be testable through:
 
-* mocks,
-* sanitized fixtures,
-* contract tests.
+- mocks,
+- sanitized fixtures,
+- contract tests.
 
 Test provider failure states as well as success paths.
 
@@ -920,6 +920,7 @@ A phase should not be considered complete while required checks fail.
 Expected checks eventually include:
 
 ```text
+format:check
 lint
 typecheck
 unit tests
@@ -937,17 +938,17 @@ Security requirements are part of implementation, not optional hardening.
 
 Always consider:
 
-* authorization,
-* data isolation,
-* secret exposure,
-* SSRF,
-* XSS,
-* unsafe redirects,
-* token handling,
-* input validation,
-* upload validation,
-* sensitive logging,
-* provider permissions.
+- authorization,
+- data isolation,
+- secret exposure,
+- SSRF,
+- XSS,
+- unsafe redirects,
+- token handling,
+- input validation,
+- upload validation,
+- sensitive logging,
+- provider permissions.
 
 If a requested implementation creates a meaningful security concern, flag it immediately.
 
@@ -973,13 +974,13 @@ Use measurements before introducing complex optimization infrastructure.
 
 UI work must consider:
 
-* keyboard navigation,
-* focus behavior,
-* semantic HTML,
-* accessible labels,
-* contrast,
-* screen-reader compatibility,
-* RTL interaction behavior.
+- keyboard navigation,
+- focus behavior,
+- semantic HTML,
+- accessible labels,
+- contrast,
+- screen-reader compatibility,
+- RTL interaction behavior.
 
 Accessibility is part of the definition of production-quality UI.
 
@@ -989,21 +990,21 @@ Accessibility is part of the definition of production-quality UI.
 
 Prefer:
 
-* clear names,
-* small cohesive modules,
-* explicit behavior,
-* simple control flow,
-* typed boundaries,
-* maintainable abstractions.
+- clear names,
+- small cohesive modules,
+- explicit behavior,
+- simple control flow,
+- typed boundaries,
+- maintainable abstractions.
 
 Avoid:
 
-* clever unnecessary abstractions,
-* speculative frameworks,
-* giant components,
-* giant service files,
-* duplicated domain rules,
-* hidden side effects.
+- clever unnecessary abstractions,
+- speculative frameworks,
+- giant components,
+- giant service files,
+- duplicated domain rules,
+- hidden side effects.
 
 ---
 
@@ -1011,9 +1012,9 @@ Avoid:
 
 Comments should explain:
 
-* why,
-* invariants,
-* unusual external constraints.
+- why,
+- invariants,
+- unusual external constraints.
 
 Do not write comments that merely restate obvious code.
 
@@ -1049,11 +1050,11 @@ Do not use destructive Git commands to make the working tree clean.
 
 Do not:
 
-* force push,
-* reset user work,
-* discard unrelated changes,
-* rewrite shared history,
-* commit secrets.
+- force push,
+- reset user work,
+- discard unrelated changes,
+- rewrite shared history,
+- commit secrets.
 
 Do not create commits unless the task explicitly asks for a commit.
 
@@ -1065,10 +1066,10 @@ Documentation is part of the implementation.
 
 If a phase introduces an approved change that affects:
 
-* behavior,
-* architecture,
-* database structure,
-* operational requirements,
+- behavior,
+- architecture,
+- database structure,
+- operational requirements,
 
 update the relevant documentation when the phase specification asks for it.
 
@@ -1190,7 +1191,6 @@ Tickets are execution artifacts and do not override:
 Ticket status, blocker relationships, and implementation notes should be committed when they materially change.
 
 Do not delete or regenerate existing .scratch ticket directories unless explicitly instructed. Preserve ticket history and statuses.
-
 
 ## Unexpected Errors, Warnings, and Regressions
 

@@ -17,7 +17,10 @@ import { createContentDnaApplicationService } from "./content-dna-service";
 
 const pool = new Pool({ connectionString: getTestDatabaseUrl(process.env) });
 const database = drizzle({ client: pool, schema });
-const partialPayload = { schemaVersion: 1, identity: { creatorOrBrandDescription: "Creator" } } satisfies ContentDnaPayload;
+const partialPayload = {
+  schemaVersion: 1,
+  identity: { creatorOrBrandDescription: "Creator" },
+} satisfies ContentDnaPayload;
 const aiReadyPayload = {
   schemaVersion: 1,
   identity: { creatorOrBrandDescription: "Creator" },
@@ -41,14 +44,21 @@ async function createUser(email: string): Promise<typeof schema.user.$inferSelec
   return user;
 }
 
-async function createWorkspaceForUser(userId: string): Promise<typeof schema.workspaces.$inferSelect> {
-  const [workspace] = await database.insert(schema.workspaces).values({ name: "Workspace" }).returning();
+async function createWorkspaceForUser(
+  userId: string,
+): Promise<typeof schema.workspaces.$inferSelect> {
+  const [workspace] = await database
+    .insert(schema.workspaces)
+    .values({ name: "Workspace" })
+    .returning();
 
   if (!workspace) {
     throw new Error("Test workspace creation did not return a workspace.");
   }
 
-  await database.insert(schema.workspaceMembers).values({ workspaceId: workspace.id, userId, role: "owner" });
+  await database
+    .insert(schema.workspaceMembers)
+    .values({ workspaceId: workspace.id, userId, role: "owner" });
   return workspace;
 }
 
@@ -69,7 +79,9 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
-  await database.execute('TRUNCATE TABLE "content_dna_versions", "content_dna", "workspace_members", "workspaces", "user" CASCADE');
+  await database.execute(
+    'TRUNCATE TABLE "content_dna_versions", "content_dna", "workspace_members", "workspaces", "user" CASCADE',
+  );
 });
 
 afterAll(async () => {
@@ -111,7 +123,9 @@ describe("Content DNA application services", () => {
       readiness: "INCOMPLETE",
       isCurrent: true,
     });
-    await expect(service.getCurrentContentDna({ workspaceId: workspace.id })).resolves.toMatchObject({
+    await expect(
+      service.getCurrentContentDna({ workspaceId: workspace.id }),
+    ).resolves.toMatchObject({
       status: "INCOMPLETE",
       currentVersion: { id: saved.id, versionNumber: 1 },
     });
@@ -125,10 +139,16 @@ describe("Content DNA application services", () => {
       getAuthenticatedUserId: async () => owner.id,
     });
 
-    const saved = await service.saveContentDna({ workspaceId: workspace.id, baseVersionId: null, payload: aiReadyPayload });
+    const saved = await service.saveContentDna({
+      workspaceId: workspace.id,
+      baseVersionId: null,
+      payload: aiReadyPayload,
+    });
 
     expect(saved).toMatchObject({ versionNumber: 1, readiness: "AI_READY", isCurrent: true });
-    await expect(service.getCurrentContentDna({ workspaceId: workspace.id })).resolves.toMatchObject({ status: "AI_READY" });
+    await expect(
+      service.getCurrentContentDna({ workspaceId: workspace.id }),
+    ).resolves.toMatchObject({ status: "AI_READY" });
   });
 
   it("allows a workspace member to read saved Content DNA", async () => {
@@ -139,9 +159,15 @@ describe("Content DNA application services", () => {
       getAuthenticatedUserId: async () => owner.id,
     });
 
-    const saved = await service.saveContentDna({ workspaceId: workspace.id, baseVersionId: null, payload: partialPayload });
+    const saved = await service.saveContentDna({
+      workspaceId: workspace.id,
+      baseVersionId: null,
+      payload: partialPayload,
+    });
 
-    await expect(service.getCurrentContentDna({ workspaceId: workspace.id })).resolves.toMatchObject({
+    await expect(
+      service.getCurrentContentDna({ workspaceId: workspace.id }),
+    ).resolves.toMatchObject({
       currentVersion: { id: saved.id, payload: partialPayload },
     });
   });
@@ -150,26 +176,50 @@ describe("Content DNA application services", () => {
     const owner = await createUser("private-read-owner@example.com");
     const otherUser = await createUser("private-read-other@example.com");
     const workspace = await createWorkspaceForUser(owner.id);
-    const ownerService = createContentDnaApplicationService({ database, getAuthenticatedUserId: async () => owner.id });
-    const unauthenticatedService = createContentDnaApplicationService({ database, getAuthenticatedUserId: async () => null });
-    const otherService = createContentDnaApplicationService({ database, getAuthenticatedUserId: async () => otherUser.id });
+    const ownerService = createContentDnaApplicationService({
+      database,
+      getAuthenticatedUserId: async () => owner.id,
+    });
+    const unauthenticatedService = createContentDnaApplicationService({
+      database,
+      getAuthenticatedUserId: async () => null,
+    });
+    const otherService = createContentDnaApplicationService({
+      database,
+      getAuthenticatedUserId: async () => otherUser.id,
+    });
 
-    await ownerService.saveContentDna({ workspaceId: workspace.id, baseVersionId: null, payload: partialPayload });
+    await ownerService.saveContentDna({
+      workspaceId: workspace.id,
+      baseVersionId: null,
+      payload: partialPayload,
+    });
 
-    await expect(unauthenticatedService.getCurrentContentDna({ workspaceId: workspace.id })).rejects.toMatchObject({
+    await expect(
+      unauthenticatedService.getCurrentContentDna({ workspaceId: workspace.id }),
+    ).rejects.toMatchObject({
       code: "UNAUTHORIZED",
     });
-    await expect(otherService.getCurrentContentDna({ workspaceId: workspace.id })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(
+      otherService.getCurrentContentDna({ workspaceId: workspace.id }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
   it("rejects an unrelated user from mutating Content DNA", async () => {
     const owner = await createUser("private-mutation-owner@example.com");
     const otherUser = await createUser("private-mutation-other@example.com");
     const workspace = await createWorkspaceForUser(owner.id);
-    const otherService = createContentDnaApplicationService({ database, getAuthenticatedUserId: async () => otherUser.id });
+    const otherService = createContentDnaApplicationService({
+      database,
+      getAuthenticatedUserId: async () => otherUser.id,
+    });
 
     await expect(
-      otherService.saveContentDna({ workspaceId: workspace.id, baseVersionId: null, payload: partialPayload }),
+      otherService.saveContentDna({
+        workspaceId: workspace.id,
+        baseVersionId: null,
+        payload: partialPayload,
+      }),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
     expect(await countVersions()).toBe(0);
   });
@@ -188,7 +238,11 @@ describe("Content DNA application services", () => {
       identity: { creatorOrBrandDescription: "Private creator instructions must not be logged" },
     } satisfies ContentDnaPayload;
 
-    await service.saveContentDna({ workspaceId: workspace.id, baseVersionId: null, payload: privatePayload });
+    await service.saveContentDna({
+      workspaceId: workspace.id,
+      baseVersionId: null,
+      payload: privatePayload,
+    });
 
     expect(serviceLogger.info).toHaveBeenCalledWith("dna.save.succeeded", {
       userId: owner.id,
@@ -196,7 +250,9 @@ describe("Content DNA application services", () => {
       module: "dna",
       operation: "saveContentDna",
     });
-    expect(JSON.stringify(serviceLogger.info.mock.calls)).not.toContain("Private creator instructions");
+    expect(JSON.stringify(serviceLogger.info.mock.calls)).not.toContain(
+      "Private creator instructions",
+    );
     expect(serviceLogger.warn).not.toHaveBeenCalled();
   });
 
@@ -207,14 +263,26 @@ describe("Content DNA application services", () => {
       database,
       getAuthenticatedUserId: async () => owner.id,
     });
-    const first = await service.saveContentDna({ workspaceId: workspace.id, baseVersionId: null, payload: partialPayload });
-    const second = await service.saveContentDna({ workspaceId: workspace.id, baseVersionId: first.id, payload: aiReadyPayload });
+    const first = await service.saveContentDna({
+      workspaceId: workspace.id,
+      baseVersionId: null,
+      payload: partialPayload,
+    });
+    const second = await service.saveContentDna({
+      workspaceId: workspace.id,
+      baseVersionId: first.id,
+      payload: aiReadyPayload,
+    });
 
-    await expect(service.listContentDnaVersions({ workspaceId: workspace.id })).resolves.toMatchObject([
+    await expect(
+      service.listContentDnaVersions({ workspaceId: workspace.id }),
+    ).resolves.toMatchObject([
       { id: second.id, versionNumber: 2, isCurrent: true, readiness: "AI_READY" },
       { id: first.id, versionNumber: 1, isCurrent: false, readiness: "INCOMPLETE" },
     ]);
-    await expect(service.getContentDnaVersion({ workspaceId: workspace.id, versionId: first.id })).resolves.toMatchObject({
+    await expect(
+      service.getContentDnaVersion({ workspaceId: workspace.id, versionId: first.id }),
+    ).resolves.toMatchObject({
       id: first.id,
       payload: partialPayload,
       isCurrent: false,
@@ -226,8 +294,14 @@ describe("Content DNA application services", () => {
     const otherUser = await createUser("version-other@example.com");
     const ownerWorkspace = await createWorkspaceForUser(owner.id);
     const otherWorkspace = await createWorkspaceForUser(otherUser.id);
-    const ownerService = createContentDnaApplicationService({ database, getAuthenticatedUserId: async () => owner.id });
-    const otherService = createContentDnaApplicationService({ database, getAuthenticatedUserId: async () => otherUser.id });
+    const ownerService = createContentDnaApplicationService({
+      database,
+      getAuthenticatedUserId: async () => owner.id,
+    });
+    const otherService = createContentDnaApplicationService({
+      database,
+      getAuthenticatedUserId: async () => otherUser.id,
+    });
     const saved = await ownerService.saveContentDna({
       workspaceId: ownerWorkspace.id,
       baseVersionId: null,
@@ -246,7 +320,11 @@ describe("Content DNA application services", () => {
       database,
       getAuthenticatedUserId: async () => owner.id,
     });
-    const first = await service.saveContentDna({ workspaceId: workspace.id, baseVersionId: null, payload: partialPayload });
+    const first = await service.saveContentDna({
+      workspaceId: workspace.id,
+      baseVersionId: null,
+      payload: partialPayload,
+    });
 
     const repeated = await service.saveContentDna({
       workspaceId: workspace.id,
@@ -266,12 +344,24 @@ describe("Content DNA application services", () => {
       database,
       getAuthenticatedUserId: async () => owner.id,
     });
-    const first = await service.saveContentDna({ workspaceId: workspace.id, baseVersionId: null, payload: partialPayload });
-    const second = await service.saveContentDna({ workspaceId: workspace.id, baseVersionId: first.id, payload: aiReadyPayload });
+    const first = await service.saveContentDna({
+      workspaceId: workspace.id,
+      baseVersionId: null,
+      payload: partialPayload,
+    });
+    const second = await service.saveContentDna({
+      workspaceId: workspace.id,
+      baseVersionId: first.id,
+      payload: aiReadyPayload,
+    });
 
     expect(second.versionNumber).toBe(2);
     await expect(
-      service.saveContentDna({ workspaceId: workspace.id, baseVersionId: first.id, payload: partialPayload }),
+      service.saveContentDna({
+        workspaceId: workspace.id,
+        baseVersionId: first.id,
+        payload: partialPayload,
+      }),
     ).rejects.toMatchObject({ code: "CONFLICT" });
     expect(await countVersions()).toBe(2);
   });
@@ -285,20 +375,38 @@ describe("Content DNA application services", () => {
     });
 
     const results = await Promise.allSettled([
-      service.saveContentDna({ workspaceId: workspace.id, baseVersionId: null, payload: partialPayload }),
-      service.saveContentDna({ workspaceId: workspace.id, baseVersionId: null, payload: aiReadyPayload }),
+      service.saveContentDna({
+        workspaceId: workspace.id,
+        baseVersionId: null,
+        payload: partialPayload,
+      }),
+      service.saveContentDna({
+        workspaceId: workspace.id,
+        baseVersionId: null,
+        payload: aiReadyPayload,
+      }),
     ]);
 
-    const winner = results.find((result): result is PromiseFulfilledResult<Awaited<ReturnType<typeof service.saveContentDna>>> => result.status === "fulfilled");
+    const winner = results.find(
+      (
+        result,
+      ): result is PromiseFulfilledResult<Awaited<ReturnType<typeof service.saveContentDna>>> =>
+        result.status === "fulfilled",
+    );
 
     expect(winner).toMatchObject({ status: "fulfilled", value: { versionNumber: 1 } });
-    const failures = results.filter((result): result is PromiseRejectedResult => result.status === "rejected");
+    const failures = results.filter(
+      (result): result is PromiseRejectedResult => result.status === "rejected",
+    );
 
     expect(failures).toHaveLength(1);
     expect(failures[0]?.reason).toMatchObject({ code: "CONFLICT" });
     expect(await countContainers()).toBe(1);
     expect(await countVersions()).toBe(1);
-    const [container] = await database.select().from(schema.contentDna).where(eq(schema.contentDna.workspaceId, workspace.id));
+    const [container] = await database
+      .select()
+      .from(schema.contentDna)
+      .where(eq(schema.contentDna.workspaceId, workspace.id));
     expect(container?.currentVersionId).toBe(winner?.value.id);
   });
 
@@ -309,26 +417,41 @@ describe("Content DNA application services", () => {
       database,
       getAuthenticatedUserId: async () => owner.id,
     });
-    const first = await service.saveContentDna({ workspaceId: workspace.id, baseVersionId: null, payload: partialPayload });
+    const first = await service.saveContentDna({
+      workspaceId: workspace.id,
+      baseVersionId: null,
+      payload: partialPayload,
+    });
 
     const results = await Promise.allSettled([
-      service.saveContentDna({ workspaceId: workspace.id, baseVersionId: first.id, payload: aiReadyPayload }),
       service.saveContentDna({
         workspaceId: workspace.id,
         baseVersionId: first.id,
-        payload: { ...partialPayload, identity: { creatorOrBrandDescription: "Different creator" } },
+        payload: aiReadyPayload,
+      }),
+      service.saveContentDna({
+        workspaceId: workspace.id,
+        baseVersionId: first.id,
+        payload: {
+          ...partialPayload,
+          identity: { creatorOrBrandDescription: "Different creator" },
+        },
       }),
     ]);
 
     const winner = results.find((result) => result.status === "fulfilled");
 
     expect(winner).toMatchObject({ status: "fulfilled", value: { versionNumber: 2 } });
-    const failures = results.filter((result): result is PromiseRejectedResult => result.status === "rejected");
+    const failures = results.filter(
+      (result): result is PromiseRejectedResult => result.status === "rejected",
+    );
 
     expect(failures).toHaveLength(1);
     expect(failures[0]?.reason).toMatchObject({ code: "CONFLICT" });
     expect(await countVersions()).toBe(2);
-    await expect(service.getCurrentContentDna({ workspaceId: workspace.id })).resolves.toMatchObject({
+    await expect(
+      service.getCurrentContentDna({ workspaceId: workspace.id }),
+    ).resolves.toMatchObject({
       currentVersion: { id: winner?.status === "fulfilled" ? winner.value.id : "" },
     });
   });
@@ -340,8 +463,16 @@ describe("Content DNA application services", () => {
       database,
       getAuthenticatedUserId: async () => owner.id,
     });
-    const first = await service.saveContentDna({ workspaceId: workspace.id, baseVersionId: null, payload: partialPayload });
-    const second = await service.saveContentDna({ workspaceId: workspace.id, baseVersionId: first.id, payload: aiReadyPayload });
+    const first = await service.saveContentDna({
+      workspaceId: workspace.id,
+      baseVersionId: null,
+      payload: partialPayload,
+    });
+    const second = await service.saveContentDna({
+      workspaceId: workspace.id,
+      baseVersionId: first.id,
+      payload: aiReadyPayload,
+    });
     const third = await service.saveContentDna({
       workspaceId: workspace.id,
       baseVersionId: second.id,
@@ -359,10 +490,20 @@ describe("Content DNA application services", () => {
       database,
       getAuthenticatedUserId: async () => owner.id,
     });
-    const first = await service.saveContentDna({ workspaceId: workspace.id, baseVersionId: null, payload: partialPayload });
-    await service.saveContentDna({ workspaceId: workspace.id, baseVersionId: first.id, payload: aiReadyPayload });
+    const first = await service.saveContentDna({
+      workspaceId: workspace.id,
+      baseVersionId: null,
+      payload: partialPayload,
+    });
+    await service.saveContentDna({
+      workspaceId: workspace.id,
+      baseVersionId: first.id,
+      payload: aiReadyPayload,
+    });
 
-    await expect(service.getContentDnaVersion({ workspaceId: workspace.id, versionId: first.id })).resolves.toMatchObject({
+    await expect(
+      service.getContentDnaVersion({ workspaceId: workspace.id, versionId: first.id }),
+    ).resolves.toMatchObject({
       payload: partialPayload,
       isCurrent: false,
     });

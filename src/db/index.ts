@@ -10,7 +10,9 @@ const globalForDatabase = globalThis as typeof globalThis & {
   betterContentDatabasePool?: Pool;
 };
 
-const pool = globalForDatabase.betterContentDatabasePool ?? new Pool({ connectionString: getServerEnvironment().DATABASE_URL });
+const pool =
+  globalForDatabase.betterContentDatabasePool ??
+  new Pool({ connectionString: getServerEnvironment().DATABASE_URL });
 
 if (process.env.NODE_ENV !== "production") {
   globalForDatabase.betterContentDatabasePool = pool;

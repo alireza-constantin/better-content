@@ -22,10 +22,7 @@ function hasValidEmailFormat(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(value);
 }
 
-export function validateAuthInput(
-  mode: "sign-in" | "sign-up",
-  input: AuthInput,
-): AuthFormErrors {
+export function validateAuthInput(mode: "sign-in" | "sign-up", input: AuthInput): AuthFormErrors {
   const errors: AuthFormErrors = {};
 
   if (mode === "sign-up" && input.name.trim().length === 0) {

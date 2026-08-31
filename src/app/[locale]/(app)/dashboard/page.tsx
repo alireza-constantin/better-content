@@ -9,7 +9,9 @@ export default async function DashboardPage() {
       <h1 className="mt-3 text-balance text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">
         {t("title")}
       </h1>
-      <p className="mt-5 max-w-xl text-pretty leading-7 text-muted-foreground">{t("description")}</p>
+      <p className="mt-5 max-w-xl text-pretty leading-7 text-muted-foreground">
+        {t("description")}
+      </p>
     </section>
   );
 }

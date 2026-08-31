@@ -54,10 +54,14 @@ function runNext(arguments_: string[]): Promise<void> {
 try {
   await runNext(["build"]);
 
-  const child = spawn(process.execPath, [nextCli, "start", "--hostname", "127.0.0.1", "--port", port], {
-    env: serverEnvironment,
-    stdio: "inherit",
-  });
+  const child = spawn(
+    process.execPath,
+    [nextCli, "start", "--hostname", "127.0.0.1", "--port", port],
+    {
+      env: serverEnvironment,
+      stdio: "inherit",
+    },
+  );
 
   child.on("error", (error) => {
     restoreGeneratedFiles();

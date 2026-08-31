@@ -39,10 +39,20 @@ export function SignOutButton({ userName }: SignOutButtonProps) {
   return (
     <div className="flex flex-wrap items-center justify-end gap-2">
       <span className="text-sm text-muted-foreground">{t("signedInAs", { name: userName })}</span>
-      <Button disabled={isSubmitting} onClick={handleSignOut} size="sm" type="button" variant="outline">
+      <Button
+        disabled={isSubmitting}
+        onClick={handleSignOut}
+        size="sm"
+        type="button"
+        variant="outline"
+      >
         {isSubmitting ? t("signingOut") : t("signOut")}
       </Button>
-      {hasError ? <p className="basis-full text-end text-sm text-destructive" role="alert">{t("generic")}</p> : null}
+      {hasError ? (
+        <p className="basis-full text-end text-sm text-destructive" role="alert">
+          {t("generic")}
+        </p>
+      ) : null}
     </div>
   );
 }
