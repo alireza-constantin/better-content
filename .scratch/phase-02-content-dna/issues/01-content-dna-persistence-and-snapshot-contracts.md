@@ -1,6 +1,6 @@
 # 01: Establish Content DNA persistence and snapshot contracts
 
-**Status:** ready-for-agent
+**Status:** resolved
 **Phase:** 02
 **Blocked by:** None (can start immediately)
 
@@ -94,3 +94,7 @@ None. This ticket establishes the domain/persistence contract consumed by subseq
 - State the exact database approach used for same-container current-version integrity and version immutability, including any practical tradeoff.
 - Report unit/integration test results and verification-command results.
 - Confirm no application UI, AI, ideas, or other future-phase work was added.
+
+## Answer
+
+Implemented the Content DNA persistence model, canonical V1 snapshot parser, readiness derivation, reviewed Drizzle migrations, and focused unit/PostgreSQL integration coverage. The database keeps `current_version_id` non-null and uses an initially deferred composite foreign key to enforce that it belongs to the same container; immutable version rows reject updates. No application services, UI, AI, ideas, or other future-phase behavior was added.

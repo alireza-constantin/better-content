@@ -10,6 +10,8 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    // PostgreSQL integration files share TEST_DATABASE_URL and truncate it between cases.
+    fileParallelism: false,
     include: ["src/**/*.test.ts"],
   },
 });
