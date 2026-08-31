@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Pool } from "pg";
@@ -79,23 +79,45 @@ afterAll(async () => {
 });
 
 describe("Content DNA persistence invariants", () => {
-  it("commits a container only with its same-container current version", async () => {
+  it("establishes a valid first DNA/version pair in one transaction", async () => {
     const user = await createUser("first-content-dna@example.com");
-    const firstWorkspace = await createWorkspace();
-    const secondWorkspace = await createWorkspace();
-    const workspaceWithoutVersion = await createWorkspace();
-    const first = await createContentDna(firstWorkspace.id, user.id);
-    const second = await createContentDna(secondWorkspace.id, user.id);
+    const workspace = await createWorkspace();
+    const { contentDnaId, versionId } = await createContentDna(workspace.id, user.id);
+
+    const [container] = await database
+      .select()
+      .from(schema.contentDna)
+      .where(eq(schema.contentDna.id, contentDnaId));
+    const [version] = await database
+      .select()
+      .from(schema.contentDnaVersions)
+      .where(eq(schema.contentDnaVersions.id, versionId));
+
+    expect(container?.currentVersionId).toBe(versionId);
+    expect(version?.contentDnaId).toBe(contentDnaId);
+    expect(version?.versionNumber).toBe(1);
+  });
+
+  it("rejects commit when current_version_id references no version", async () => {
+    const workspace = await createWorkspace();
 
     await expect(
       database.transaction(async (transaction) => {
         await transaction.insert(schema.contentDna).values({
           id: randomUUID(),
-          workspaceId: workspaceWithoutVersion.id,
+          workspaceId: workspace.id,
           currentVersionId: randomUUID(),
         });
       }),
     ).rejects.toThrow();
+  });
+
+  it("rejects a current version belonging to another DNA", async () => {
+    const user = await createUser("same-container-content-dna@example.com");
+    const firstWorkspace = await createWorkspace();
+    const secondWorkspace = await createWorkspace();
+    const first = await createContentDna(firstWorkspace.id, user.id);
+    const second = await createContentDna(secondWorkspace.id, user.id);
 
     await expect(
       database
@@ -112,12 +134,18 @@ describe("Content DNA persistence invariants", () => {
     expect(current?.currentVersionId).toBe(first.versionId);
   });
 
-  it("allows at most one container per workspace and one number per container", async () => {
+  it("enforces one container per workspace", async () => {
     const user = await createUser("unique-content-dna@example.com");
     const workspace = await createWorkspace();
-    const { contentDnaId } = await createContentDna(workspace.id, user.id);
+    await createContentDna(workspace.id, user.id);
 
     await expect(createContentDna(workspace.id, user.id)).rejects.toThrow();
+  });
+
+  it("enforces unique version numbers per DNA", async () => {
+    const user = await createUser("unique-version-content-dna@example.com");
+    const workspace = await createWorkspace();
+    const { contentDnaId } = await createContentDna(workspace.id, user.id);
 
     await database.insert(schema.contentDnaVersions).values({
       contentDnaId,
@@ -143,6 +171,22 @@ describe("Content DNA persistence invariants", () => {
         createdByUserId: user.id,
       }),
     ).rejects.toThrow();
+  });
+
+  it("uses a deferred same-container FK without the redundant source unique", async () => {
+    const foreignKey = await database.execute(sql`
+      SELECT condeferrable, condeferred
+      FROM pg_constraint
+      WHERE conname = 'content_dna_current_version_same_container_fk'
+    `);
+    const redundantUnique = await database.execute(sql`
+      SELECT 1
+      FROM pg_constraint
+      WHERE conname = 'content_dna_id_current_version_id_unique'
+    `);
+
+    expect(foreignKey.rows).toEqual([{ condeferrable: true, condeferred: true }]);
+    expect(redundantUnique.rows).toHaveLength(0);
   });
 
   it("prevents in-place mutation of an immutable snapshot", async () => {

@@ -98,3 +98,11 @@ None. This ticket establishes the domain/persistence contract consumed by subseq
 ## Answer
 
 Implemented the Content DNA persistence model, canonical V1 snapshot parser, readiness derivation, reviewed Drizzle migrations, and focused unit/PostgreSQL integration coverage. The database keeps `current_version_id` non-null and uses an initially deferred composite foreign key to enforce that it belongs to the same container; immutable version rows reject updates. No application services, UI, AI, ideas, or other future-phase behavior was added.
+
+### Schema review follow-up
+
+- Confirmed that Drizzle 0.45.2 cannot declare PostgreSQL foreign-key deferrability. The Drizzle schema therefore models the same-container composite relationship, while the reviewed `0001_bouncy_killer_shrike.sql` migration applies `DEFERRABLE INITIALLY DEFERRED` to `content_dna_current_version_same_container_fk`.
+- Any future migration that drops, recreates, or otherwise modifies `content_dna_current_version_same_container_fk` must explicitly preserve `DEFERRABLE INITIALLY DEFERRED`; Drizzle schema metadata does not retain that PostgreSQL timing property.
+- Applied the complete migration chain to the dedicated PostgreSQL test database and verified `pg_constraint` reports this FK with both `condeferrable = true` and `condeferred = true`.
+- Removed the redundant `content_dna_id_current_version_id_unique` declaration from the Drizzle schema and added `0003_steep_forgotten_one.sql` to drop the already-unnecessary historical constraint without rewriting migration history. The target candidate key `content_dna_versions(content_dna_id, id)` remains.
+- Integration coverage explicitly proves one-transaction first creation, missing-version commit failure, cross-DNA pointer failure, duplicate workspace-container failure, duplicate per-DNA version-number failure, deferred-FK metadata, and immutable version updates. The existing UPDATE-prevention trigger remains; no delete prohibition or retention policy was added.

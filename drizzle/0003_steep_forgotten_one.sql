@@ -1,0 +1,1 @@
+ALTER TABLE "content_dna" DROP CONSTRAINT "content_dna_id_current_version_id_unique";

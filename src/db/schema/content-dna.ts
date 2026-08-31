@@ -34,7 +34,11 @@ export const contentDna = pgTable(
     },
     (table) => [
         unique("content_dna_workspace_id_unique").on(table.workspaceId),
-        unique("content_dna_id_current_version_id_unique").on(table.id, table.currentVersionId),
+        // Drizzle models the relationship, but does not expose PostgreSQL's
+        // DEFERRABLE foreign-key option. The reviewed migration applies
+        // DEFERRABLE INITIALLY DEFERRED to this constraint so first creation
+        // can insert the container before its pre-generated version row. Any
+        // migration that replaces this FK must restore those semantics.
         foreignKey({
             columns: [table.id, table.currentVersionId],
             foreignColumns: currentVersionForeignColumns(),
