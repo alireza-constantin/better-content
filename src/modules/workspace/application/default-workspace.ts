@@ -75,3 +75,27 @@ export async function requireWorkspaceMembership(
 
   return result.workspace;
 }
+
+export async function requireWorkspaceOwner(
+  userId: string,
+  workspaceId: string,
+  database: WorkspaceQueryDatabase = db,
+): Promise<Workspace> {
+  const [result] = await database
+    .select({ workspace: workspaces })
+    .from(workspaceMembers)
+    .innerJoin(workspaces, eq(workspaceMembers.workspaceId, workspaces.id))
+    .where(
+      and(
+        eq(workspaceMembers.userId, userId),
+        eq(workspaceMembers.workspaceId, workspaceId),
+        eq(workspaceMembers.role, "owner"),
+      ),
+    );
+
+  if (!result) {
+    throw new ApplicationError("FORBIDDEN", "The user is not an owner of this workspace.");
+  }
+
+  return result.workspace;
+}

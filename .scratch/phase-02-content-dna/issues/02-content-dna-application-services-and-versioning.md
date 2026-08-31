@@ -1,6 +1,6 @@
 # 02: Deliver Content DNA read/save application services and versioning
 
-**Status:** ready-for-agent
+**Status:** resolved
 **Phase:** 02
 **Blocked by:** 01: Establish Content DNA persistence and snapshot contracts
 
@@ -107,4 +107,12 @@ Requires Ticket 01's persistence model and canonical payload contracts. This tic
 - Report the save/concurrency strategy and integration-test evidence.
 - State whether any database-invariant tradeoff from Ticket 01 affected the service design.
 - Confirm no UI or Phase 3+ implementation was added.
+
+## Answer
+
+Implemented the Content DNA server/application boundary: current, history, and version-detail reads return DTOs; saves use session-derived identity, workspace-owner authorization, canonical payload parsing, and a short PostgreSQL transaction. The transaction acquires a workspace-scoped advisory lock, locks/re-reads the container, rejects stale bases with `CONFLICT`, preserves identical saves without a new version, and atomically creates or advances immutable snapshots.
+
+The first-save path pre-generates the container and version UUIDs, inserts the non-null current pointer before version 1, and relies on Ticket 01's deferred same-container FK at commit. Concurrent first saves yield one version-1 winner and one `CONFLICT`; concurrent same-base updates yield one successor and one `CONFLICT`.
+
+Focused PostgreSQL integration coverage passes 15 tests for reads, authorization, first save, readiness, history/detail, canonical identical saves, N+1 changes, stale conflicts, first-save/update concurrency, immutable history, current-pointer correctness, and payload-safe logging. Full verification passed: migration health, 72 tests, lint, typecheck, build, and `git diff --check`. No database schema changes, UI, or Phase 3+ work were added.
 

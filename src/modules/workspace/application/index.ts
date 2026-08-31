@@ -1,1 +1,1 @@
-export { getOrCreateDefaultWorkspace, requireWorkspaceMembership, type Workspace } from "./default-workspace";
+export { getOrCreateDefaultWorkspace, requireWorkspaceMembership, requireWorkspaceOwner, type Workspace } from "./default-workspace";
