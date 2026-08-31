@@ -1226,3 +1226,24 @@ architectural decision.
 
 After a corrective change, rerun the affected ticket's verification before
 continuing.
+
+## 60.Frontend implementation standards
+
+All user-facing frontend implementation must follow:
+
+`docs/agents/frontend-standards.md`
+
+In particular:
+
+- prefer shadcn/ui primitives for the design-system layer;
+- use React Hook Form + Zod for non-trivial structured forms;
+- maintain clean server/client boundaries;
+- split product surfaces into cohesive domain components without excessive
+  fragmentation;
+- treat accessibility, responsiveness, EN/FA, and RTL/LTR as implementation
+  requirements;
+- actively use the relevant installed frontend/design skills during
+  implementation and review.
+
+Repository architecture and phase specifications remain authoritative over
+skill recommendations.

@@ -1,6 +1,6 @@
 # 03: Build the localized Content DNA editor
 
-**Status:** ready-for-agent
+**Status:** resolved
 **Phase:** 02
 **Blocked by:** 02: Deliver Content DNA read/save application services and versioning
 
