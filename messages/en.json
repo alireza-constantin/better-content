@@ -136,7 +136,22 @@
     "moveDown": "Move {value} down",
     "newListItem": "Add an item",
     "saveBarUnsaved": "Your edits are only in this browser until you save.",
-    "saveBarClean": "Saved changes are recorded as immutable Content DNA versions."
+    "saveBarClean": "Saved changes are recorded as immutable Content DNA versions.",
+    "viewHistory": "View version history",
+    "historyTitle": "Content DNA history",
+    "historyPageDescription": "Review the exact saved context behind each immutable Content DNA version.",
+    "historyDescription": "Versions are shown newest first. Each keeps the readiness calculated from its own saved snapshot.",
+    "savedVersions": "Saved versions",
+    "historyEmptyTitle": "No saved versions yet",
+    "historyEmptyDescription": "Your Content DNA history will appear here after you explicitly save it in the editor.",
+    "openEditor": "Open Content DNA editor",
+    "currentVersion": "Current",
+    "versionStatus": "Version status",
+    "savedOn": "Saved {date}",
+    "backToHistory": "Back to version history",
+    "notProvided": "Not provided",
+    "expertiseTopics": "Expertise & Topics",
+    "voicePersonality": "Voice & Personality"
   },
   "Dashboard": {
     "eyebrow": "Your creator workspace",

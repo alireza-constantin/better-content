@@ -1,5 +1,6 @@
 import { getTranslations } from "next-intl/server";
 
+import { Link } from "@/i18n/navigation";
 import { ContentDnaEditor } from "@/modules/dna/presentation/content-dna-editor";
 import { getServerSession } from "@/lib/auth/server";
 import { getCurrentContentDna } from "@/modules/dna/application";
@@ -25,6 +26,14 @@ export default async function ContentDnaPage() {
         {t("title")}
       </h1>
       <p className="mt-5 max-w-2xl leading-7 text-muted-foreground">{t("description")}</p>
+      <div className="mt-6 flex flex-wrap items-center gap-3">
+        <Link
+          className="min-h-11 rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium text-foreground underline underline-offset-4 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          href="/content-dna/history"
+        >
+          {t("viewHistory")}
+        </Link>
+      </div>
       <ContentDnaEditor initialContentDna={current} workspaceId={workspace.id} />
     </section>
   );
