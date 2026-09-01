@@ -1,11 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import {
-  IBM_Plex_Mono,
-  Source_Serif_4,
-  Roboto,
-  Vazirmatn,
-} from "next/font/google";
+import { IBM_Plex_Mono, Source_Serif_4, Roboto, Vazirmatn } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getTranslations } from "next-intl/server";
 import type { ReactNode } from "react";

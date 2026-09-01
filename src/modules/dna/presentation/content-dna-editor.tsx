@@ -143,8 +143,20 @@ export function ContentDnaEditor({
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2" aria-live="polite">
-              <Badge variant={readiness === "AI_READY" ? "default" : "secondary"}>
-                {readiness === "AI_READY" ? t("aiReady") : t("incomplete")}
+              <Badge
+                variant={
+                  readiness === "AI_READY"
+                    ? "default"
+                    : readiness === "NOT_CREATED"
+                      ? "outline"
+                      : "secondary"
+                }
+              >
+                {readiness === "AI_READY"
+                  ? t("aiReady")
+                  : readiness === "NOT_CREATED"
+                    ? t("notCreated")
+                    : t("incomplete")}
               </Badge>
               {versionNumber && (
                 <Badge variant="outline">{t("version", { version: versionNumber })}</Badge>

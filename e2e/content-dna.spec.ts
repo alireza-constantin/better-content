@@ -156,3 +156,69 @@ test("creator can create, edit, inspect history, and recover from a stale save",
   ).toBeVisible();
   await expect(page.getByText("Product strategy", { exact: true })).toBeVisible();
 });
+
+test("protects dirty editor values during history and locale navigation", async ({ page }) => {
+  await signUp(page);
+  await page.goto("/en/content-dna");
+
+  await expect(page.getByText("Not created", { exact: true })).toBeVisible();
+
+  await fillIdentity(page, "en", "Partial Content DNA");
+  await save(page, "en");
+  await expect(page.getByText("Incomplete", { exact: true })).toBeVisible();
+
+  await fillReadyFields(page);
+  await save(page, "en");
+  await expect(page.getByText("AI-ready", { exact: true })).toBeVisible();
+
+  await fillIdentity(page, "en", "Keep this history edit");
+  await page.getByRole("link", { name: "View version history" }).click();
+  await expect(page.getByRole("heading", { name: "Leave with unsaved changes?" })).toBeVisible();
+  await page.getByRole("button", { name: "Stay on this page" }).click();
+  await expect(page).toHaveURL(/\/en\/content-dna$/);
+  await expect(page.getByLabel("Creator or brand description")).toHaveValue(
+    "Keep this history edit",
+  );
+  await expect(page.getByText("You have unsaved changes.", { exact: true })).toBeVisible();
+
+  await page.getByRole("link", { name: "View version history" }).click();
+  await page.getByRole("button", { name: "Leave without saving" }).click();
+  await expect(page).toHaveURL(/\/en\/content-dna\/history$/);
+
+  await page.getByRole("link", { name: "Open Content DNA editor" }).click();
+  await expect(page).toHaveURL(/\/en\/content-dna$/);
+  await page.getByRole("link", { name: "View version history" }).click();
+  await expect(page).toHaveURL(/\/en\/content-dna\/history$/);
+  await expect(page.getByRole("alertdialog")).toHaveCount(0);
+
+  await page.getByRole("link", { name: "Open Content DNA editor" }).click();
+  await fillIdentity(page, "en", "Keep this English locale edit");
+  await page.getByRole("link", { name: "فارسی" }).click();
+  await expect(page.getByRole("heading", { name: "Leave with unsaved changes?" })).toBeVisible();
+  await page.getByRole("button", { name: "Stay on this page" }).click();
+  await expect(page).toHaveURL(/\/en\/content-dna$/);
+  await expect(page.getByLabel("Creator or brand description")).toHaveValue(
+    "Keep this English locale edit",
+  );
+
+  await page.getByRole("link", { name: "فارسی" }).click();
+  await page.getByRole("button", { name: "Leave without saving" }).click();
+  await expect(page).toHaveURL(/\/fa\/content-dna$/);
+  await expect(page.getByRole("heading", { name: "با تغییرات ذخیره‌نشده خارج شوید؟" })).toHaveCount(
+    0,
+  );
+
+  await fillIdentity(page, "fa", "این ویرایش فارسی بماند");
+  await page.getByRole("link", { name: "English" }).click();
+  await expect(
+    page.getByRole("heading", { name: "با تغییرات ذخیره‌نشده خارج شوید؟" }),
+  ).toBeVisible();
+  await expect(page.getByText("تغییرات شما ذخیره نشده‌اند.", { exact: false })).toBeVisible();
+  await page.getByRole("button", { name: "ماندن در این صفحه" }).click();
+  await expect(page).toHaveURL(/\/fa\/content-dna$/);
+  await expect(page.getByLabel("توضیح سازنده یا برند")).toHaveValue("این ویرایش فارسی بماند");
+
+  await page.getByRole("link", { name: "English" }).click();
+  await page.getByRole("button", { name: "خروج بدون ذخیره" }).click();
+  await expect(page).toHaveURL(/\/en\/content-dna$/);
+});

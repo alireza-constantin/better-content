@@ -6,6 +6,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import en from "../../../../messages/en.json";
 import fa from "../../../../messages/fa.json";
+import { UnsavedChangesProvider } from "@/components/navigation/unsaved-changes-provider";
 import type { CurrentContentDnaDto, ContentDnaVersionDto } from "@/modules/dna/application";
 
 import { ContentDnaEditor } from "./content-dna-editor";
@@ -59,7 +60,9 @@ function renderEditor(locale = "en", data: CurrentContentDnaDto = empty) {
   const user = userEvent.setup();
   render(
     <NextIntlClientProvider locale={locale} messages={locale === "fa" ? fa : en}>
-      <ContentDnaEditor initialContentDna={data} workspaceId="workspace" />
+      <UnsavedChangesProvider>
+        <ContentDnaEditor initialContentDna={data} workspaceId="workspace" />
+      </UnsavedChangesProvider>
     </NextIntlClientProvider>,
   );
   return user;
@@ -80,8 +83,17 @@ describe("ContentDnaEditor", () => {
   it("renders the English NOT_CREATED state and privacy notice", () => {
     renderEditor();
     expect(screen.getByRole("heading", { name: "Start your Content DNA" })).toBeTruthy();
+    expect(screen.getByText("Not created", { exact: true })).toBeTruthy();
+    expect(screen.queryByText("Incomplete", { exact: true })).toBeNull();
     expect(screen.getByText("Keep private information out")).toBeTruthy();
     expect(screen.getByRole("form").getAttribute("dir")).toBe("ltr");
+  });
+
+  it("renders INCOMPLETE for a persisted partial version", () => {
+    renderEditor("en", current({ readiness: "INCOMPLETE" }));
+
+    expect(screen.getByText("Incomplete", { exact: true })).toBeTruthy();
+    expect(screen.queryByText("Not created", { exact: true })).toBeNull();
   });
 
   it("hydrates the current DTO and presents server readiness and version", () => {
@@ -89,6 +101,8 @@ describe("ContentDnaEditor", () => {
     expect(screen.getByDisplayValue("Creator")).toBeTruthy();
     expect(screen.getByDisplayValue("One")).toBeTruthy();
     expect(screen.getByText("AI-ready")).toBeTruthy();
+    expect(screen.queryByText("Incomplete", { exact: true })).toBeNull();
+    expect(screen.queryByText("Not created", { exact: true })).toBeNull();
     expect(screen.getByText("Version 4")).toBeTruthy();
   });
 
@@ -297,6 +311,7 @@ describe("ContentDnaEditor", () => {
   it("renders localized Persian UI with RTL direction", () => {
     renderEditor("fa");
     expect(screen.getByRole("heading", { name: "DNA محتوای خود را آغاز کنید" })).toBeTruthy();
+    expect(screen.getByText("ساخته نشده", { exact: true })).toBeTruthy();
     expect(screen.getByRole("form").getAttribute("dir")).toBe("rtl");
     expect(screen.getByText("اطلاعات خصوصی را وارد نکنید")).toBeTruthy();
   });
