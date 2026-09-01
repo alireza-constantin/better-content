@@ -1,6 +1,6 @@
 # 05: Harden and verify the complete Content DNA workflow
 
-**Status:** ready-for-agent
+**Status:** resolved
 **Phase:** 02
 **Blocked by:** 03: Build the localized Content DNA editor; 04: Deliver read-only Content DNA version history
 
@@ -85,3 +85,10 @@ Requires both Ticket 03 and Ticket 04. It verifies the complete feature path aft
 - Summarize authorization, privacy/logging, accessibility, responsive, and localization verification.
 - Map any corrected defect to its originating Phase 2 concern.
 - Confirm no implementation was added outside approved Phase 2 scope and identify any remaining risk for architect review.
+
+## Implementation Notes
+
+- Added `e2e/content-dna.spec.ts` covering the authorized create → save → edit → history journey, immutable versions, stale-save conflict recovery, keyboard list reordering, mobile layout, and EN/FA locale switching with LTR/RTL assertions.
+- Re-ran the Phase 2 unit, integration, UI, migration, build, lint, typecheck, formatting, and full Playwright suites successfully.
+- Reviewed the existing server-side authorization, workspace isolation, concurrency locking, immutable persistence, payload-safe logging, privacy notice, localized error, and server/client boundaries. No production defect within Ticket 05 scope required a code change.
+- No Phase 3 or later functionality was introduced.
