@@ -349,7 +349,11 @@ A short educational Reel about the visual signals that make clothing appear prem
 
 # 14. Idea Generation Batches
 
-Every idea generation request creates a batch.
+Every accepted idea-generation operation creates a batch. Requests rejected
+before generation begins because authorization, validation, Content DNA
+freshness/readiness, or workspace generation limits fail create no batch. An
+idempotent replay returns the existing operation/batch and does not create
+another.
 
 Example:
 

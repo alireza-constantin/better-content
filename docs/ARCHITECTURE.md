@@ -482,6 +482,19 @@ WHERE id = contentId
 
 The application must verify workspace ownership.
 
+For idea authorization and ownership resolution, the relationship is:
+
+```text
+Idea
+  ↓
+Idea Generation Batch
+  ↓
+Workspace
+```
+
+An Idea retains no direct `workspace_id`. The batch is the workspace-owned
+aggregate that supplies that ownership boundary.
+
 ---
 
 # 14. Database Conventions
@@ -810,7 +823,6 @@ Each idea contains at minimum:
 
 ```text
 id
-workspace_id
 batch_id
 position
 title
@@ -2280,7 +2292,7 @@ Examples likely include:
 ```text
 workspace_members(user_id, workspace_id)
 
-ideas(workspace_id, status)
+idea_generation_batches(workspace_id, created_at)
 ideas(batch_id)
 
 contents(workspace_id)
