@@ -57,6 +57,7 @@ test("creator can create, edit, inspect history, and recover from a stale save",
 
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
   await expect(page.locator("html")).toHaveAttribute("dir", "ltr");
+  await expect(page.locator("body")).toHaveCSS("font-family", /Roboto/);
   await expect(page.getByRole("heading", { name: "Start your Content DNA" })).toBeVisible();
   await expect(page.getByText("Keep private information out", { exact: true })).toBeVisible();
 
@@ -74,6 +75,7 @@ test("creator can create, edit, inspect history, and recover from a stale save",
   await expect(stalePage).toHaveURL(/\/fa\/content-dna$/);
   await expect(stalePage.locator("html")).toHaveAttribute("lang", "fa");
   await expect(stalePage.locator("html")).toHaveAttribute("dir", "rtl");
+  await expect(stalePage.locator("body")).toHaveCSS("font-family", /Vazirmatn/);
   await expect(stalePage.getByText("اطلاعات خصوصی را وارد نکنید", { exact: true })).toBeVisible();
   await expect(stalePage.getByLabel("توضیح سازنده یا برند")).toHaveValue(
     "Creator v1: practical product education.",
