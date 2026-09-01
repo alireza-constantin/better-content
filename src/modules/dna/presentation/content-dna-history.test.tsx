@@ -97,6 +97,14 @@ describe("Content DNA history presentation", () => {
     expect(screen.getByText("Persian")).toBeTruthy();
   });
 
+  it("keeps detail sections addressable by stable accessible names", () => {
+    renderDetail("en", version());
+
+    expect(screen.getByRole("region", { name: "Identity" })).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Expertise & Topics" })).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Content languages" })).toBeTruthy();
+  });
+
   it("renders Persian labels with RTL-safe, unchanged creator content", () => {
     renderDetail("fa", version({ isCurrent: true, readiness: "AI_READY" }));
 

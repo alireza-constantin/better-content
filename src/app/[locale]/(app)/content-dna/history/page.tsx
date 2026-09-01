@@ -32,7 +32,7 @@ export default async function ContentDnaHistoryPage({
           </p>
         </div>
         <Link
-          className="min-h-11 rounded-lg border border-border bg-background px-3 py-2 text-center text-sm font-medium text-foreground underline underline-offset-4 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          className="inline-flex min-h-11 items-center justify-center rounded-lg border border-border bg-background px-3 py-2 text-center text-sm font-medium text-foreground underline underline-offset-4 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
           href="/content-dna"
         >
           {t("openEditor")}

@@ -2,7 +2,7 @@ import { CheckCircle2Icon, CircleDashedIcon } from "lucide-react";
 import { useTranslations } from "next-intl";
 
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
 import { Link } from "@/i18n/navigation";
 import type { ContentDnaVersionDto } from "@/modules/dna/application";
 
@@ -32,7 +32,7 @@ function VersionBadges({ version }: Readonly<{ version: ContentDnaVersionDto }>)
   const t = useTranslations("ContentDna");
 
   return (
-    <div className="flex flex-wrap items-center gap-2" aria-label={t("versionStatus")}>
+    <div className="flex flex-wrap items-center gap-2" role="group" aria-label={t("versionStatus")}>
       {version.isCurrent ? <Badge variant="outline">{t("currentVersion")}</Badge> : null}
       <ReadinessBadge readiness={version.readiness} />
     </div>
@@ -52,7 +52,10 @@ export function ContentDnaHistory({ versions, locale }: ContentDnaHistoryProps) 
   return (
     <section className="mt-10" aria-labelledby="content-dna-history-list-title">
       <div className="flex flex-col gap-2 border-b border-border pb-5">
-        <h2 className="text-xl font-semibold tracking-tight" id="content-dna-history-list-title">
+        <h2
+          className="text-balance text-xl font-semibold tracking-tight"
+          id="content-dna-history-list-title"
+        >
           {t("savedVersions")}
         </h2>
         <p className="max-w-2xl text-sm leading-6 text-muted-foreground">
@@ -63,7 +66,9 @@ export function ContentDnaHistory({ versions, locale }: ContentDnaHistoryProps) 
       {versions.length === 0 ? (
         <Card className="mt-6 shadow-none">
           <CardHeader>
-            <CardTitle>{t("historyEmptyTitle")}</CardTitle>
+            <h3 className="text-balance text-lg font-semibold leading-none">
+              {t("historyEmptyTitle")}
+            </h3>
             <CardDescription className="max-w-2xl leading-6">
               {t("historyEmptyDescription")}
             </CardDescription>
@@ -86,7 +91,7 @@ export function ContentDnaHistory({ versions, locale }: ContentDnaHistoryProps) 
                 href={`/content-dna/history/${version.id}`}
               >
                 <div className="min-w-0">
-                  <h3 className="text-base font-semibold tracking-tight underline-offset-4 group-hover:underline">
+                  <h3 className="text-balance text-base font-semibold tracking-tight underline-offset-4 group-hover:underline">
                     {t("version", { version: version.versionNumber })}
                   </h3>
                   <time
@@ -110,7 +115,7 @@ function Value({ children }: Readonly<{ children: string | undefined }>) {
   const t = useTranslations("ContentDna");
 
   return children ? (
-    <p className="whitespace-pre-wrap leading-7" dir="auto">
+    <p className="break-words whitespace-pre-wrap leading-7" dir="auto">
       {children}
     </p>
   ) : (
@@ -128,7 +133,7 @@ function ListValue({ children }: Readonly<{ children: readonly string[] | undefi
   return (
     <ul className="flex flex-wrap gap-2" dir="auto">
       {children.map((value) => (
-        <li className="rounded-md bg-muted px-2.5 py-1 text-sm" key={value}>
+        <li className="break-words rounded-md bg-muted px-2.5 py-1 text-sm" dir="auto" key={value}>
           {value}
         </li>
       ))}
@@ -137,15 +142,16 @@ function ListValue({ children }: Readonly<{ children: readonly string[] | undefi
 }
 
 function DetailSection({
+  id,
   title,
   children,
-}: Readonly<{ title: string; children: React.ReactNode }>) {
+}: Readonly<{ id: string; title: string; children: React.ReactNode }>) {
   return (
     <section
       className="border-b border-border py-6 first:pt-0 last:border-b-0 last:pb-0"
-      aria-labelledby={`${title}-heading`}
+      aria-labelledby={`${id}-heading`}
     >
-      <h2 className="text-lg font-semibold tracking-tight" id={`${title}-heading`}>
+      <h2 className="text-balance text-lg font-semibold tracking-tight" id={`${id}-heading`}>
         {title}
       </h2>
       <div className="mt-4">{children}</div>
@@ -184,28 +190,28 @@ export function ContentDnaVersionDetail({ version, locale }: ContentDnaVersionDe
       </header>
 
       <div className="mt-6">
-        <DetailSection title={t("identity")}>
+        <DetailSection id="identity" title={t("identity")}>
           <dl>
             <LabeledValue label={t("creatorOrBrandDescription")}>
               <Value>{payload.identity?.creatorOrBrandDescription}</Value>
             </LabeledValue>
           </dl>
         </DetailSection>
-        <DetailSection title={t("audience")}>
+        <DetailSection id="audience" title={t("audience")}>
           <dl>
             <LabeledValue label={t("targetAudienceDescription")}>
               <Value>{payload.audience?.targetAudienceDescription}</Value>
             </LabeledValue>
           </dl>
         </DetailSection>
-        <DetailSection title={t("expertiseTopics")}>
+        <DetailSection id="expertise" title={t("expertiseTopics")}>
           <dl>
             <LabeledValue label={t("primaryTopics")}>
               <ListValue>{payload.expertise?.primaryTopics}</ListValue>
             </LabeledValue>
           </dl>
         </DetailSection>
-        <DetailSection title={t("voicePersonality")}>
+        <DetailSection id="voice" title={t("voicePersonality")}>
           <dl className="grid gap-5">
             <LabeledValue label={t("toneTraits")}>
               <ListValue>{payload.voice?.toneTraits}</ListValue>
@@ -215,14 +221,14 @@ export function ContentDnaVersionDetail({ version, locale }: ContentDnaVersionDe
             </LabeledValue>
           </dl>
         </DetailSection>
-        <DetailSection title={t("contentGoals")}>
+        <DetailSection id="goals" title={t("contentGoals")}>
           <dl>
             <LabeledValue label={t("contentGoals")}>
               <ListValue>{payload.goals?.contentGoals}</ListValue>
             </LabeledValue>
           </dl>
         </DetailSection>
-        <DetailSection title={t("preferences")}>
+        <DetailSection id="preferences" title={t("preferences")}>
           <dl className="grid gap-5">
             <LabeledValue label={t("preferredFormats")}>
               <ListValue>{payload.preferences?.preferredFormats}</ListValue>
@@ -238,7 +244,7 @@ export function ContentDnaVersionDetail({ version, locale }: ContentDnaVersionDe
             </LabeledValue>
           </dl>
         </DetailSection>
-        <DetailSection title={t("contentLanguages")}>
+        <DetailSection id="language" title={t("contentLanguages")}>
           <dl className="grid gap-5">
             <LabeledValue label={t("defaultContentLanguage")}>
               <Value>

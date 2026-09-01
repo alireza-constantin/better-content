@@ -39,7 +39,7 @@ export default async function ContentDnaVersionDetailPage({
   return (
     <section className="mx-auto w-full max-w-4xl">
       <Link
-        className="inline-flex min-h-11 items-center text-sm font-medium text-foreground underline underline-offset-4 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+        className="inline-flex min-h-11 items-center text-sm font-medium text-foreground underline underline-offset-4 transition-colors hover:text-muted-foreground focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
         href="/content-dna/history"
       >
         {t("backToHistory")}

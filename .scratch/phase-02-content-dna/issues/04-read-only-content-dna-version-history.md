@@ -1,6 +1,6 @@
 # 04: Deliver read-only Content DNA version history
 
-**Status:** ready-for-agent
+**Status:** resolved
 **Phase:** 02
 **Blocked by:** 02: Deliver Content DNA read/save application services and versioning
 
@@ -47,12 +47,12 @@ Requires Ticket 02 only. It is intentionally independent of Ticket 03: history c
 
 ## Acceptance criteria
 
-- [ ] An authorized user can view all saved versions and a selected immutable version through the application-service boundary.
-- [ ] The history distinguishes the current version and renders `INCOMPLETE` or `AI_READY` based on each version's own payload.
-- [ ] Version detail is read-only and does not expose edit, restore, fork, delete, or diff behavior.
-- [ ] Unauthorized/cross-workspace history access is denied by the service boundary and does not reveal private history.
-- [ ] English and Persian history/detail UI works in LTR and RTL and leaves creator content language unchanged.
-- [ ] No React component queries Drizzle or reimplements version/readiness rules.
+- [x] An authorized user can view all saved versions and a selected immutable version through the application-service boundary.
+- [x] The history distinguishes the current version and renders `INCOMPLETE` or `AI_READY` based on each version's own payload.
+- [x] Version detail is read-only and does not expose edit, restore, fork, delete, or diff behavior.
+- [x] Unauthorized/cross-workspace history access is denied by the service boundary and does not reveal private history.
+- [x] English and Persian history/detail UI works in LTR and RTL and leaves creator content language unchanged.
+- [x] No React component queries Drizzle or reimplements version/readiness rules.
 
 ## Tests
 
@@ -72,6 +72,13 @@ Requires Ticket 02 only. It is intentionally independent of Ticket 03: history c
 
 - Use `web-design-guidelines` for read-only navigation, semantic structure, accessibility, responsive behavior, and RTL/LTR review.
 - Confirm no editor dependency or mutation capability was introduced.
+
+## Implementation Notes
+
+- Delivered localized history and immutable version-detail routes using Ticket 02's read DTOs and services.
+- Added route-level coverage for authenticated rendering, unauthenticated access, authorized detail loading, and not-found behavior, plus component coverage for localized detail structure and read-only rendering.
+- Verified the full PostgreSQL-backed test suite, lint, typecheck, build, formatting, and diff checks.
+- No editor, restore, fork, delete, diff, or later-phase behavior was added.
 
 ## Completion report requirements
 
