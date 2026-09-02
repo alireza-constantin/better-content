@@ -4,7 +4,7 @@
 
 **Blocked by:** 01: Define Idea Generation domain contracts and canonical validation.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 ## Goal
 
@@ -90,3 +90,23 @@ git diff --check
 ## Dependencies
 
 - 01: Define Idea Generation domain contracts and canonical validation.
+
+## Answer
+
+Implemented Ticket 02 only. Added the four Phase 3 persistence tables to the
+Drizzle schema and generated migration `0004_kind_dracula`, including the
+reviewed PostgreSQL composite same-workspace AI-run FK, scoped idempotency,
+fixed-count/language/status checks, lineage FKs, quota reservation state, and
+minimal history/quota access paths.
+
+Added a PostgreSQL trigger that prevents mutation of generated idea facts while
+allowing decision-field updates. Added focused integration coverage for the
+requested FK, uniqueness, check, immutability, snapshot, quota, catalog, and
+migration invariants.
+
+Ticket 01 cross-phase check: the `save-content-dna-action.ts` change was only a
+compatibility/exhaustiveness adjustment for the shared application-error
+vocabulary; it did not change Content DNA behavior.
+
+No Ticket 03 provider, orchestration, quota algorithm, UI, route, job, or other
+future-phase work was started. No map.md exists for a context pointer.
