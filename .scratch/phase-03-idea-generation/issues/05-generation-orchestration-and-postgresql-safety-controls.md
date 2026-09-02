@@ -4,7 +4,7 @@
 
 **Blocked by:** 01: Define Idea Generation domain contracts and canonical validation; 02: Add Phase 3 persistence schema and reviewed migration; 03: Establish the provider-neutral AI contract and deterministic fake; 04: Implement the Phase 3 OpenAI adapter and privacy boundary.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 ## Goal
 
@@ -95,3 +95,137 @@ git diff --check
 - 02: Add Phase 3 persistence schema and reviewed migration.
 - 03: Establish the provider-neutral AI contract and deterministic fake.
 - 04: Implement the Phase 3 OpenAI adapter and privacy boundary.
+
+## Answer
+
+### Ticket 04 Policy Check
+
+Confirmed the existing adapter matches ADR-014: `gpt-5.6-terra` through the
+Responses API, medium reasoning, default service tier, 16,000 output tokens,
+`store: false`, explicit prompt-cache mode with no breakpoint/key, a 60-second
+timeout, zero automatic retries, strict `idea_generation_v1` output, exactly 20
+ideas, and no tools/background/conversation/continuation. No adapter changes
+were required.
+
+### Implemented
+
+Implemented Ticket 05 only. Added the authorized idea-generation application
+service and PostgreSQL-backed orchestration for current AI-ready DNA, exact-20
+requests, workspace-scoped idempotency, quota reservations, lifecycle
+transitions, atomic completion/failure, and stale recovery. Added deterministic
+PostgreSQL integration coverage for preflight denials, replay/conflict,
+success/failure mapping, both quota windows, concurrency, recovery, late
+results, and terminal races.
+
+### Application Service
+
+`createIdeaGenerationApplicationService` validates the server input, requires
+an authenticated workspace owner, computes the Ticket 01 fingerprint, returns
+safe batch/status DTOs, and calls only the provider-neutral
+`GenerateIdeasProvider` contract. The default composition in the application
+index wires the approved OpenAI adapter without exposing OpenAI types to the
+service.
+
+### Authorization / DNA Preconditions
+
+The service requires authentication and owner access before private work. New
+operations re-read the authoritative current Content DNA before reservation,
+call the canonical Phase 2 readiness function, and require the requested
+language in immutable `contentLanguages`. Once the PENDING pair is committed,
+the operation remains bound to its recorded immutable DNA version; the
+PENDING-to-RUNNING transition checks only the accepted pair and reservation,
+not whether the workspace current pointer has changed. Invalid, incomplete,
+stale, or unsupported requests before acceptance do not invoke the provider or
+reserve quota.
+
+### Idempotency
+
+Same-workspace key lookup occurs before stale recovery and quota evaluation.
+Same-fingerprint requests return the original operation without another
+provider call or reservation; mismatched fingerprints return `CONFLICT`, and
+unexpected uniqueness races resolve to the same safe behavior. Replays remain
+workspace-scoped, including failed operations.
+
+### Quota Reservations
+
+A PostgreSQL transaction advisory lock serializes each workspace’s reservation
+decision. Invoked reservations and live uninvoked reservations are counted in
+the rolling 10-minute/24-hour windows (3/12 limits). Policy denial creates no
+batch, run, or reservation. Reservations become consumed only in the
+committed PENDING-to-RUNNING transition; uninvoked failures/recovery release
+them, while invoked failures retain them.
+
+### Lifecycle / Transactions
+
+Batch and AI run transitions are paired and conditional. PENDING creation,
+invocation start, completion, failure, and recovery each use short database
+transactions. Provider invocation occurs only after a committed RUNNING state
+and never inside an open transaction. No automatic provider retry was added.
+
+### Success Atomicity
+
+Successful provider output is validated again at the neutral boundary, then a
+single transaction persists the canonical snapshot, neutral usage, exactly 20
+immutable ideas at positions 1–20, initial `NEW` decisions, and both terminal
+COMPLETED states. Late results after recovery/other terminal outcomes are
+discarded without inserting ideas.
+
+### Failure Mapping
+
+`TIMEOUT`, provider `RATE_LIMITED`, `PROVIDER_UNAVAILABLE`, `INVALID_OUTPUT`,
+and `UNKNOWN` are durably paired on the batch/run and mapped to stable
+application errors. Failed attempts persist no output snapshot and no ideas.
+
+### Stale Recovery
+
+Authorized opportunistic recovery fails stale PENDING and RUNNING pairs after
+75 seconds with `INTERRUPTED`. PENDING reservations are released; RUNNING
+reservations remain consumed. Recovery is exposed for later authorized history
+entrypoints without adding a worker or background job.
+
+### Concurrency
+
+The repository uses workspace advisory locking for reservation/start and row
+locks for pair lifecycle updates. Integration tests cover concurrent same-key
+convergence, concurrent quota reservations, accepted immutable-DNA lineage,
+and completion/recovery terminal-winner behavior.
+
+### Logging / Privacy
+
+Only allowlisted structured fields are emitted, including safe workspace,
+batch/run, transition, category, and application error correlation. Raw DNA,
+prompts, provider envelopes/IDs/refusals/reasoning, secrets, and thrown provider
+details are neither persisted nor logged.
+
+### Tests
+
+Added 26 focused PostgreSQL integration tests. The focused suite passes, and
+the full deterministic suite passes with 27 test files and 199 tests.
+
+### Verification
+
+- `npm run db:migrate:test` — passed.
+- `npm run format:check` — passed.
+- `npm run lint` — passed with no warnings.
+- `npm run typecheck` — passed.
+- `npm run test` — passed: 27 files, 199 tests.
+- `npm run build` — passed.
+- `git diff --check` — passed.
+
+### Database Changes
+
+None. Ticket 02’s reviewed schema and migration are used unchanged.
+
+### Commit
+
+Final verification passed; this correction is included in the unpublished
+Ticket 05 commit.
+
+### Deviations / Risks
+
+The prior start-time DNA revalidation deviation is corrected: after acceptance,
+changing the current DNA pointer no longer fails or interrupts the operation,
+and the provider receives the immutable payload recorded at acceptance.
+`INTERRUPTED` remains limited to stale/interrupted lifecycle recovery. No
+Ticket 06 history/decision service, UI, retry UI, job, provider, schema, or
+live OpenAI smoke work was started.
