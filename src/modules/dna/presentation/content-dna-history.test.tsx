@@ -37,7 +37,9 @@ function version(overrides: Partial<ContentDnaVersionDto> = {}): ContentDnaVersi
 function renderHistory(locale: "en" | "fa", versions: readonly ContentDnaVersionDto[]) {
   return render(
     <NextIntlClientProvider locale={locale} messages={locale === "en" ? en : fa}>
-      <ContentDnaHistory locale={locale} versions={versions} />
+      <div dir={locale === "fa" ? "rtl" : "ltr"}>
+        <ContentDnaHistory locale={locale} versions={versions} />
+      </div>
     </NextIntlClientProvider>,
   );
 }
@@ -45,7 +47,9 @@ function renderHistory(locale: "en" | "fa", versions: readonly ContentDnaVersion
 function renderDetail(locale: "en" | "fa", data: ContentDnaVersionDto) {
   return render(
     <NextIntlClientProvider locale={locale} messages={locale === "en" ? en : fa}>
-      <ContentDnaVersionDetail locale={locale} version={data} />
+      <div dir={locale === "fa" ? "rtl" : "ltr"}>
+        <ContentDnaVersionDetail locale={locale} version={data} />
+      </div>
     </NextIntlClientProvider>,
   );
 }
@@ -108,11 +112,25 @@ describe("Content DNA history presentation", () => {
   it("renders Persian labels with RTL-safe, unchanged creator content", () => {
     renderDetail("fa", version({ isCurrent: true, readiness: "AI_READY" }));
 
+    expect(screen.getByRole("article").parentElement?.getAttribute("dir")).toBe("rtl");
     expect(screen.getByRole("heading", { name: "نسخهٔ 1" })).toBeTruthy();
     expect(screen.getByText("آماده برای هوش مصنوعی")).toBeTruthy();
     expect(screen.getByText("English + فارسی creator context")).toBeTruthy();
     expect(screen.getAllByText("انگلیسی")).toHaveLength(2);
     expect(screen.getByText("فعلی")).toBeTruthy();
+  });
+
+  it("keeps stored content-language preferences unchanged across a UI locale switch", () => {
+    const stored = version();
+    renderDetail("en", stored);
+    expect(screen.getAllByText("English")).toHaveLength(2);
+    expect(screen.getByRole("article").parentElement?.getAttribute("dir")).toBe("ltr");
+
+    cleanup();
+    renderDetail("fa", stored);
+    expect(screen.getAllByText("انگلیسی")).toHaveLength(2);
+    expect(screen.getAllByText("فارسی")).toHaveLength(1);
+    expect(screen.getByRole("article").parentElement?.getAttribute("dir")).toBe("rtl");
   });
 
   it("presents omitted optional data clearly without historical mutation actions", () => {
