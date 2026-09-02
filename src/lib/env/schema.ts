@@ -28,9 +28,20 @@ const serverEnvironmentSchema = z.object({
   BETTER_AUTH_URL: applicationOrigin,
 });
 
-const serverOnlyEnvironmentKeys = ["DATABASE_URL", "BETTER_AUTH_SECRET"] as const;
+const openAIEnvironmentSchema = z.object({
+  OPENAI_API_KEY: z.string().min(1),
+  AI_SAFETY_IDENTIFIER_SECRET: z.string().min(32),
+});
+
+const serverOnlyEnvironmentKeys = [
+  "DATABASE_URL",
+  "BETTER_AUTH_SECRET",
+  "OPENAI_API_KEY",
+  "AI_SAFETY_IDENTIFIER_SECRET",
+] as const;
 
 export type ServerEnvironment = z.infer<typeof serverEnvironmentSchema>;
+export type OpenAIEnvironment = z.infer<typeof openAIEnvironmentSchema>;
 
 type EnvironmentValues = Readonly<Record<string, string | undefined>>;
 
@@ -42,4 +53,14 @@ export function parseServerEnvironment(environment: EnvironmentValues): ServerEn
   }
 
   return serverEnvironmentSchema.parse(environment);
+}
+
+export function parseOpenAIEnvironment(environment: EnvironmentValues): OpenAIEnvironment {
+  for (const key of ["OPENAI_API_KEY", "AI_SAFETY_IDENTIFIER_SECRET"] as const) {
+    if (environment[`NEXT_PUBLIC_${key}`]) {
+      throw new Error(`${key} must not be exposed through NEXT_PUBLIC_ environment variables.`);
+    }
+  }
+
+  return openAIEnvironmentSchema.parse(environment);
 }

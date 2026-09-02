@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseServerEnvironment } from "./schema";
+import { parseOpenAIEnvironment, parseServerEnvironment } from "./schema";
 
 const validEnvironment = {
   DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/better_content",
@@ -35,5 +35,37 @@ describe("server environment validation", () => {
         NEXT_PUBLIC_DATABASE_URL: validEnvironment.DATABASE_URL,
       }),
     ).toThrow("DATABASE_URL must not be exposed");
+  });
+
+  it("validates OpenAI credentials separately from the base server environment", () => {
+    expect(
+      parseOpenAIEnvironment({
+        OPENAI_API_KEY: "sk-test-only",
+        AI_SAFETY_IDENTIFIER_SECRET: "a-test-only-safety-secret-that-is-long-enough",
+      }),
+    ).toEqual({
+      OPENAI_API_KEY: "sk-test-only",
+      AI_SAFETY_IDENTIFIER_SECRET: "a-test-only-safety-secret-that-is-long-enough",
+    });
+
+    expect(() => parseOpenAIEnvironment({ OPENAI_API_KEY: "sk-test-only" })).toThrow();
+  });
+
+  it("rejects OpenAI secrets exposed through NEXT_PUBLIC_ variables", () => {
+    expect(() =>
+      parseOpenAIEnvironment({
+        OPENAI_API_KEY: "sk-test-only",
+        AI_SAFETY_IDENTIFIER_SECRET: "a-test-only-safety-secret-that-is-long-enough",
+        NEXT_PUBLIC_OPENAI_API_KEY: "sk-test-only",
+      }),
+    ).toThrow("OPENAI_API_KEY must not be exposed");
+
+    expect(() =>
+      parseOpenAIEnvironment({
+        OPENAI_API_KEY: "sk-test-only",
+        AI_SAFETY_IDENTIFIER_SECRET: "a-test-only-safety-secret-that-is-long-enough",
+        NEXT_PUBLIC_AI_SAFETY_IDENTIFIER_SECRET: "unsafe",
+      }),
+    ).toThrow("AI_SAFETY_IDENTIFIER_SECRET must not be exposed");
   });
 });
