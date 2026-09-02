@@ -4,7 +4,7 @@
 
 **Blocked by:** 05: Orchestrate safe, idempotent idea generation; 06: Deliver authorized batch history, detail, retry, and idea decisions.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 ## Goal
 
@@ -67,11 +67,11 @@ Deliver the approved Phase 3 UX with server-authoritative generation/decision be
 
 ## Acceptance criteria
 
-- [ ] An authorized owner can complete the mocked ready-DNA flow: select allowed language, Generate 20 Ideas, observe operation state, inspect exactly 20 results, and classify an individual idea.
-- [ ] All required no-DNA/incomplete/active/rate-limited/conflict/failed/completed/history states are clear, safe, and localized.
-- [ ] UI uses server/DTO boundaries, shadcn/ui where appropriate, focused client islands, and React Hook Form + Zod for the non-trivial rejection form.
-- [ ] Keyboard, focus, semantic labels, associated errors, status announcements, disabled controls, touch targets, responsive layout, EN/FA, and LTR/RTL are verified.
-- [ ] No forbidden/deferred controls or data leak into the UI.
+- [x] An authorized owner can complete the mocked ready-DNA flow: select allowed language, Generate 20 Ideas, observe operation state, inspect exactly 20 results, and classify an individual idea.
+- [x] All required no-DNA/incomplete/active/rate-limited/conflict/failed/completed/history states are clear, safe, and localized.
+- [x] UI uses server/DTO boundaries, shadcn/ui where appropriate, focused client islands, and React Hook Form + Zod for the non-trivial rejection form.
+- [x] Keyboard, focus, semantic labels, associated errors, status announcements, disabled controls, touch targets, responsive layout, EN/FA, and LTR/RTL are verified.
+- [x] No forbidden/deferred controls or data leak into the UI.
 
 ## Focused tests
 
@@ -97,3 +97,47 @@ git diff --check
 
 - 05: Orchestrate safe, idempotent idea generation.
 - 06: Deliver authorized batch history, detail, retry, and idea decisions.
+
+## Answer
+
+Implemented Ticket 07 only. Added the localized workspace-scoped Ideas route,
+server action adapters, safe Content DNA summary shaping, generation language
+selection, fixed 20-idea generation, newest-first history, active/failed/
+completed detail states, retry, and individual Accept/Save for later/Reject
+decisions. The optional rejection reason uses React Hook Form + Zod, supports
+blank values and a localized 500-character validation error, and restores focus
+after closing.
+
+The surface is available in English and Persian with explicit LTR/RTL handling,
+accessible status announcements, modal focus management, keyboard-safe controls,
+responsive layout, and localized safe error states. Client actions send only
+validated workspace/resource identifiers and decision inputs; provider details,
+raw DNA, prompts, private persistence fields, and raw errors are not exposed.
+
+### Tests
+
+- Added deterministic component coverage for setup, ready 20-idea rendering,
+  safe generation input, decision updates, rejection validation/focus, active
+  and provider-failure states, Retry, and Persian RTL rendering.
+- Added route authorization/selection coverage and localized Playwright setup
+  coverage in both directions, including a mobile overflow assertion.
+
+### Verification
+
+- `npm run format:check` passed.
+- `npm run lint` passed.
+- `npm run typecheck` passed.
+- `npm run test` passed: 30 files, 215 tests.
+- `npm run build` passed.
+- `npm run test:e2e` passed: 6 tests.
+- `git diff --check` passed.
+
+### Database Changes
+
+- None.
+
+### Deviations / Risks
+
+- No live OpenAI call was added to CI. Full provider-backed hardening and the
+  manual OpenAI smoke procedure remain in Ticket 08, as required by the phase
+  boundary.

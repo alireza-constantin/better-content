@@ -37,6 +37,7 @@ export default async function ProtectedApplicationLayout({
     <ApplicationShell
       dashboardLabel={t("dashboard")}
       contentDnaLabel={t("contentDna")}
+      ideasLabel={t("ideas")}
       productName={t("productName")}
       skipToContentLabel={t("skipToContent")}
       userEmail={session.user.email}
