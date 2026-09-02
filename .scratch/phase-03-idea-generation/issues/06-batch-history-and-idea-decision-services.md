@@ -4,7 +4,7 @@
 
 **Blocked by:** 05: Orchestrate safe, idempotent idea generation.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 ## Goal
 
@@ -88,3 +88,18 @@ git diff --check
 ## Dependencies
 
 - 05: Orchestrate safe, idempotent idea generation.
+
+## Answer
+
+Implemented Ticket 06 only. Added authorized newest-first batch history and
+safe detail DTOs, newest-operation selection, opportunistic stale recovery,
+owner-only retry through a new UUID operation, and owner-authorized individual
+idea decisions. Decision updates preserve generated facts, support direct
+state transitions, clear rejection reasons when leaving `REJECTED`, and treat
+unchanged submissions as no-ops. Added PostgreSQL integration coverage for
+history/detail selection, stale recovery, safe failures, retry lineage,
+decision transitions/reason validation, and cross-workspace isolation.
+
+Verification passed: `npm run db:migrate:test`, `npm run format:check`,
+`npm run lint`, `npm run typecheck`, `npm run test` (28 files, 205 tests),
+`npm run build`, and `git diff --check`.
