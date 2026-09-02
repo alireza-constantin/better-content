@@ -4,7 +4,7 @@
 
 **Blocked by:** 01: Define Idea Generation domain contracts and canonical validation; 02: Add Phase 3 persistence schema and reviewed migration.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 ## Goal
 
@@ -83,3 +83,20 @@ git diff --check
 
 - 01: Define Idea Generation domain contracts and canonical validation.
 - 02: Add Phase 3 persistence schema and reviewed migration.
+
+## Answer
+
+Implemented Ticket 03 only. Added the narrow provider-neutral `GenerateIdeas`
+port with canonical Content DNA request context, fixed `en`/`fa` and exact-20
+requirements, prompt-version identity, safe result/failure types, and runtime
+canonical output/usage validation.
+
+Added an isolated deterministic fake with configurable success, custom output,
+refusal/incomplete/malformed/invalid-output, timeout, rate-limit,
+provider-unavailable, and unknown scenarios. Invocation counting and opt-in
+request recording support later orchestration tests without retaining request
+content by default.
+
+No OpenAI, database, Drizzle, persistence, orchestration, quota, UI, route, job,
+or other deferred implementation was introduced. No map.md exists for a
+context pointer.
