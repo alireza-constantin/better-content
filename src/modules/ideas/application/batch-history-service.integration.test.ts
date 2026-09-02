@@ -37,6 +37,11 @@ const readyPayload: ContentDnaPayload = parseContentDnaPayload({
   language: { defaultContentLanguage: "en", contentLanguages: ["en", "fa"] },
 });
 
+const incompletePayload: ContentDnaPayload = parseContentDnaPayload({
+  schemaVersion: 1,
+  identity: { creatorOrBrandDescription: "An educator." },
+});
+
 async function createUser(email = `${randomUUID()}@example.com`) {
   const [created] = await database
     .insert(schema.user)
@@ -90,7 +95,30 @@ async function createContext() {
     });
   });
 
-  return { user, workspace, contentDnaVersionId };
+  return { user, workspace, contentDnaId, contentDnaVersionId };
+}
+
+async function setCurrentContentDnaVersion(
+  context: Awaited<ReturnType<typeof createContext>>,
+  payload: ContentDnaPayload,
+) {
+  const contentDnaVersionId = randomUUID();
+
+  await database.transaction(async (transaction) => {
+    await transaction.insert(schema.contentDnaVersions).values({
+      id: contentDnaVersionId,
+      contentDnaId: context.contentDnaId,
+      versionNumber: 2,
+      payload,
+      createdByUserId: context.user.id,
+    });
+    await transaction
+      .update(schema.contentDna)
+      .set({ currentVersionId: contentDnaVersionId })
+      .where(eq(schema.contentDna.id, context.contentDnaId));
+  });
+
+  return contentDnaVersionId;
 }
 
 function generationInput(context: Awaited<ReturnType<typeof createContext>>) {
@@ -106,7 +134,13 @@ function createLogger() {
   return { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 }
 
-async function countRows(table: typeof schema.ideaGenerationBatches | typeof schema.ideas) {
+async function countRows(
+  table:
+    | typeof schema.aiRuns
+    | typeof schema.ideaGenerationBatches
+    | typeof schema.ideas
+    | typeof schema.workspaceGenerationQuotaReservations,
+) {
   const [result] = await database.select({ value: count() }).from(table);
 
   return Number(result?.value ?? 0);
@@ -253,7 +287,7 @@ describe("idea generation batch application services", () => {
     expect(history.selectedBatchId).toBe(history.batches[0]?.id);
   });
 
-  it("retries a failed batch with a new operation and reuses only safe request facts", async () => {
+  it("retries a failed v4 batch against the still-current v4 DNA with a fresh key", async () => {
     const context = await createContext();
     const failedGeneration = createIdeaGenerationApplicationService({
       database,
@@ -273,10 +307,11 @@ describe("idea generation batch application services", () => {
       throw new Error("Failed batch was not persisted.");
     }
 
+    const retryProvider = new FakeGenerateIdeasProvider({ recordRequests: true });
     const successfulGeneration = createIdeaGenerationApplicationService({
       database,
       getAuthenticatedUserId: async () => context.user.id,
-      providerFactory: () => new FakeGenerateIdeasProvider(),
+      providerFactory: () => retryProvider,
       logger: createLogger(),
     });
     const batches = createIdeaGenerationBatchApplicationService({
@@ -297,6 +332,12 @@ describe("idea generation batch application services", () => {
       canRetry: true,
     });
 
+    const originalAttempt = await database
+      .select({ batch: schema.ideaGenerationBatches, run: schema.aiRuns })
+      .from(schema.ideaGenerationBatches)
+      .innerJoin(schema.aiRuns, eq(schema.ideaGenerationBatches.aiRunId, schema.aiRuns.id))
+      .where(eq(schema.ideaGenerationBatches.id, failedBatch.id));
+
     const retry = await batches.retryBatch({
       workspaceId: context.workspace.id,
       batchId: failedBatch.id,
@@ -306,9 +347,182 @@ describe("idea generation batch application services", () => {
     expect(retry.batch.id).not.toBe(failedBatch.id);
     expect(retry.batch.status).toBe("COMPLETED");
     expect(retry.batch.contentDnaVersionId).toBe(context.contentDnaVersionId);
-    expect(await countRows(schema.ideaGenerationBatches)).toBe(2);
-    expect(await countRows(schema.ideas)).toBe(20);
+    expect(retryProvider.lastRequest).toMatchObject({
+      contentDna: readyPayload,
+      requestedLanguage: "en",
+    });
+
+    const secondRetry = await batches.retryBatch({
+      workspaceId: context.workspace.id,
+      batchId: failedBatch.id,
+    });
+    expect(secondRetry.batch.id).not.toBe(retry.batch.id);
+    expect(secondRetry.batch.contentDnaVersionId).toBe(context.contentDnaVersionId);
+    expect(retryProvider.invocationCount).toBe(2);
+
+    const originalAfterRetry = await database
+      .select({ batch: schema.ideaGenerationBatches, run: schema.aiRuns })
+      .from(schema.ideaGenerationBatches)
+      .innerJoin(schema.aiRuns, eq(schema.ideaGenerationBatches.aiRunId, schema.aiRuns.id))
+      .where(eq(schema.ideaGenerationBatches.id, failedBatch.id));
+    expect(originalAfterRetry).toEqual(originalAttempt);
+    expect(await countRows(schema.ideaGenerationBatches)).toBe(3);
+    expect(await countRows(schema.ideas)).toBe(40);
   });
+
+  it("retries a failed v4 batch against current v5 DNA and sends its immutable payload", async () => {
+    const context = await createContext();
+    const failedProvider = new FakeGenerateIdeasProvider({ scenario: "provider-unavailable" });
+    const failedGeneration = createIdeaGenerationApplicationService({
+      database,
+      getAuthenticatedUserId: async () => context.user.id,
+      providerFactory: () => failedProvider,
+      logger: createLogger(),
+    });
+    await expect(failedGeneration.generateIdeas(generationInput(context))).rejects.toMatchObject({
+      code: "PROVIDER_ERROR",
+    });
+    const [failedBatch] = await database
+      .select()
+      .from(schema.ideaGenerationBatches)
+      .where(eq(schema.ideaGenerationBatches.workspaceId, context.workspace.id));
+    if (!failedBatch) {
+      throw new Error("Failed batch was not persisted.");
+    }
+
+    const v5Payload = parseContentDnaPayload({
+      ...readyPayload,
+      expertise: { primaryTopics: ["Version five workflow"] },
+    });
+    const v5Id = await setCurrentContentDnaVersion(context, v5Payload);
+    const retryProvider = new FakeGenerateIdeasProvider({ recordRequests: true });
+    const retryGeneration = createIdeaGenerationApplicationService({
+      database,
+      getAuthenticatedUserId: async () => context.user.id,
+      providerFactory: () => retryProvider,
+      logger: createLogger(),
+    });
+    const batches = createIdeaGenerationBatchApplicationService({
+      database,
+      getAuthenticatedUserId: async () => context.user.id,
+      generateIdeas: retryGeneration.generateIdeas,
+      recoverStaleAttempts: retryGeneration.recoverStaleAttempts,
+      logger: createLogger(),
+    });
+
+    const retry = await batches.retryBatch({
+      workspaceId: context.workspace.id,
+      batchId: failedBatch.id,
+    });
+
+    expect(retry).toMatchObject({
+      replayed: false,
+      batch: { contentDnaVersionId: v5Id, requestedLanguage: "en", status: "COMPLETED" },
+    });
+    expect(retryProvider.lastRequest).toMatchObject({
+      contentDna: v5Payload,
+      requestedLanguage: "en",
+    });
+    const [unchangedFailedBatch] = await database
+      .select()
+      .from(schema.ideaGenerationBatches)
+      .where(eq(schema.ideaGenerationBatches.id, failedBatch.id));
+    expect(unchangedFailedBatch).toMatchObject({
+      contentDnaVersionId: context.contentDnaVersionId,
+      status: "FAILED",
+    });
+  });
+
+  it.each([
+    [
+      "the failed language is no longer allowed",
+      parseContentDnaPayload({
+        ...readyPayload,
+        language: { defaultContentLanguage: "en", contentLanguages: ["en"] },
+      }),
+    ],
+    ["current DNA is incomplete", incompletePayload],
+  ] as const)("does not reserve or invoke a retry when %s", async (_scenario, payload) => {
+    const context = await createContext();
+    const failedGeneration = createIdeaGenerationApplicationService({
+      database,
+      getAuthenticatedUserId: async () => context.user.id,
+      providerFactory: () => new FakeGenerateIdeasProvider({ scenario: "provider-unavailable" }),
+      logger: createLogger(),
+    });
+    await expect(
+      failedGeneration.generateIdeas({ ...generationInput(context), requestedLanguage: "fa" }),
+    ).rejects.toMatchObject({ code: "PROVIDER_ERROR" });
+    const [failedBatch] = await database.select().from(schema.ideaGenerationBatches);
+    if (!failedBatch) {
+      throw new Error("Failed batch was not persisted.");
+    }
+
+    await setCurrentContentDnaVersion(context, payload);
+    const retryProvider = new FakeGenerateIdeasProvider();
+    const retryGeneration = createIdeaGenerationApplicationService({
+      database,
+      getAuthenticatedUserId: async () => context.user.id,
+      providerFactory: () => retryProvider,
+      logger: createLogger(),
+    });
+    const batches = createIdeaGenerationBatchApplicationService({
+      database,
+      getAuthenticatedUserId: async () => context.user.id,
+      generateIdeas: retryGeneration.generateIdeas,
+      recoverStaleAttempts: retryGeneration.recoverStaleAttempts,
+      logger: createLogger(),
+    });
+
+    await expect(
+      batches.retryBatch({ workspaceId: context.workspace.id, batchId: failedBatch.id }),
+    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+    expect(retryProvider.invocationCount).toBe(0);
+    expect(await countRows(schema.ideaGenerationBatches)).toBe(1);
+    expect(await countRows(schema.aiRuns)).toBe(1);
+    expect(await countRows(schema.workspaceGenerationQuotaReservations)).toBe(1);
+  });
+
+  it.each(["COMPLETED", "RUNNING", "PENDING"] as const)(
+    "rejects retrying a %s batch without delegating generation",
+    async (status) => {
+      const context = await createContext();
+      const generation = createIdeaGenerationApplicationService({
+        database,
+        getAuthenticatedUserId: async () => context.user.id,
+        providerFactory: () => new FakeGenerateIdeasProvider(),
+        logger: createLogger(),
+      });
+      const generated = await generation.generateIdeas(generationInput(context));
+
+      if (status !== "COMPLETED") {
+        const startedAt = status === "PENDING" ? null : generated.batch.startedAt;
+        await database.transaction(async (transaction) => {
+          await transaction
+            .update(schema.ideaGenerationBatches)
+            .set({ status, startedAt, completedAt: null })
+            .where(eq(schema.ideaGenerationBatches.id, generated.batch.id));
+          await transaction
+            .update(schema.aiRuns)
+            .set({ status, startedAt, completedAt: null, outputSnapshot: null })
+            .where(eq(schema.aiRuns.id, generated.batch.aiRunId));
+        });
+      }
+
+      const generateIdeas = vi.fn();
+      const batches = createIdeaGenerationBatchApplicationService({
+        database,
+        getAuthenticatedUserId: async () => context.user.id,
+        generateIdeas,
+        logger: createLogger(),
+      });
+
+      await expect(
+        batches.retryBatch({ workspaceId: context.workspace.id, batchId: generated.batch.id }),
+      ).rejects.toMatchObject({ code: "CONFLICT" });
+      expect(generateIdeas).not.toHaveBeenCalled();
+    },
+  );
 
   it("authorizes idea decisions through the owning batch and clears reasons atomically", async () => {
     const context = await createContext();

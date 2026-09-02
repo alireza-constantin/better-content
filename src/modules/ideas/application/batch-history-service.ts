@@ -28,6 +28,7 @@ import {
   parseStoredErrorCategory,
   recoverStaleAttemptsInTransaction,
 } from "./generation-repository";
+import { findCurrentContentDnaVersion } from "./generation-dna-repository";
 import type { IdeaGenerationResult } from "./generation-service";
 import { toIdeaDto, type IdeaDto } from "./idea-dto";
 
@@ -315,9 +316,15 @@ export function createIdeaGenerationBatchApplicationService(
         batchId,
       });
 
+      const currentContentDna = await findCurrentContentDnaVersion(
+        database,
+        workspaceId,
+        batch.requestedLanguage,
+      );
+
       return generateIdeas({
         workspaceId,
-        baseContentDnaVersionId: batch.contentDnaVersionId,
+        baseContentDnaVersionId: currentContentDna.id,
         requestedLanguage: batch.requestedLanguage,
         idempotencyKey: randomUUID(),
       });

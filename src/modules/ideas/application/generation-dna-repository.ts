@@ -29,6 +29,29 @@ export function findCurrentContentDna(
   baseVersionId: string,
   requestedLanguage: GenerationLanguage,
 ): Promise<ContentDnaPayload> {
+  return findCurrentContentDnaVersion(database, workspaceId, requestedLanguage).then((current) => {
+    if (current.id !== baseVersionId) {
+      throw conflictError();
+    }
+
+    return current.payload;
+  });
+}
+
+export type CurrentContentDnaVersion = Readonly<{
+  id: string;
+  payload: ContentDnaPayload;
+}>;
+
+/**
+ * Resolves the authoritative current DNA once for retry flows. Generation still
+ * rechecks this version in its reservation transaction before it can invoke a provider.
+ */
+export function findCurrentContentDnaVersion(
+  database: Pick<typeof db, "select">,
+  workspaceId: string,
+  requestedLanguage: GenerationLanguage,
+): Promise<CurrentContentDnaVersion> {
   return database
     .select({ container: contentDna, version: contentDnaVersions })
     .from(contentDna)
@@ -43,10 +66,6 @@ export function findCurrentContentDna(
     .then(([result]) => {
       if (!result) {
         throw validationError("Complete Content DNA is required before generating ideas.");
-      }
-
-      if (result.version.id !== baseVersionId) {
-        throw conflictError();
       }
 
       let payload: ContentDnaPayload;
@@ -65,6 +84,6 @@ export function findCurrentContentDna(
         throw validationError("The requested content language is not configured in Content DNA.");
       }
 
-      return payload;
+      return { id: result.version.id, payload };
     });
 }
