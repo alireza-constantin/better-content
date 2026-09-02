@@ -15,7 +15,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
-    "test": "node --env-file-if-exists=.env.local ./node_modules/vitest/vitest.mjs run",
+    "test": "node --env-file-if-exists=.env.local ./node_modules/vitest/vitest.mjs run && node --env-file-if-exists=.env.local ./node_modules/vitest/vitest.mjs run --config vitest.integration.config.mts",
     "test:e2e": "node --env-file-if-exists=.env.local ./node_modules/@playwright/test/cli.js test",
     "e2e:server": "node --env-file-if-exists=.env.local --import tsx ./scripts/start-e2e-server.ts",
     "db:up": "docker compose up -d --wait",

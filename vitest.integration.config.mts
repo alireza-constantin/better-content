@@ -10,7 +10,9 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["src/**/*.test.{ts,tsx}"],
-    exclude: ["src/**/*.integration.test.ts"],
+    // These files share one mutable PostgreSQL database and each owns a whole-database reset.
+    // Keep only this integration group sequential; unit and UI tests remain parallel.
+    fileParallelism: false,
+    include: ["src/**/*.integration.test.ts"],
   },
 });
