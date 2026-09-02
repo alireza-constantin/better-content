@@ -18,6 +18,9 @@ export type SaveContentDnaActionResult =
         | "UNAUTHORIZED"
         | "FORBIDDEN"
         | "NOT_FOUND"
+        | "RATE_LIMITED"
+        | "PROVIDER_ERROR"
+        | "AI_OUTPUT_INVALID"
         | "INTERNAL_ERROR";
     }>;
 

@@ -4,6 +4,9 @@ export const applicationErrorCodes = [
   "NOT_FOUND",
   "VALIDATION_ERROR",
   "CONFLICT",
+  "RATE_LIMITED",
+  "PROVIDER_ERROR",
+  "AI_OUTPUT_INVALID",
   "INTERNAL_ERROR",
 ] as const;
 
@@ -15,6 +18,9 @@ const statusByCode: Record<ApplicationErrorCode, number> = {
   NOT_FOUND: 404,
   VALIDATION_ERROR: 400,
   CONFLICT: 409,
+  RATE_LIMITED: 429,
+  PROVIDER_ERROR: 502,
+  AI_OUTPUT_INVALID: 502,
   INTERNAL_ERROR: 500,
 };
 

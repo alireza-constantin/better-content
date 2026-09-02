@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 ## Goal
 
@@ -87,3 +87,19 @@ git diff --check
 ## Dependencies
 
 - None.
+
+## Answer
+
+Implemented Ticket 01 only. Added server-only provider-neutral AI and Ideas
+domain contracts for the fixed `IDEA_GENERATION` request, `en`/`fa` language,
+exactly-20 canonical output, lifecycle/failure categories, usage, generation
+settings, deterministic SHA-256 request fingerprints, and direct decision
+updates with no-op and rejection-reason clearing semantics.
+
+Added focused tests for normalization, strict keys, limits, duplicate titles,
+fingerprints, decisions, lifecycle, usage, and settings. Extended the existing
+application error vocabulary with `RATE_LIMITED`, `PROVIDER_ERROR`, and
+`AI_OUTPUT_INVALID`.
+
+No persistence, provider, orchestration, UI, route, job, or migration work was
+introduced. No `map.md` exists for a context pointer.
