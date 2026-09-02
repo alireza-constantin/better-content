@@ -68,4 +68,46 @@ describe("server environment validation", () => {
       }),
     ).toThrow("AI_SAFETY_IDENTIFIER_SECRET must not be exposed");
   });
+
+  it("accepts only the official or loopback credential-free OpenAI base URL", () => {
+    expect(
+      parseOpenAIEnvironment({
+        OPENAI_API_KEY: "sk-test-only",
+        AI_SAFETY_IDENTIFIER_SECRET: "a-test-only-safety-secret-that-is-long-enough",
+        OPENAI_BASE_URL: "http://127.0.0.1:4318/v1",
+      }),
+    ).toMatchObject({ OPENAI_BASE_URL: "http://127.0.0.1:4318/v1" });
+
+    expect(() =>
+      parseOpenAIEnvironment({
+        OPENAI_API_KEY: "sk-test-only",
+        AI_SAFETY_IDENTIFIER_SECRET: "a-test-only-safety-secret-that-is-long-enough",
+        OPENAI_BASE_URL: "https://user:password@example.test/v1",
+      }),
+    ).toThrow("official OpenAI API or a loopback");
+
+    expect(() =>
+      parseOpenAIEnvironment({
+        OPENAI_API_KEY: "sk-test-only",
+        AI_SAFETY_IDENTIFIER_SECRET: "a-test-only-safety-secret-that-is-long-enough",
+        OPENAI_BASE_URL: "https://example.test/v1",
+      }),
+    ).toThrow("official OpenAI API or a loopback");
+
+    expect(() =>
+      parseOpenAIEnvironment({
+        OPENAI_API_KEY: "sk-test-only",
+        AI_SAFETY_IDENTIFIER_SECRET: "a-test-only-safety-secret-that-is-long-enough",
+        OPENAI_BASE_URL: "http://api.openai.com/v1",
+      }),
+    ).toThrow("official OpenAI API or a loopback");
+
+    expect(() =>
+      parseOpenAIEnvironment({
+        OPENAI_API_KEY: "sk-test-only",
+        AI_SAFETY_IDENTIFIER_SECRET: "a-test-only-safety-secret-that-is-long-enough",
+        OPENAI_BASE_URL: "https://api.openai.com/v1?key=secret",
+      }),
+    ).toThrow("official OpenAI API or a loopback");
+  });
 });

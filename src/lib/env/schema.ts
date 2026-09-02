@@ -31,6 +31,31 @@ const serverEnvironmentSchema = z.object({
 const openAIEnvironmentSchema = z.object({
   OPENAI_API_KEY: z.string().min(1),
   AI_SAFETY_IDENTIFIER_SECRET: z.string().min(32),
+  OPENAI_BASE_URL: z
+    .url()
+    .refine((value) => {
+      const url = new URL(value);
+      const hostname = url.hostname.toLowerCase();
+      const isOfficialOpenAiHost = hostname === "api.openai.com";
+      const isLoopbackHost =
+        hostname === "localhost" ||
+        hostname === "127.0.0.1" ||
+        hostname === "[::1]" ||
+        hostname === "::1";
+
+      return (
+        (isOfficialOpenAiHost
+          ? url.protocol === "https:"
+          : url.protocol === "http:" || url.protocol === "https:") &&
+        url.username === "" &&
+        url.password === "" &&
+        url.search === "" &&
+        url.hash === "" &&
+        (isOfficialOpenAiHost || isLoopbackHost) &&
+        (url.pathname === "/v1" || url.pathname === "/v1/")
+      );
+    }, "Expected the official OpenAI API or a loopback /v1 base URL without credentials.")
+    .optional(),
 });
 
 const serverOnlyEnvironmentKeys = [
@@ -38,6 +63,7 @@ const serverOnlyEnvironmentKeys = [
   "BETTER_AUTH_SECRET",
   "OPENAI_API_KEY",
   "AI_SAFETY_IDENTIFIER_SECRET",
+  "OPENAI_BASE_URL",
 ] as const;
 
 export type ServerEnvironment = z.infer<typeof serverEnvironmentSchema>;

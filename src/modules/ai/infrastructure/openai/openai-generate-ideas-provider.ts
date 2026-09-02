@@ -105,6 +105,7 @@ export type OpenAIResponsesClient = Readonly<{
 export function createOpenAIResponsesClient(environment: OpenAIEnvironment): OpenAIResponsesClient {
   const client = new OpenAI({
     apiKey: environment.OPENAI_API_KEY,
+    ...(environment.OPENAI_BASE_URL ? { baseURL: environment.OPENAI_BASE_URL } : {}),
     ...openAIClientConfiguration,
   });
 

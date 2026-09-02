@@ -841,7 +841,9 @@ export function IdeasWorkspace({
 
         if (!result.ok) {
           setNotice({ kind: "error", code: result.code });
-          router.refresh();
+          if (result.code !== "CONFLICT" && result.code !== "RATE_LIMITED") {
+            router.refresh();
+          }
           return;
         }
 
@@ -921,10 +923,31 @@ export function IdeasWorkspace({
   }
 
   function closeRejectDialog() {
-    const trigger = rejectTriggerRef.current;
     setRejectingIdea(null);
-    window.setTimeout(() => trigger?.focus(), 0);
   }
+
+  useEffect(() => {
+    if (rejectingIdea || isPending || pendingDecisionId) {
+      return;
+    }
+
+    const trigger = rejectTriggerRef.current;
+
+    if (!trigger) {
+      return;
+    }
+
+    const focusTimer = window.setTimeout(() => {
+      if (!trigger.disabled) {
+        trigger.focus();
+        rejectTriggerRef.current = null;
+      }
+    }, 0);
+
+    return () => {
+      window.clearTimeout(focusTimer);
+    };
+  }, [isPending, pendingDecisionId, rejectingIdea]);
 
   function submitRejectionReason(reason: string) {
     if (!rejectingIdea) {
