@@ -10,6 +10,7 @@ import {
   RefreshCwIcon,
   SparklesIcon,
   WandSparklesIcon,
+  XIcon,
 } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { useEffect, useRef, useState, useTransition } from "react";
@@ -20,6 +21,17 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogBackdrop,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogPortal,
+  DialogTitle,
+  DialogViewport,
+} from "@/components/ui/dialog";
 import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
 import { Label } from "@/components/ui/label";
 import {
@@ -522,13 +534,6 @@ function RejectReasonDialog({
     defaultValues: { rejectionReason: "" },
   });
   const reason = useWatch({ control: form.control, name: "rejectionReason" }) ?? "";
-  const onCloseRef = useRef(onClose);
-  const isSubmittingRef = useRef(isSubmitting);
-
-  useEffect(() => {
-    onCloseRef.current = onClose;
-    isSubmittingRef.current = isSubmitting;
-  }, [isSubmitting, onClose]);
 
   useEffect(() => {
     if (!idea) {
@@ -537,17 +542,9 @@ function RejectReasonDialog({
 
     form.reset({ rejectionReason: idea.rejectionReason ?? "" });
     const focusTimer = window.setTimeout(() => textareaRef.current?.focus(), 0);
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !isSubmittingRef.current) {
-        onCloseRef.current();
-      }
-    };
-
-    document.addEventListener("keydown", handleKeyDown);
 
     return () => {
       window.clearTimeout(focusTimer);
-      document.removeEventListener("keydown", handleKeyDown);
     };
   }, [form, idea]);
 
@@ -559,129 +556,100 @@ function RejectReasonDialog({
   const errorId = "idea-rejection-reason-error";
 
   return (
-    <div
-      className="fixed inset-0 z-50 grid place-items-center overscroll-contain p-4"
-      role="presentation"
+    <Dialog
+      disablePointerDismissal={isSubmitting}
+      open={Boolean(idea)}
+      onOpenChange={(open) => {
+        if (!open && !isSubmitting) {
+          onClose();
+        }
+      }}
     >
-      <div aria-hidden="true" className="absolute inset-0 bg-foreground/50 backdrop-blur-[2px]" />
-      <section
-        aria-describedby="idea-rejection-description"
-        aria-labelledby="idea-rejection-title"
-        aria-modal="true"
-        className="relative max-h-[min(42rem,calc(100dvh-2rem))] w-full max-w-lg overflow-y-auto rounded-2xl border bg-background p-6 shadow-2xl sm:p-8"
-        onKeyDown={(event) => {
-          if (event.key !== "Tab") {
-            return;
-          }
-
-          const focusableElements = Array.from(
-            event.currentTarget.querySelectorAll<HTMLElement>(
-              'button:not([disabled]), textarea, input, select, a[href], [tabindex]:not([tabindex="-1"])',
-            ),
-          );
-          const firstElement = focusableElements[0];
-          const lastElement = focusableElements.at(-1);
-
-          if (!firstElement || !lastElement) {
-            return;
-          }
-
-          const activeElement = document.activeElement;
-          const focusIsInside = event.currentTarget.contains(activeElement);
-
-          if (event.shiftKey && (!focusIsInside || activeElement === firstElement)) {
-            event.preventDefault();
-            lastElement.focus();
-          } else if (!event.shiftKey && (!focusIsInside || activeElement === lastElement)) {
-            event.preventDefault();
-            firstElement.focus();
-          }
-        }}
-        role="dialog"
-      >
-        <div className="flex items-start justify-between gap-5">
-          <div>
-            <p className="text-sm font-medium text-muted-foreground">{t("rejectEyebrow")}</p>
-            <h2 className="mt-2 text-2xl font-semibold tracking-tight" id="idea-rejection-title">
-              {t("rejectTitle")}
-            </h2>
-          </div>
-          <Button
-            aria-label={t("cancel")}
-            className="min-h-11 min-w-11"
-            disabled={isSubmitting}
-            onClick={onClose}
-            size="icon"
-            type="button"
-            variant="ghost"
-          >
-            ×
-          </Button>
-        </div>
-        <p className="mt-4 text-sm leading-6 text-muted-foreground" id="idea-rejection-description">
-          {t("rejectDescription")}
-        </p>
-        <p className="mt-4 rounded-lg bg-muted px-3 py-2 text-sm font-medium" dir="auto">
-          {idea.title}
-        </p>
-        <form
-          aria-busy={isSubmitting}
-          className="mt-6 grid gap-5"
-          noValidate
-          onSubmit={form.handleSubmit(({ rejectionReason }) => onSubmit(rejectionReason))}
-        >
-          <Field data-invalid={Boolean(form.formState.errors.rejectionReason)}>
-            <FieldLabel htmlFor="idea-rejection-reason">{t("rejectReasonLabel")}</FieldLabel>
-            <Textarea
-              aria-describedby={`idea-rejection-reason-help${form.formState.errors.rejectionReason ? ` ${errorId}` : ""}`}
-              aria-invalid={Boolean(form.formState.errors.rejectionReason)}
-              autoComplete="off"
-              className="min-h-32 resize-y"
-              disabled={isSubmitting}
-              dir="auto"
-              id="idea-rejection-reason"
-              maxLength={500}
-              placeholder={t("rejectReasonPlaceholder")}
-              {...rejectionField}
-              ref={(element) => {
-                rejectionField.ref(element);
-                textareaRef.current = element;
-              }}
-            />
-            <FieldDescription id="idea-rejection-reason-help">
-              {t("rejectReasonHelp")}
-            </FieldDescription>
-            <FieldError
-              id={errorId}
-              errors={
-                form.formState.errors.rejectionReason
-                  ? [{ message: t("reasonTooLong") }]
-                  : undefined
-              }
-            />
-          </Field>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="text-xs tabular-nums text-muted-foreground" aria-live="polite">
-              {t("characterCount", { count: reason.length })}
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                className="min-h-11"
+      <DialogPortal>
+        <DialogBackdrop />
+        <DialogViewport>
+          <DialogContent>
+            <div className="flex items-start justify-between gap-5">
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">{t("rejectEyebrow")}</p>
+                <DialogTitle className="mt-2" id="idea-rejection-title">
+                  {t("rejectTitle")}
+                </DialogTitle>
+              </div>
+              <DialogClose
+                aria-label={t("cancel")}
+                className="inline-flex size-11 items-center justify-center rounded-md text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
                 disabled={isSubmitting}
-                onClick={onClose}
-                type="button"
-                variant="outline"
               >
-                {t("cancel")}
-              </Button>
-              <Button className="min-h-11" disabled={isSubmitting} type="submit">
-                {isSubmitting ? t("rejecting") : t("confirmReject")}
-              </Button>
+                <XIcon aria-hidden="true" className="size-4" />
+              </DialogClose>
             </div>
-          </div>
-        </form>
-      </section>
-    </div>
+            <DialogDescription className="mt-4" id="idea-rejection-description">
+              {t("rejectDescription")}
+            </DialogDescription>
+            <p className="mt-4 rounded-lg bg-muted px-3 py-2 text-sm font-medium" dir="auto">
+              {idea.title}
+            </p>
+            <form
+              aria-busy={isSubmitting}
+              className="mt-6 grid gap-5"
+              noValidate
+              onSubmit={form.handleSubmit(({ rejectionReason }) => onSubmit(rejectionReason))}
+            >
+              <Field data-invalid={Boolean(form.formState.errors.rejectionReason)}>
+                <FieldLabel htmlFor="idea-rejection-reason">{t("rejectReasonLabel")}</FieldLabel>
+                <Textarea
+                  aria-describedby={`idea-rejection-reason-help${form.formState.errors.rejectionReason ? ` ${errorId}` : ""}`}
+                  aria-invalid={Boolean(form.formState.errors.rejectionReason)}
+                  autoComplete="off"
+                  className="min-h-32 resize-y"
+                  disabled={isSubmitting}
+                  dir="auto"
+                  id="idea-rejection-reason"
+                  maxLength={500}
+                  placeholder={t("rejectReasonPlaceholder")}
+                  {...rejectionField}
+                  ref={(element) => {
+                    rejectionField.ref(element);
+                    textareaRef.current = element;
+                  }}
+                />
+                <FieldDescription id="idea-rejection-reason-help">
+                  {t("rejectReasonHelp")}
+                </FieldDescription>
+                <FieldError
+                  id={errorId}
+                  errors={
+                    form.formState.errors.rejectionReason
+                      ? [{ message: t("reasonTooLong") }]
+                      : undefined
+                  }
+                />
+              </Field>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-xs tabular-nums text-muted-foreground" aria-live="polite">
+                  {t("characterCount", { count: reason.length })}
+                </p>
+                <DialogFooter>
+                  <Button
+                    className="min-h-11"
+                    disabled={isSubmitting}
+                    onClick={onClose}
+                    type="button"
+                    variant="outline"
+                  >
+                    {t("cancel")}
+                  </Button>
+                  <Button className="min-h-11" disabled={isSubmitting} type="submit">
+                    {isSubmitting ? t("rejecting") : t("confirmReject")}
+                  </Button>
+                </DialogFooter>
+              </div>
+            </form>
+          </DialogContent>
+        </DialogViewport>
+      </DialogPortal>
+    </Dialog>
   );
 }
 
