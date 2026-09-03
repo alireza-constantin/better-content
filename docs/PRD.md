@@ -439,7 +439,10 @@ The action should remain fast.
 
 # 17. Generate Content From an Idea
 
-Content generation should normally begin from an idea.
+V1 Content generation begins only from an `ACCEPTED` Idea and only after an
+explicit creator action. Accepting an Idea does not automatically create
+Content or invoke AI. `NEW`, `SAVED`, and `REJECTED` Ideas are not eligible;
+a saved Idea must first be accepted.
 
 The relationship must remain explicit:
 
@@ -453,24 +456,41 @@ Content must retain its originating Idea ID.
 
 Better Content must not simply copy the idea text into a content record and lose the relationship.
 
+One accepted Idea may produce multiple Content aggregates for different
+languages, formats, instructions, or creative approaches. Creating Content
+does not freeze the Idea's decision state. Later Idea state changes do not
+invalidate already accepted generation operations or delete resulting Content.
+`USED` remains derived from the existence of linked Content and is never stored
+as an Idea status.
+
 ---
 
 # 18. Content Generation Inputs
 
-AI content generation should consider at minimum:
+The Phase 4 Content-generation request contains exactly:
 
-* source idea
-* Content DNA
-* content language
-* requested content format
-* user instructions
-* relevant generation configuration
+* workspace
+* source Idea
+* client-observed base Content DNA version
+* requested content language
+* requested format
+* optional creator instructions
+* idempotency key
 
-Generated content initially receives:
+The only Phase 4 formats are `SHORT_VIDEO` and `LONG_VIDEO`. Instructions are
+optional, canonically trimmed, and limited to 1,000 characters. Content
+language is `en` or `fa`, is independent of Idea language and UI locale, and
+must be supported by the current authoritative AI-ready Content DNA.
 
-**DRAFT**
+Before accepting a new operation, the server verifies that the submitted base
+DNA version is still current. A mismatch has no generation, quota, or provider
+side effects. Once accepted, the operation remains permanently bound to that
+immutable DNA version even if current DNA later changes. Content generation
+does not automatically reuse the historical DNA version that generated the
+Idea.
 
-status.
+Generated Content initially has one mutable Draft. In Phase 4, **Draft** is a
+descriptive authoring condition, not a persisted Content lifecycle status.
 
 ---
 
@@ -529,6 +549,20 @@ They are structured production instructions associated with the same Script.
 
 Content should not exist only as a giant opaque text field.
 
+Phase 4 begins with the smallest schema-versioned Script document:
+
+```json
+{
+  "schemaVersion": 1,
+  "script": {
+    "text": "..."
+  }
+}
+```
+
+The Script is plain Unicode text. Phase 4 does not define blocks, direction
+anchors, or Production Direction structure.
+
 The system must eventually understand individual content sections or blocks.
 
 Conceptually:
@@ -541,7 +575,9 @@ Content
 └── Block
 ```
 
-The exact schema will be defined during architecture.
+The later structured-editor schema, including blocks and direction anchoring,
+will be defined and explicitly transformed during Phase 5. Immutable Phase 4
+schema-v1 Content Versions retain their original interpretation.
 
 Structured content allows production instructions to reference specific parts of the content.
 
@@ -628,6 +664,11 @@ Users must be able to:
 * edit Performance Directions and Edit Directions,
 * save their work.
 
+Phase 4 implements plain Script viewing/editing and autosave only. Adding and
+editing structured Performance Directions, Edit Directions, sections, and
+anchors begins in Phase 5 after its taxonomy and anchoring decisions are
+approved.
+
 Human edits should remain distinguishable from the originally generated output where practical.
 
 This information will eventually become important learning data.
@@ -637,6 +678,11 @@ This information will eventually become important learning data.
 # 25. Content Versioning
 
 Content must support version history.
+
+Initial AI Content generation creates immutable Content Version #1 and a
+mutable Draft initialized from the same canonical validated Script. Human
+autosaves change only the Draft and do not create versions. The immutable
+initial version preserves the generated artifact for future comparison.
 
 At minimum, Better Content must preserve the difference between:
 
@@ -1088,7 +1134,14 @@ V1 architecture must avoid destroying this information.
 
 # 47. AI Generation Traceability
 
-Meaningful AI generation operations should retain metadata needed for:
+Meaningful AI generation operations use a durable product-operation entity
+paired one-to-one with an AI Run. The operation owns immutable canonical
+business inputs and source lineage. The AI Run owns safe provider/model/prompt
+configuration, execution state, neutral usage, and canonical validated output.
+Neither owns raw assembled prompts, raw provider envelopes, or hidden
+reasoning.
+
+Together they retain metadata needed for:
 
 * debugging
 * reproducibility
@@ -1470,7 +1523,8 @@ Ideas are stored objects, not temporary AI text.
 
 ## Decision 2 — Idea generation precedes content generation
 
-Content should normally originate from an idea.
+V1 Content generation requires an explicitly selected `ACCEPTED` Idea.
+Accepting an Idea alone does not generate Content.
 
 ## Decision 3 — Generate 20 ideas by default
 
@@ -1486,7 +1540,8 @@ Historical generations retain their originating DNA version.
 
 ## Decision 6 — Content remains linked to its idea
 
-The lineage must never be lost.
+The lineage must never be lost. One Idea may produce multiple Content
+aggregates, and `USED` remains derived from their existence.
 
 ## Decision 7 — Production Directions are structured
 
@@ -1499,7 +1554,9 @@ Both are structured data associated with the Script rather than merely annotatio
 
 ## Decision 8 — Content is versioned
 
-Published content must remain immutable historically.
+Initial AI output and published content must remain immutable historically.
+Content keeps one mutable Draft while meaningful snapshots are immutable
+Content Versions.
 
 ## Decision 9 — Publication is a separate entity
 
@@ -1577,16 +1634,13 @@ We need rules for how often publications are synchronized based on age and platf
 
 ## E. AI Provider Strategy
 
-Before implementing AI generation, we need to select and define:
-
-* initial AI provider
-* default model(s)
-* provider-specific structured-output implementation
-* retry/failure policy
-* token/cost tracking
-* latency/cost expectations
-
-The provider-neutral application boundary itself is already established by architecture.
+The provider-neutral application boundary is established by architecture.
+Provider/model and operating policies are selected per workflow rather than
+globally: ADR-014 as superseded in part by ADR-015 governs Phase 3 Idea
+generation, and ADR-016 governs Phase 4 Content Script generation. Future AI
+workflows or changes to an existing workflow still require deliberate
+provider/model, structured-output, retry/failure, privacy, usage/cost, and
+latency decisions before implementation.
 
 ## F. Content Editor Data Structure
 

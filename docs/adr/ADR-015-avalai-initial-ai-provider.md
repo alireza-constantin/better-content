@@ -151,8 +151,8 @@ errors must not be persisted or logged.
 
 ## ADR-014 relationship
 
-ADR-015 supersedes ADR-014 only where ADR-014 selects direct OpenAI as the
-production provider and provider endpoint.
+ADR-015 supersedes ADR-014 only where ADR-014 selects the Phase 3 direct
+production provider, provider endpoint, and model.
 
 ADR-014 remains authoritative for Phase 3 generation behavior that is not
 explicitly changed here, including:
@@ -168,6 +168,9 @@ explicitly changed here, including:
 - safety identifier
 - neutral usage
 - no tools/background/conversation/continuation features
+
+ADR-016 separately governs Phase 4 Content Script generation. It does not
+expand this ADR's Phase 3 scope or change Phase 3 behavior.
 
 ## Consequences
 

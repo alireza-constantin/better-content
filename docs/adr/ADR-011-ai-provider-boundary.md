@@ -41,9 +41,14 @@ Do not store or request hidden chain-of-thought/reasoning traces.
 
 ## Current provider decision
 
-**Undecided.**
+**Undecided when this ADR was accepted.**
 
 A separate provider/model ADR or amendment must be written before Phase 3 implementation.
+
+Subsequent workflow-specific decisions preserve this provider-neutral ADR:
+ADR-014 as superseded in its applicable provider/model portions by ADR-015
+governs Phase 3 Idea generation, and ADR-016 governs Phase 4 Content Script
+generation. Future workflows still require their own deliberate decision.
 
 Codex must not choose multiple providers or build a complex routing system independently.
 

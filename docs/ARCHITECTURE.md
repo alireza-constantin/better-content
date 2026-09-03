@@ -644,12 +644,14 @@ External provider calls must never occur directly inside feature UI code.
 Conceptually:
 
 ```text
-Ideas Module
-     ↓
+Ideas Module / Content Module
+            ↓
 AI Generation Service
-     ↓
+            ↓
+workflow-specific provider-neutral contract
+            ↓
 AI Provider Adapter
-     ↓
+            ↓
 External AI Provider
 ```
 
@@ -694,9 +696,13 @@ The architecture is provider-neutral.
 ADR-015 records the current Phase 3 production choice as AvalAI at the fixed
 `https://api.avalai.ir/v1` endpoint, using the OpenAI SDK's Responses API with
 `gpt-5.6-luna`. This decision does not add a provider registry, routing layer,
-fallback, or provider/model selector. ADR-014 remains authoritative for the
-provider-neutral contract and all generation behavior not superseded by
-ADR-015.
+fallback, or provider/model selector. ADR-015 supersedes the applicable Phase 3
+direct-provider, endpoint, and model portions of ADR-014; ADR-014 remains
+authoritative for unaffected Phase 3 operating behavior.
+
+ADR-016 records the Phase 4 Content Script generation choice as AvalAI and
+`gpt-5.6-luna` under a separately reviewed workflow policy. It does not change
+Phase 3 behavior.
 
 The initial provider/model is not a permanent architecture-wide choice for
 future workflows. Any future provider or model requires a deliberate ADR and
@@ -743,15 +749,14 @@ kind
 provider
 model
 prompt_template_version
+generation_settings
 status
 started_at
 completed_at
-input_snapshot
 output_snapshot
-input_tokens
-output_tokens
-estimated_cost
-error_code
+neutral_usage
+safe_provider_request_id
+error_category
 ```
 
 Possible `kind` examples:
@@ -770,7 +775,8 @@ We need final outputs and operational metadata, not private reasoning traces.
 
 # 25. AI Input Snapshots
 
-An AI run must preserve enough input context for debugging.
+An AI workflow must preserve enough canonical input context for debugging
+without storing raw assembled prompts or duplicating large source payloads.
 
 For example an idea-generation run should preserve:
 
@@ -780,7 +786,16 @@ For example an idea-generation run should preserve:
 * generation settings,
 * prompt template version.
 
-We should not rely exclusively on reconstructing historical prompts from current application code.
+The product workflow entity owns canonical business inputs and immutable source
+references; the paired AI Run owns operational provider/model/prompt/settings,
+safe outcome, neutral usage, and canonical validated output. Their one-to-one
+relationship supplies complete traceability without making the AI Run a shadow
+copy of the request.
+
+We should not rely exclusively on reconstructing historical behavior from
+current application code. Persist prompt-template and output-schema versions,
+but do not persist raw assembled prompts, DNA payload copies, raw provider
+envelopes, or estimated-cost columns.
 
 ---
 
@@ -902,9 +917,82 @@ A separate permanent-delete mechanism may exist for privacy/account deletion req
 
 ---
 
+# 29A. Content Generation Attempt Architecture
+
+Phase 4 inserts a durable Content Generation Attempt between an accepted Idea
+and generated Content:
+
+```text
+ACCEPTED Idea + current AI-ready DNA Version
+                ↓
+Content Generation Attempt
+                ↓ exactly one
+AI Run
+                ↓ successful canonical output
+Content ──┬── mutable Draft
+           └── immutable Content Version #1
+```
+
+Only an explicit action on an `ACCEPTED` Idea may create a new Attempt.
+`NEW`, `SAVED`, and `REJECTED` Ideas are ineligible. An Idea may produce
+multiple Content aggregates, and `USED` remains derived.
+
+The Attempt owns immutable workspace, source Idea, accepted current Content DNA
+version, requested language, format, canonical instructions, idempotency key,
+and request fingerprint. It has exactly one same-workspace AI Run. The Attempt
+does not store a resulting Content ID.
+
+Content instead owns a non-null unique `source_generation_attempt_id`. A
+candidate key on Attempt `(workspace_id, id)` plus a composite Content
+`(workspace_id, source_generation_attempt_id)` foreign key enforces same-
+workspace ownership. Attempt result reads derive zero or one Content by reverse
+lookup, preserving Attempt 1 → 0..1 Content without cyclic foreign keys.
+
+For a new key, acceptance transactionally verifies Idea ownership/status and
+that the client-observed base DNA version is still the current AI-ready version
+supporting the requested language. Failure before acceptance creates no
+Attempt, AI Run, quota effect, or provider call. Once accepted, the Attempt is
+permanently bound to that immutable DNA version; later DNA or Idea-state changes
+do not invalidate it, and the current DNA pointer is not checked again.
+
+Workspace-scoped idempotent replay precedes mutable-state and quota evaluation.
+Same key/request returns the original Attempt; mismatched reuse is a conflict.
+Content generation uses its own PostgreSQL quota of 2 provider-invoking
+attempts per rolling 10 minutes and 8 per rolling 24 hours.
+
+Application-level `RATE_LIMITED` results distinguish `source = WORKSPACE` for
+local quota denial from `source = PROVIDER` for an invoked AvalAI rate limit.
+The durable provider error category remains `RATE_LIMITED`; a workspace denial
+creates no Attempt/AI Run record.
+
+Attempt/AI Run lifecycle is `PENDING → RUNNING → COMPLETED | FAILED`. The
+provider call occurs outside a database transaction. With a 90-second timeout,
+stale PENDING and RUNNING attempts fail as `INTERRUPTED` at their respective
+created/started timestamp plus 105 seconds. Recovery never calls the provider;
+late output cannot win after a terminal transition.
+
+Successful validated completion atomically creates Content, its one Draft, and
+immutable AI-generated Content Version #1. Failure creates none. Retry from a
+failed Attempt creates a new Attempt/AI Run with a fresh idempotency key and
+reevaluates the current accepted Idea, current AI-ready DNA, language, and
+quota.
+
+---
+
 # 30. Content Aggregate
 
 Content is a stable aggregate representing a piece of creator work.
+
+In Phase 4 it directly stores immutable `workspace_id`, `source_idea_id`,
+`content_language`, `format`, and non-null unique
+`source_generation_attempt_id`. A different language, format, or creative
+approach creates another Content aggregate. Content has no persisted lifecycle
+status or accepted-version pointer until the phase that owns those behaviors.
+
+Database-level immutability enforcement prevents updates to these Content
+identity/lineage fields, to Attempt request/lineage fields, and to Content
+Versions. Only lifecycle-controlled Attempt/AI Run outcome fields and the Draft
+document/revision/timestamp may mutate under their domain rules.
 
 Conceptual tables:
 
@@ -960,7 +1048,6 @@ Conceptual fields:
 ```text
 content_id
 document
-document_schema_version
 revision
 updated_at
 ```
@@ -982,7 +1069,6 @@ id
 content_id
 version_number
 document
-document_schema_version
 source
 ai_run_id
 created_by_user_id
@@ -1027,6 +1113,27 @@ If the creator wants those edits published, the content must be accepted again.
 # 35. Structured Content Representation
 
 Structured content will be stored as versioned JSONB.
+
+Phase 4 uses the minimal Script-only document:
+
+```json
+{
+  "schemaVersion": 1,
+  "script": {
+    "text": "..."
+  }
+}
+```
+
+`schemaVersion` is authoritative inside JSONB; Phase 4 adds no duplicate
+relational schema-version column. Generated Script text is normalized to LF,
+outer-trimmed, non-empty, and at most 50,000 characters. Human Draft edits
+normalize line endings, preserve other whitespace, may be empty, and remain
+bounded to 50,000 characters.
+
+This does not approve blocks, direction taxonomy, or anchors. Phase 5 must
+explicitly transform mutable Drafts if it evolves the representation, while
+immutable schema-v1 Content Versions retain their original meaning.
 
 Example conceptually:
 
@@ -2063,6 +2170,18 @@ so moving heavy AI calls to the background job system later does not require red
 
 Long-running operations should be job-backed when necessary.
 
+Phase 4 Content Script generation remains synchronous with a 90-second local
+provider timeout and durable Attempt/AI Run records. Its stale cutoff is 105
+seconds from `created_at` for PENDING and from `started_at` for RUNNING.
+Recovery conditionally fails stale work as `INTERRUPTED`, never re-calls the
+provider, and rejects late output after another terminal winner.
+
+The initiating UI shows local generating feedback while its synchronous request
+is in flight, then redirects on success or shows safe failure/retry. Persisted
+PENDING/RUNNING records render correctly when observed, but Phase 4 does not add
+polling, split execution endpoints, jobs, `after()`, `waitUntil()`, or other
+background execution merely to expose active status to that initiating browser.
+
 ---
 
 # 72. Internationalization Architecture
@@ -2355,6 +2474,14 @@ This is useful even in a single-user product because:
 * AI actions
 
 can create conflicting writes.
+
+Phase 4 Draft autosave debounces approximately 750–1000 ms, permits one request
+in flight, and coalesces later edits into the latest pending document. Each save
+submits a base revision and increments the authoritative revision on success.
+Conflict stops autosave, preserves local text, and offers Reload plus Copy
+unsaved text; there is no automatic merge or offline queue. Content-list
+last-edited ordering and display use `content_drafts.updated_at`; autosave does
+not require touching the stable Content row.
 
 ---
 
@@ -2811,12 +2938,10 @@ Publication
 Content Version
  ↓
 Content
- ↓
-Idea
- ↓
-Idea Batch
- ↓
-DNA Version
+ ├── source Idea → Idea Batch → Idea-generation DNA Version
+ └── source Content Generation Attempt
+       ├── Content-generation DNA Version
+       └── AI Run
 ```
 
 where those upstream entities exist.
@@ -2833,6 +2958,7 @@ But the architecture preserves:
 
 * rejected ideas,
 * AI runs,
+* Content Generation Attempts and their exact Content-generation DNA versions,
 * generated content version,
 * human-edited accepted version,
 * exact published version,
@@ -2941,6 +3067,12 @@ retry, and neutral error policy.
 AvalAI is the current Phase 3 production provider and `gpt-5.6-luna` is the
 current production model; the decision supersedes ADR-014 only for the direct
 provider and endpoint selection.
+
+## ADR-016 — Content Script Generation AI Policy
+
+Phase 4 uses the provider-neutral Content Script contract with AvalAI,
+`gpt-5.6-luna`, strict `content_script_v1`, fixed generation/privacy settings,
+and workflow-specific timeout, quota, and verification policy.
 
 ---
 
@@ -3054,17 +3186,23 @@ Implement:
 
 ---
 
-## Phase 4 — Content Generation
+## Phase 4 — Script Generation + Draft Editing
 
-* contents
-* content drafts
-* content versions
-* generation from accepted/saved idea
-* Script generation
-* version lineage
-* draft editing basics
+* explicit generation from `ACCEPTED` Ideas only
+* Content Generation Attempts with exactly one AI Run
+* binding to the current AI-ready Content DNA at operation acceptance
+* contents with immutable source identity
+* one mutable revisioned content draft
+* immutable AI-generated Content Version #1
+* Script-only schema-v1 JSONB document
+* provider-neutral AvalAI generation under ADR-016
+* idempotency, Content-generation quota, lifecycle, and stale recovery
+* serialized autosave and optimistic Draft conflict handling
+* minimal Content list and editor in EN/FA and LTR/RTL
 
-Performance Direction and Edit Direction generation may be introduced only to the extent explicitly defined in the approved phase specification.
+No Performance Direction, Edit Direction, production block, taxonomy, anchor,
+asset, acceptance, publishing, analytics, AI rewriting, or background-job work
+is introduced in Phase 4.
 
 ---
 
@@ -3078,11 +3216,11 @@ Before implementation, explicitly approve:
 
 Then implement:
 
-- structured editor
-- Script layer
+- structured editor that evolves the Phase 4 Script document
+- structured Script block/anchor-aware layer
 - Performance Direction layer
 - Edit Direction layer
-* optimistic concurrency
+* build on Phase 4 optimistic Draft concurrency
 * accepted snapshot
 * version history
 
