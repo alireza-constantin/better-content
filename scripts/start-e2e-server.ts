@@ -9,6 +9,14 @@ const port = process.env.PLAYWRIGHT_PORT ?? "3100";
 const serverEnvironment = {
   ...process.env,
   DATABASE_URL: databaseUrl,
+  // E2E uses sanitized database fixtures and must never be able to reach the
+  // real provider, even when the invoking shell has local AvalAI credentials.
+  // Empty values intentionally fail the provider configuration boundary if a
+  // test exercises generation/retry; they prevent Next from reloading local
+  // credentials and keep E2E deterministic without a provider request.
+  AVALAI_API_KEY: "",
+  AI_SAFETY_IDENTIFIER_SECRET: "",
+  BETTER_CONTENT_E2E: "1",
   BETTER_AUTH_SECRET: "e2e-only-better-auth-secret-that-is-long-enough",
   BETTER_AUTH_URL: `http://127.0.0.1:${port}`,
   NEXT_DIST_DIR: ".next-e2e",

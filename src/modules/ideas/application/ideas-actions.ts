@@ -1,6 +1,10 @@
 "use server";
 
-import { ApplicationError, type ApplicationErrorCode } from "@/lib/errors/app-error";
+import {
+  ApplicationError,
+  type ApplicationErrorCode,
+  type RateLimitSource,
+} from "@/lib/errors/app-error";
 import {
   generateIdeas,
   retryIdeaGeneration,
@@ -11,6 +15,7 @@ import {
 export type IdeasActionFailure = Readonly<{
   ok: false;
   code: ApplicationErrorCode;
+  rateLimitSource?: RateLimitSource;
 }>;
 
 export type GenerateIdeasActionResult = Readonly<{ ok: true }> | IdeasActionFailure;
@@ -22,6 +27,9 @@ function failureFrom(error: unknown): IdeasActionFailure {
   return {
     ok: false,
     code: error instanceof ApplicationError ? error.code : "INTERNAL_ERROR",
+    ...(error instanceof ApplicationError && error.code === "RATE_LIMITED" && error.rateLimitSource
+      ? { rateLimitSource: error.rateLimitSource }
+      : {}),
   };
 }
 

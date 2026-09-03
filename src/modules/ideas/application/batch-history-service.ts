@@ -6,7 +6,11 @@ import { z } from "zod";
 
 import { db } from "@/db";
 import { getServerSession } from "@/lib/auth/server";
-import { ApplicationError, type ApplicationErrorCode } from "@/lib/errors/app-error";
+import {
+  ApplicationError,
+  type ApplicationErrorCode,
+  type RateLimitSource,
+} from "@/lib/errors/app-error";
 import { logger } from "@/lib/logging/server";
 import {
   generationLanguageSchema,
@@ -49,6 +53,7 @@ export type IdeaGenerationBatchHistoryDto = Readonly<{
   requestedCount: 20;
   status: GenerationLifecycle;
   errorCategory: FailureCategory | null;
+  rateLimitSource: RateLimitSource | null;
   ideaCount: number;
   createdAt: Date;
   startedAt: Date | null;
@@ -104,14 +109,18 @@ function toHistoryDto(record: IdeaGenerationBatchHistoryRecord): IdeaGenerationB
     throw new ApplicationError("INTERNAL_ERROR", "The generation language invariant is invalid.");
   }
 
+  const status = parseStoredBatchStatus(record.batch.status);
+  const errorCategory = parseStoredErrorCategory(record.batch.errorCategory);
+
   return {
     id: record.batch.id,
     contentDnaVersionId: record.batch.contentDnaVersionId,
     contentDnaVersionNumber: record.contentDnaVersionNumber,
     requestedLanguage: requestedLanguage.data,
     requestedCount: 20,
-    status: parseStoredBatchStatus(record.batch.status),
-    errorCategory: parseStoredErrorCategory(record.batch.errorCategory),
+    status,
+    errorCategory,
+    rateLimitSource: status === "FAILED" && errorCategory === "RATE_LIMITED" ? "provider" : null,
     ideaCount: record.ideaCount,
     createdAt: record.batch.createdAt,
     startedAt: record.batch.startedAt,

@@ -4,7 +4,7 @@
 
 **Blocked by:** 01: Define Idea Generation domain contracts and canonical validation; 02: Add Phase 3 persistence schema and reviewed migration; 03: Establish the provider-neutral AI contract and deterministic fake; 04: Implement the Phase 3 OpenAI adapter and privacy boundary; 05: Orchestrate safe, idempotent idea generation; 06: Deliver authorized batch history, detail, retry, and idea decisions; 07: Build the localized, accessible Ideas workspace UI.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 ## Goal
 
@@ -101,3 +101,13 @@ git diff --check
 - 05: Orchestrate safe, idempotent idea generation.
 - 06: Deliver authorized batch history, detail, retry, and idea decisions.
 - 07: Build the localized, accessible Ideas workspace UI.
+
+## Answer
+
+Implemented the final Phase 3 hardening and closure corrections: provider and
+workspace rate-limit outcomes are distinct and safely localized, migration
+environment boundaries are documented, deterministic Playwright coverage now
+includes lifecycle, failure, retry, decision, focus, responsive, and EN/FA
+RTL/LTR scenarios, and the E2E server cannot use local provider credentials.
+Ticket 08 is resolved; Phase 3 remains ready for final review pending the
+post-fix verification recorded by Ticket 10.

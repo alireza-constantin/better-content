@@ -45,7 +45,21 @@ npm run db:down     # Stop it without deleting its volume
 npm run db:check    # Verify connection, schema, and migration history
 npm run db:generate # Generate a reviewed Drizzle migration
 npm run db:migrate  # Apply committed Drizzle migrations
+npm run db:migrate:test # Apply committed migrations to TEST_DATABASE_URL only
 ```
+
+`npm run db:migrate:test` migrates only the database named by
+`TEST_DATABASE_URL`; it does not migrate the database used by the Next.js
+development app. The development app uses `DATABASE_URL`. After pulling new
+migrations, apply them to the normal development database separately with the
+repository-approved setup command:
+
+```bash
+npm run db:setup
+```
+
+The application does not run database migrations at runtime or on application
+startup; apply committed migrations explicitly with `npm run db:setup`.
 
 The Compose credentials and port in `.env.example` are for local development
 only. Do not commit `.env.local` or use those credentials in production.

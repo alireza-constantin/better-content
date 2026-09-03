@@ -31,6 +31,8 @@ export type FakeGenerateIdeasProviderOptions = Readonly<{
   usage?: ProviderNeutralUsage;
   /** Request snapshots can contain Content DNA, so recording is opt-in. */
   recordRequests?: boolean;
+  /** Test-only instrumentation; never records the request payload itself. */
+  onInvocation?: (request: GenerateIdeasRequest) => void;
 }>;
 
 const failureByScenario: Record<
@@ -73,6 +75,7 @@ export class FakeGenerateIdeasProvider implements GenerateIdeasProvider {
   private readonly customOutput: unknown;
   private readonly usage: ProviderNeutralUsage | undefined;
   private readonly shouldRecordRequests: boolean;
+  private readonly onInvocation: ((request: GenerateIdeasRequest) => void) | undefined;
   private readonly recordedRequests: GenerateIdeasRequest[] = [];
   private calls = 0;
 
@@ -81,6 +84,7 @@ export class FakeGenerateIdeasProvider implements GenerateIdeasProvider {
     this.customOutput = options.output;
     this.usage = options.usage;
     this.shouldRecordRequests = options.recordRequests ?? false;
+    this.onInvocation = options.onInvocation;
   }
 
   get invocationCount(): number {
@@ -102,6 +106,7 @@ export class FakeGenerateIdeasProvider implements GenerateIdeasProvider {
     if (this.shouldRecordRequests) {
       this.recordedRequests.push(canonicalRequest);
     }
+    this.onInvocation?.(canonicalRequest);
 
     if (this.scenario !== "success") {
       return createGenerateIdeasFailure(failureByScenario[this.scenario]);

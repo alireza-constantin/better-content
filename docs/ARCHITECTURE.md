@@ -691,15 +691,16 @@ We will **not** build a complicated multi-provider routing engine in V1.
 
 The architecture is provider-neutral.
 
-The exact initial provider/model is intentionally **not locked in Architecture v0.1**.
+ADR-015 records the current Phase 3 production choice as AvalAI at the fixed
+`https://api.avalai.ir/v1` endpoint, using the OpenAI SDK's Responses API with
+`gpt-5.6-luna`. This decision does not add a provider registry, routing layer,
+fallback, or provider/model selector. ADR-014 remains authoritative for the
+provider-neutral contract and all generation behavior not superseded by
+ADR-015.
 
-Before implementing the AI phase, we will create an ADR covering:
-
-* provider,
-* default model,
-* structured output capabilities,
-* token/cost expectations,
-* failure behavior.
+The initial provider/model is not a permanent architecture-wide choice for
+future workflows. Any future provider or model requires a deliberate ADR and
+must preserve the provider-neutral boundary.
 
 Codex must not independently choose or add multiple AI providers.
 
@@ -2930,6 +2931,17 @@ Provider-neutral AI application interface and structured output.
 
 Drizzle-managed reviewed migrations.
 
+## ADR-014 — Initial AI Provider and Model for Idea Generation
+
+Phase 3 generation contract, strict Responses output, privacy, usage, timeout,
+retry, and neutral error policy.
+
+## ADR-015 — AvalAI Initial AI Provider
+
+AvalAI is the current Phase 3 production provider and `gpt-5.6-luna` is the
+current production model; the decision supersedes ADR-014 only for the direct
+provider and endpoint selection.
+
 ---
 
 # 107. Decisions Still Open
@@ -2953,10 +2965,6 @@ We must define exactly how Performance Directions and Edit Directions attach to 
 ---
 
 ## Technical
-
-### Initial AI provider/model
-
-Deferred until the AI implementation phase.
 
 ### Asset storage provider
 

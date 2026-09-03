@@ -91,6 +91,7 @@ function batch(
     requestedCount: 20,
     status: "COMPLETED",
     errorCategory: null,
+    rateLimitSource: null,
     ideaCount: 20,
     createdAt: new Date("2026-09-01T10:00:00Z"),
     startedAt: new Date("2026-09-01T10:00:01Z"),
@@ -189,6 +190,27 @@ describe("Ideas workspace presentation", () => {
     expect(mocks.refresh).toHaveBeenCalled();
   });
 
+  it("announces generation while the server action is pending and disables repeat input", async () => {
+    let resolveGeneration!: (result: { ok: true }) => void;
+    mocks.generate.mockReturnValueOnce(
+      new Promise<{ ok: true }>((resolve) => {
+        resolveGeneration = resolve;
+      }),
+    );
+    const user = renderWorkspace();
+
+    await user.click(screen.getByRole("button", { name: "Generate 20 Ideas" }));
+
+    await waitFor(() => expect(mocks.generate).toHaveBeenCalledOnce());
+    expect(screen.getByRole("button", { name: "Generating ideas…" }).hasAttribute("disabled")).toBe(
+      true,
+    );
+    expect(screen.getByRole("status").textContent).toContain("Generating ideas…");
+
+    resolveGeneration({ ok: true });
+    await waitFor(() => expect(mocks.refresh).toHaveBeenCalled());
+  });
+
   it("updates an individual decision without changing generated text", async () => {
     const updated = idea(1, { status: "SAVED" });
     mocks.decision.mockResolvedValue({ ok: true, idea: updated });
@@ -206,6 +228,110 @@ describe("Ideas workspace presentation", () => {
     });
     expect(within(card).getByText("Saved for later")).toBeTruthy();
     expect(within(card).getByText("Idea title 1")).toBeTruthy();
+  });
+
+  it.each([
+    { contentLanguage: "en" as const, locale: "en" as const },
+    { contentLanguage: "fa" as const, locale: "en" as const },
+    { contentLanguage: "en" as const, locale: "fa" as const },
+    { contentLanguage: "fa" as const, locale: "fa" as const },
+  ])(
+    "keeps UI and generated content language presentation independent",
+    ({ contentLanguage, locale }) => {
+      const isPersianContent = contentLanguage === "fa";
+      const content = isPersianContent
+        ? { title: "ایدهٔ عنوان", description: "توضیح مفید برای ایده.", category: "منابع" }
+        : { title: "Idea title", description: "A useful idea description.", category: "Education" };
+
+      renderWorkspace({
+        locale,
+        currentDetail: detail({
+          ideas: [
+            idea(1, {
+              title: content.title,
+              description: content.description,
+              category: content.category,
+              language: contentLanguage,
+            }),
+          ],
+        }),
+      });
+
+      const card = screen.getByText(content.title, { exact: true }).closest("article");
+      if (!card) throw new Error("Idea card was not rendered.");
+
+      const title = within(card).getByRole("heading", { name: content.title });
+      const description = within(card).getByText(content.description, { exact: true });
+      const categoryLabel = within(card).getByText(locale === "fa" ? "دسته‌بندی:" : "Category:", {
+        exact: true,
+      });
+      const categoryValue = within(card).getByText(content.category, { exact: true });
+      const contentClass = isPersianContent ? "font-content-persian" : "font-content-english";
+      const contentDirection = isPersianContent ? "rtl" : "ltr";
+
+      expect(title.getAttribute("lang")).toBe(contentLanguage);
+      expect(title.getAttribute("dir")).toBe(contentDirection);
+      expect(title.classList.contains(contentClass)).toBe(true);
+      expect(description.getAttribute("lang")).toBe(contentLanguage);
+      expect(description.getAttribute("dir")).toBe(contentDirection);
+      expect(description.classList.contains(contentClass)).toBe(true);
+      expect(categoryLabel.getAttribute("lang")).toBe(locale);
+      expect(categoryLabel.getAttribute("dir")).toBe(locale === "fa" ? "rtl" : "ltr");
+      expect(categoryLabel.classList.contains("font-sans")).toBe(true);
+      expect(categoryValue.getAttribute("lang")).toBe(contentLanguage);
+      expect(categoryValue.getAttribute("dir")).toBe(contentDirection);
+      expect(categoryValue.classList.contains(contentClass)).toBe(true);
+    },
+  );
+
+  it("represents REJECTED as the current decision without reopening rejection", async () => {
+    const user = renderWorkspace({
+      currentDetail: detail({
+        ideas: [idea(1, { status: "REJECTED", rejectionReason: "Already covered" })],
+      }),
+    });
+    const card = screen.getByText("Idea title 1").closest("article");
+
+    if (!card) throw new Error("Idea card was not rendered.");
+    const acceptButton = within(card).getByRole("button", { name: "Accept" });
+    const saveButton = within(card).getByRole("button", { name: "Save for later" });
+    const rejectButton = within(card).getByRole("button", { name: "Reject" });
+
+    expect(rejectButton.getAttribute("aria-pressed")).toBe("true");
+    expect(rejectButton.hasAttribute("disabled")).toBe(true);
+    expect(acceptButton.getAttribute("aria-pressed")).toBe("false");
+    expect(saveButton.getAttribute("aria-pressed")).toBe("false");
+    expect(acceptButton.hasAttribute("disabled")).toBe(false);
+    expect(saveButton.hasAttribute("disabled")).toBe(false);
+
+    await user.click(rejectButton);
+
+    expect(mocks.decision).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it.each([
+    ["ACCEPTED", "Accept"],
+    ["SAVED", "Save for later"],
+  ] as const)("represents %s as the current decision", (status, currentAction) => {
+    renderWorkspace({ currentDetail: detail({ ideas: [idea(1, { status })] }) });
+    const card = screen.getByText("Idea title 1").closest("article");
+
+    if (!card) throw new Error("Idea card was not rendered.");
+    const currentButton = within(card).getByRole("button", { name: currentAction });
+
+    expect(currentButton.getAttribute("aria-pressed")).toBe("true");
+    expect(currentButton.hasAttribute("disabled")).toBe(true);
+  });
+
+  it("leaves every decision action unselected for NEW ideas", () => {
+    renderWorkspace({ currentDetail: detail({ ideas: [idea(1)] }) });
+    const card = screen.getByText("Idea title 1").closest("article");
+
+    if (!card) throw new Error("Idea card was not rendered.");
+    for (const name of ["Accept", "Save for later", "Reject"]) {
+      expect(within(card).getByRole("button", { name }).getAttribute("aria-pressed")).toBe("false");
+    }
   });
 
   it("opens an accessible optional rejection form, submits a blank reason, and restores focus", async () => {
@@ -276,6 +402,65 @@ describe("Ideas workspace presentation", () => {
     });
     expect(screen.getByText(/The idea provider was unavailable\./)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Retry generation" })).toBeTruthy();
+  });
+
+  it("keeps workspace and provider rate limits distinct and safe", async () => {
+    const user = renderWorkspace({
+      currentDetail: null,
+      currentHistory: { batches: [], selectedBatchId: null },
+    });
+    mocks.generate.mockResolvedValueOnce({
+      ok: false,
+      code: "RATE_LIMITED",
+      rateLimitSource: "workspace",
+    });
+
+    await user.click(screen.getByRole("button", { name: "Generate 20 Ideas" }));
+
+    await waitFor(() => expect(mocks.generate).toHaveBeenCalledOnce());
+    expect(
+      screen.getByText(
+        "No new batch was created. Wait for the workspace limit window to pass, then try again.",
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText(/recorded as a failed batch/)).toBeNull();
+
+    cleanup();
+    mocks.generate.mockClear();
+    mocks.generate.mockResolvedValueOnce({
+      ok: false,
+      code: "RATE_LIMITED",
+      rateLimitSource: "provider",
+    });
+    const providerUser = renderWorkspace({
+      currentDetail: detail({
+        status: "FAILED",
+        errorCategory: "RATE_LIMITED",
+        rateLimitSource: "provider",
+        ideas: [],
+        canRetry: true,
+      }),
+      currentHistory: {
+        batches: [
+          batch({
+            status: "FAILED",
+            errorCategory: "RATE_LIMITED",
+            rateLimitSource: "provider",
+            ideaCount: 0,
+          }),
+        ],
+        selectedBatchId: batch().id,
+      },
+    });
+
+    expect(screen.getByText(/recorded as a failed batch/)).toBeTruthy();
+    expect(screen.queryByText(/workspace limit window/)).toBeNull();
+    await providerUser.click(screen.getByRole("button", { name: "Generate 20 Ideas" }));
+    await waitFor(() => expect(mocks.generate).toHaveBeenCalledOnce());
+    expect(
+      screen.getAllByText(/This generation attempt was recorded as a failed batch/),
+    ).toHaveLength(2);
+    expect(screen.queryByText(/No new batch was created/)).toBeNull();
   });
 
   it("renders the same content decisions under Persian RTL", () => {
