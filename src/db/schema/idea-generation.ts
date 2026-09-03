@@ -18,6 +18,7 @@ import type {
   GenerationLanguage,
 } from "@/modules/ideas/domain/idea-generation-contracts";
 import type { GenerationSettings, ProviderNeutralUsage } from "@/modules/ai/domain/ai-contracts";
+import type { ContentScriptDocument } from "@/modules/content/domain/content-script-contracts";
 
 import { contentDnaVersions } from "./content-dna";
 import { workspaces } from "./workspace";
@@ -44,26 +45,60 @@ export const aiRuns = pgTable(
     generationSettings: jsonb("generation_settings").$type<GenerationSettings>().notNull(),
     status: text("status").notNull(),
     errorCategory: text("error_category"),
-    outputSnapshot: jsonb("output_snapshot").$type<CanonicalIdeaGenerationOutput>(),
+    outputSnapshot: jsonb("output_snapshot").$type<
+      CanonicalIdeaGenerationOutput | ContentScriptDocument
+    >(),
     usage: jsonb("usage").$type<ProviderNeutralUsage>(),
+    providerRequestCorrelation: text("provider_request_correlation"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     startedAt: timestamp("started_at", { withTimezone: true }),
     completedAt: timestamp("completed_at", { withTimezone: true }),
     failedAt: timestamp("failed_at", { withTimezone: true }),
   },
   (table) => [
-    check("ai_runs_kind_check", sql`${table.kind} = 'IDEA_GENERATION'`),
+    check(
+      "ai_runs_kind_check",
+      sql`${table.kind} IN ('IDEA_GENERATION', 'CONTENT_SCRIPT_GENERATION')`,
+    ),
     // Keep the prior provider/model pair valid for historical runs while the
     // application writes only the ADR-015 AvalAI/Luna pair going forward.
     check(
       "ai_runs_provider_check",
-      sql`(${table.provider} = 'avalai' AND ${table.model} = 'gpt-5.6-luna') OR (${table.provider} = 'openai' AND ${table.model} = 'gpt-5.6-terra')`,
+      sql`(
+        ${table.kind} = 'IDEA_GENERATION'
+        AND (
+          (${table.provider} = 'avalai' AND ${table.model} = 'gpt-5.6-luna')
+          OR (${table.provider} = 'openai' AND ${table.model} = 'gpt-5.6-terra')
+        )
+      ) OR (
+        ${table.kind} = 'CONTENT_SCRIPT_GENERATION'
+        AND ${table.provider} = 'avalai'
+        AND ${table.model} = 'gpt-5.6-luna'
+      )`,
     ),
     check(
       "ai_runs_model_check",
-      sql`(${table.provider} = 'avalai' AND ${table.model} = 'gpt-5.6-luna') OR (${table.provider} = 'openai' AND ${table.model} = 'gpt-5.6-terra')`,
+      sql`(
+        ${table.kind} = 'IDEA_GENERATION'
+        AND (
+          (${table.provider} = 'avalai' AND ${table.model} = 'gpt-5.6-luna')
+          OR (${table.provider} = 'openai' AND ${table.model} = 'gpt-5.6-terra')
+        )
+      ) OR (
+        ${table.kind} = 'CONTENT_SCRIPT_GENERATION'
+        AND ${table.provider} = 'avalai'
+        AND ${table.model} = 'gpt-5.6-luna'
+      )`,
     ),
-    check("ai_runs_prompt_version_check", sql`${table.promptVersion} = 'idea-generation/v1'`),
+    check(
+      "ai_runs_prompt_version_check",
+      sql`(
+        ${table.kind} = 'IDEA_GENERATION' AND ${table.promptVersion} = 'idea-generation/v1'
+      ) OR (
+        ${table.kind} = 'CONTENT_SCRIPT_GENERATION'
+        AND ${table.promptVersion} = 'content-script-generation/v1'
+      )`,
+    ),
     check(
       "ai_runs_status_check",
       sql`${table.status} IN ('PENDING', 'RUNNING', 'COMPLETED', 'FAILED')`,
@@ -75,6 +110,16 @@ export const aiRuns = pgTable(
     check(
       "ai_runs_output_snapshot_status_check",
       sql`${table.status} = 'COMPLETED' OR ${table.outputSnapshot} IS NULL`,
+    ),
+    check(
+      "ai_runs_content_output_snapshot_check",
+      sql`${table.kind} <> 'CONTENT_SCRIPT_GENERATION'
+        OR ${table.status} <> 'COMPLETED'
+        OR ${table.outputSnapshot} IS NOT NULL`,
+    ),
+    check(
+      "ai_runs_provider_request_correlation_check",
+      sql`${table.providerRequestCorrelation} IS NULL OR char_length(${table.providerRequestCorrelation}) > 0`,
     ),
     check(
       "ai_runs_error_category_status_check",

@@ -4,7 +4,7 @@
 
 **Blocked by:** 01 — Define Content Script domain contracts and canonical validation.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 ## Goal
 
@@ -98,3 +98,31 @@ npm run typecheck
 npm run test
 git diff --check
 ```
+
+## Answer
+
+Implemented Ticket 02 only. Added the reviewed Phase 4 Drizzle persistence
+model and migration `0006_salty_xavin`: `content_generation_attempts`,
+`contents`, `content_drafts`, `content_versions`, and a separate
+`workspace_content_generation_quota_reservations` relation.
+
+The migration uses the approved acyclic composite same-workspace foreign keys
+for Attempt → AI Run and Content → Attempt; Content owns the non-null unique
+`source_generation_attempt_id`, so Attempt results remain a reverse lookup.
+It also adds the approved lifecycle, language, format, fingerprint, document
+revision, version, quota, and access-path constraints, plus PostgreSQL triggers
+for immutable Attempt request/lineage fields, immutable Content rows, immutable
+Content Version rows, and Phase 4 Content Script AI Run configuration/outcomes.
+
+Extended `ai_runs` compatibly for `CONTENT_SCRIPT_GENERATION`, retaining valid
+historical Phase 3 provider/model rows and adding only the safe request
+correlation field and Content Script policy checks. No provider calls,
+repositories, application services, pages, UI, jobs, or later Ticket work was
+introduced.
+
+Added focused PostgreSQL integration coverage for the migration catalog,
+cross-workspace FKs, one-Draft/one-result/version invariants, lifecycle and
+quota checks, immutable fields, Content Script AI Run policy, and concurrent
+workspace-scoped idempotency. The dedicated test database was recreated and
+migrated from clean state; all required checks, including the complete test
+suite, passed.

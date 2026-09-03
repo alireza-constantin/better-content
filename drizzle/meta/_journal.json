@@ -43,6 +43,13 @@
       "when": 1788417584251,
       "tag": "0005_young_hardball",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1788462065755,
+      "tag": "0006_salty_xavin",
+      "breakpoints": true
     }
   ]
 }
