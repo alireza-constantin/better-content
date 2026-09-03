@@ -17,7 +17,6 @@ const serverEnvironment = {
   // test exercises generation/retry; they prevent Next from reloading local
   // credentials and keep E2E deterministic without a provider request.
   AVALAI_API_KEY: "",
-  AI_SAFETY_IDENTIFIER_SECRET: "",
   BETTER_CONTENT_E2E: "1",
   BETTER_AUTH_SECRET: "e2e-only-better-auth-secret-that-is-long-enough",
   BETTER_AUTH_URL: `http://127.0.0.1:${port}`,
