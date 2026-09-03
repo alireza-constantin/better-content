@@ -68,13 +68,14 @@ const singleLineStringSchema = (max: number) =>
     .max(max)
     .refine((value) => !/[\r\n]/.test(value), "Value must be a single line.");
 
-const canonicalIdeaSchema = z
+export const canonicalIdeaSchema = z
   .object({
     title: singleLineStringSchema(120),
     description: z.string().min(1).max(500),
     category: singleLineStringSchema(80).optional(),
   })
   .strict();
+export type CanonicalIdea = z.infer<typeof canonicalIdeaSchema>;
 
 export const canonicalIdeaGenerationOutputSchema = z
   .object({ schemaVersion: z.literal(1), ideas: z.array(canonicalIdeaSchema).length(20) })
@@ -119,7 +120,7 @@ export function normalizeRejectionReason(input: unknown): string | undefined {
   return rejectionReasonSchema.parse(normalized);
 }
 
-function normalizeIdea(idea: CanonicalIdeaGenerationOutputInput["ideas"][number]) {
+function normalizeIdea(idea: CanonicalIdeaGenerationOutputInput["ideas"][number]): CanonicalIdea {
   const title = idea.title.trim();
   const description = idea.description.replace(/\r\n?/g, "\n").trim();
   const category = idea.category?.trim();
@@ -129,6 +130,14 @@ function normalizeIdea(idea: CanonicalIdeaGenerationOutputInput["ideas"][number]
     description,
     ...(category ? { category } : {}),
   };
+}
+
+/**
+ * Reuses the generated-Idea canonicalization for an accepted Idea later used
+ * as source context by Content generation.
+ */
+export function parseCanonicalIdea(input: unknown): CanonicalIdea {
+  return canonicalIdeaSchema.parse(normalizeIdea(rawIdeaSchema.parse(input)));
 }
 
 /**

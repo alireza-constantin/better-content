@@ -4,7 +4,7 @@
 
 **Blocked by:** 01 — Define Content Script domain contracts and canonical validation.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 ## Goal
 
