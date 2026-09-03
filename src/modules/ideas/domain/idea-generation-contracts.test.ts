@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  aiGenerationKindSchema,
+  contentScriptGenerationSettingsSchema,
+  parseSafeProviderRequestCorrelation,
+} from "@/modules/ai/domain/ai-contracts";
+
+import {
   canonicalIdeaGenerationRequestSchema,
   decisionStateSchema,
   failureCategorySchema,
@@ -147,6 +153,12 @@ describe("canonical generation request and fingerprint", () => {
     expect(() =>
       canonicalIdeaGenerationRequestSchema.parse({ ...request, requestedCount: 19 }),
     ).toThrow();
+    expect(() =>
+      canonicalIdeaGenerationRequestSchema.parse({
+        ...request,
+        generationKind: "CONTENT_SCRIPT_GENERATION",
+      }),
+    ).toThrow();
   });
 
   it("produces a deterministic fingerprint from immutable request inputs only", () => {
@@ -242,6 +254,35 @@ describe("idea decisions", () => {
 });
 
 describe("provider-neutral AI contracts", () => {
+  it("adds only the approved Content Script generation kind and audit settings", () => {
+    expect(aiGenerationKindSchema.options).toEqual([
+      "IDEA_GENERATION",
+      "CONTENT_SCRIPT_GENERATION",
+    ]);
+    expect(
+      contentScriptGenerationSettingsSchema.parse({
+        structuredOutput: { schemaName: "content_script_v1", schemaVersion: 1 },
+        reasoningEffort: "medium",
+        maxOutputTokens: 16_000,
+        timeoutSeconds: 90,
+        retryPolicy: { maxRetries: 0 },
+        serviceTier: "default",
+      }),
+    ).toMatchObject({ timeoutSeconds: 90 });
+    expect(() =>
+      contentScriptGenerationSettingsSchema.parse({
+        structuredOutput: { schemaName: "content_script_v1", schemaVersion: 1 },
+        reasoningEffort: "medium",
+        maxOutputTokens: 16_000,
+        timeoutSeconds: 60,
+        retryPolicy: { maxRetries: 0 },
+        serviceTier: "default",
+      }),
+    ).toThrow();
+    expect(parseSafeProviderRequestCorrelation("avalai-request-id")).toBe("avalai-request-id");
+    expect(() => parseSafeProviderRequestCorrelation(123)).toThrow();
+  });
+
   it("restricts lifecycle statuses and failure categories to the approved values", () => {
     expect(generationLifecycleSchema.options).toEqual([
       "PENDING",

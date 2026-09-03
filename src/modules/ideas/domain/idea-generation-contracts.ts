@@ -36,9 +36,12 @@ export {
 export const generationLanguageSchema = z.enum(["en", "fa"]);
 export type GenerationLanguage = z.infer<typeof generationLanguageSchema>;
 
+export const ideaGenerationKindSchema = aiGenerationKindSchema.extract(["IDEA_GENERATION"]);
+export type IdeaGenerationKind = z.infer<typeof ideaGenerationKindSchema>;
+
 export const canonicalIdeaGenerationRequestSchema = z
   .object({
-    generationKind: aiGenerationKindSchema,
+    generationKind: ideaGenerationKindSchema,
     baseContentDnaVersionId: z.string().uuid(),
     requestedLanguage: generationLanguageSchema,
     requestedCount: z.literal(20),

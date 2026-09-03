@@ -3,10 +3,8 @@ import "server-only";
 import { z } from "zod";
 
 import {
-  aiGenerationKindSchema,
   failureCategorySchema,
   providerNeutralUsageSchema,
-  type AiGenerationKind,
   type FailureCategory,
   type ProviderNeutralUsage,
 } from "@/modules/ai/domain/ai-contracts";
@@ -17,9 +15,11 @@ import {
 import {
   canonicalIdeaGenerationOutputSchema,
   generationLanguageSchema,
+  ideaGenerationKindSchema,
   parseCanonicalIdeaGenerationOutput,
   type CanonicalIdeaGenerationOutput,
   type GenerationLanguage,
+  type IdeaGenerationKind,
 } from "@/modules/ideas/domain/idea-generation-contracts";
 
 export const ideaGenerationPromptVersionSchema = z.literal("idea-generation/v1");
@@ -42,7 +42,7 @@ const canonicalContentDnaPayloadSchema = z.unknown().transform((value, context) 
 
 export const generateIdeasRequestSchema = z
   .object({
-    generationKind: aiGenerationKindSchema,
+    generationKind: ideaGenerationKindSchema,
     contentDna: canonicalContentDnaPayloadSchema,
     requestedLanguage: generationLanguageSchema,
     requestedCount: z.literal(20),
@@ -51,7 +51,7 @@ export const generateIdeasRequestSchema = z
   .strict();
 
 export type GenerateIdeasRequest = Readonly<{
-  generationKind: AiGenerationKind;
+  generationKind: IdeaGenerationKind;
   contentDna: ContentDnaPayload;
   requestedLanguage: GenerationLanguage;
   requestedCount: 20;
