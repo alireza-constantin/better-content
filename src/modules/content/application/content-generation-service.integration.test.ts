@@ -13,7 +13,10 @@ import {
   fingerprintContentScriptGenerationRequest,
   parseCanonicalContentScriptGenerationRequest,
 } from "@/modules/content/domain/content-script-contracts";
-import { reserveContentGenerationOperation } from "./content-generation-repository";
+import {
+  contentScriptGenerationSettings,
+  reserveContentGenerationOperation,
+} from "./content-generation-repository";
 import {
   parseContentDnaPayload,
   type ContentDnaPayload,
@@ -237,14 +240,7 @@ async function seedInvokedContentReservation(
       provider: "avalai",
       model: "gpt-5.6-luna",
       promptVersion: "content-script-generation/v1",
-      generationSettings: {
-        structuredOutput: { schemaName: "content_script_v1", schemaVersion: 1 },
-        reasoningEffort: "medium",
-        maxOutputTokens: 16_000,
-        timeoutSeconds: 90,
-        retryPolicy: { maxRetries: 0 },
-        serviceTier: "default",
-      },
+      generationSettings: contentScriptGenerationSettings,
       status: "RUNNING",
       createdAt: invokedAt,
       startedAt: invokedAt,
