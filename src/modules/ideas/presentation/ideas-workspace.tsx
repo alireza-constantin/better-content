@@ -13,7 +13,7 @@ import {
   XIcon,
 } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition, type RefObject } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 
@@ -42,6 +42,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import type { RateLimitSource } from "@/lib/errors/app-error";
 import { Link, useRouter } from "@/i18n/navigation";
 import type {
   IdeaGenerationBatchDetailDto,
@@ -67,7 +68,7 @@ type IdeasWorkspaceProps = Readonly<{
 type ActiveOperation = "generate" | "retry" | null;
 type Notice =
   | Readonly<{ kind: "success"; message: "generationSuccess" | "decisionSuccess" }>
-  | Readonly<{ kind: "error"; code: string }>;
+  | Readonly<{ kind: "error"; code: string; rateLimitSource?: RateLimitSource }>;
 
 type RejectionFormValues = { rejectionReason: string };
 
@@ -100,6 +101,15 @@ function lifecycleLabel(
     case "FAILED":
       return t("statusFailed");
   }
+}
+
+function contentPresentation(language: IdeasLanguage): Readonly<{
+  dir: "ltr" | "rtl";
+  fontClassName: "font-content-english" | "font-content-persian";
+}> {
+  return language === "fa"
+    ? { dir: "rtl", fontClassName: "font-content-persian" }
+    : { dir: "ltr", fontClassName: "font-content-english" };
 }
 
 function DecisionStatus({ status }: Readonly<{ status: IdeaDto["status"] }>) {
@@ -152,10 +162,13 @@ function LifecycleBadge({ status }: Readonly<{ status: IdeaGenerationBatchHistor
 function failureDescription(
   t: ReturnType<typeof useTranslations>,
   errorCategory: IdeaGenerationBatchDetailDto["errorCategory"],
+  rateLimitSource: IdeaGenerationBatchDetailDto["rateLimitSource"],
 ): string {
   switch (errorCategory) {
     case "RATE_LIMITED":
-      return t("failureRateLimited");
+      return rateLimitSource === "provider"
+        ? t("failureProviderRateLimited")
+        : t("failureRateLimited");
     case "INVALID_OUTPUT":
       return t("failureInvalidOutput");
     case "TIMEOUT":
@@ -172,12 +185,18 @@ function failureDescription(
 function actionErrorCopy(
   t: ReturnType<typeof useTranslations>,
   code: string,
+  rateLimitSource?: RateLimitSource,
 ): Readonly<{ title: string; description: string }> {
   switch (code) {
     case "CONFLICT":
       return { title: t("conflictTitle"), description: t("conflictDescription") };
     case "RATE_LIMITED":
-      return { title: t("rateLimitedTitle"), description: t("rateLimitedDescription") };
+      return rateLimitSource === "provider"
+        ? {
+            title: t("providerRateLimitedTitle"),
+            description: t("providerRateLimitedDescription"),
+          }
+        : { title: t("rateLimitedTitle"), description: t("rateLimitedDescription") };
     case "PROVIDER_ERROR":
       return { title: t("providerFailureTitle"), description: t("providerFailureDescription") };
     case "AI_OUTPUT_INVALID":
@@ -212,7 +231,7 @@ function ActionNotice({
     );
   }
 
-  const copy = actionErrorCopy(t, notice.code);
+  const copy = actionErrorCopy(t, notice.code, notice.rateLimitSource);
 
   return (
     <Alert variant="destructive">
@@ -252,6 +271,7 @@ function GenerationPanel({
   requestedLanguage,
   onLanguageChange,
   onGenerate,
+  generationButtonRef,
 }: Readonly<{
   dna: IdeasDnaSummary;
   isBusy: boolean;
@@ -259,6 +279,7 @@ function GenerationPanel({
   requestedLanguage: IdeasLanguage;
   onLanguageChange: (language: IdeasLanguage) => void;
   onGenerate: () => void;
+  generationButtonRef: RefObject<HTMLButtonElement | null>;
 }>) {
   const t = useTranslations("Ideas");
   const locale = useLocale();
@@ -353,6 +374,7 @@ function GenerationPanel({
           <Button
             className="min-h-11 w-full bg-amber-300 text-amber-950 hover:bg-amber-200 sm:w-auto"
             disabled={isBusy}
+            ref={generationButtonRef}
             onClick={onGenerate}
             type="button"
           >
@@ -447,6 +469,10 @@ function IdeaCard({
   onReject: (idea: IdeaDto, trigger: HTMLButtonElement) => void;
 }>) {
   const t = useTranslations("Ideas");
+  const locale = useLocale();
+  const uiLocale = locale === "fa" ? "fa" : "en";
+  const uiDirection = uiLocale === "fa" ? "rtl" : "ltr";
+  const content = contentPresentation(idea.language);
   const isPending = isBusy;
 
   return (
@@ -458,19 +484,35 @@ function IdeaCard({
           </span>
           <DecisionStatus status={idea.status} />
         </div>
-        <h3 className="mt-5 text-balance text-lg font-semibold tracking-tight" dir="auto">
+        <h3
+          className={`mt-5 break-words text-balance text-lg font-semibold tracking-tight ${content.fontClassName}`}
+          dir={content.dir}
+          lang={idea.language}
+        >
           {idea.title}
         </h3>
         <p
-          className="mt-3 flex-1 break-words whitespace-pre-wrap text-sm leading-6 text-muted-foreground"
-          dir="auto"
+          className={`mt-3 flex-1 break-words whitespace-pre-wrap text-sm leading-6 text-muted-foreground ${content.fontClassName}`}
+          dir={content.dir}
+          lang={idea.language}
         >
           {idea.description}
         </p>
         {idea.category ? (
-          <p className="mt-5 text-xs font-medium text-foreground/70" dir="auto">
-            <span className="me-1 text-muted-foreground">{t("categoryLabel")}:</span>
-            {idea.category}
+          <p
+            className="mt-5 flex flex-wrap items-baseline gap-x-1 text-xs font-medium text-foreground/70"
+            dir={uiDirection}
+          >
+            <bdi className="font-sans text-muted-foreground" dir={uiDirection} lang={uiLocale}>
+              {t("categoryLabel")}:
+            </bdi>
+            <bdi
+              className={`min-w-0 break-words ${content.fontClassName}`}
+              dir={content.dir}
+              lang={idea.language}
+            >
+              {idea.category}
+            </bdi>
           </p>
         ) : null}
         <div className="mt-5 border-t border-border pt-4">
@@ -528,6 +570,7 @@ function RejectReasonDialog({
   onSubmit: (reason: string) => void;
 }>) {
   const t = useTranslations("Ideas");
+  const content = idea ? contentPresentation(idea.language) : null;
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const form = useForm<RejectionFormValues>({
     resolver: zodResolver(rejectionFormSchema),
@@ -587,7 +630,11 @@ function RejectReasonDialog({
             <DialogDescription className="mt-4" id="idea-rejection-description">
               {t("rejectDescription")}
             </DialogDescription>
-            <p className="mt-4 rounded-lg bg-muted px-3 py-2 text-sm font-medium" dir="auto">
+            <p
+              className={`mt-4 rounded-lg bg-muted px-3 py-2 text-sm font-medium ${content?.fontClassName ?? ""}`}
+              dir={content?.dir}
+              lang={idea.language}
+            >
               {idea.title}
             </p>
             <form
@@ -734,7 +781,7 @@ function DetailPanel({
           <AlertCircleIcon />
           <AlertTitle>{t("failedTitle")}</AlertTitle>
           <AlertDescription>
-            <p>{failureDescription(t, detail.errorCategory)}</p>
+            <p>{failureDescription(t, detail.errorCategory, detail.rateLimitSource)}</p>
             {detail.canRetry ? (
               <Button
                 className="mt-4 min-h-11"
@@ -794,6 +841,8 @@ export function IdeasWorkspace({
   const [pendingDecisionId, setPendingDecisionId] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [rejectingIdea, setRejectingIdea] = useState<IdeaDto | null>(null);
+  const generationButtonRef = useRef<HTMLButtonElement | null>(null);
+  const restoreGenerationFocus = useRef(false);
   const rejectTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [isPending, startTransition] = useTransition();
   const serverDataSignature = `${initialHistory.selectedBatchId}|${initialHistory.batches.map((batch) => `${batch.id}:${batch.status}:${batch.ideaCount}`).join(",")}|${initialDetail?.id ?? "none"}:${initialDetail?.status ?? "none"}:${initialDetail?.ideas.length ?? 0}`;
@@ -808,6 +857,13 @@ export function IdeasWorkspace({
     setHistory(initialHistory.batches);
     setSelectedBatchId(initialHistory.selectedBatchId);
     setDetail(initialDetail);
+
+    if (restoreGenerationFocus.current) {
+      restoreGenerationFocus.current = false;
+      const focusTimer = window.setTimeout(() => generationButtonRef.current?.focus(), 0);
+
+      return () => window.clearTimeout(focusTimer);
+    }
   }, [initialDetail, initialHistory.batches, initialHistory.selectedBatchId, serverDataSignature]);
 
   const isBusy = isPending || pendingDecisionId !== null;
@@ -830,6 +886,7 @@ export function IdeasWorkspace({
 
     setNotice(null);
     setActiveOperation("generate");
+    restoreGenerationFocus.current = true;
     startTransition(async () => {
       try {
         const result = await generateIdeasAction({
@@ -840,8 +897,14 @@ export function IdeasWorkspace({
         });
 
         if (!result.ok) {
-          setNotice({ kind: "error", code: result.code });
-          if (result.code !== "CONFLICT" && result.code !== "RATE_LIMITED") {
+          setNotice({
+            kind: "error",
+            code: result.code,
+            ...(result.rateLimitSource ? { rateLimitSource: result.rateLimitSource } : {}),
+          });
+          const isWorkspaceRateLimit =
+            result.code === "RATE_LIMITED" && result.rateLimitSource === "workspace";
+          if (result.code !== "CONFLICT" && !isWorkspaceRateLimit) {
             router.refresh();
           }
           return;
@@ -866,7 +929,11 @@ export function IdeasWorkspace({
         const result = await retryIdeaGenerationAction({ workspaceId, batchId });
 
         if (!result.ok) {
-          setNotice({ kind: "error", code: result.code });
+          setNotice({
+            kind: "error",
+            code: result.code,
+            ...(result.rateLimitSource ? { rateLimitSource: result.rateLimitSource } : {}),
+          });
           router.refresh();
           return;
         }
@@ -1005,6 +1072,7 @@ export function IdeasWorkspace({
       <GenerationPanel
         activeOperation={activeOperation}
         dna={dna}
+        generationButtonRef={generationButtonRef}
         isBusy={isBusy}
         onGenerate={handleGenerate}
         onLanguageChange={setRequestedLanguage}

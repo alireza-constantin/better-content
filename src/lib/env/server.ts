@@ -1,16 +1,16 @@
 import "server-only";
 
 import {
-  parseOpenAIEnvironment,
+  parseAvalAIEnvironment,
   parseServerEnvironment,
-  type OpenAIEnvironment,
+  type AvalAIEnvironment,
   type ServerEnvironment,
 } from "./schema";
 
 export {
-  parseOpenAIEnvironment,
+  parseAvalAIEnvironment,
   parseServerEnvironment,
-  type OpenAIEnvironment,
+  type AvalAIEnvironment,
   type ServerEnvironment,
 };
 
@@ -18,6 +18,6 @@ export function getServerEnvironment(): ServerEnvironment {
   return parseServerEnvironment(process.env);
 }
 
-export function getOpenAIEnvironment(): OpenAIEnvironment {
-  return parseOpenAIEnvironment(process.env);
+export function getAvalAIEnvironment(): AvalAIEnvironment {
+  return parseAvalAIEnvironment(process.env);
 }

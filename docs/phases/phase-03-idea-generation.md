@@ -1,7 +1,7 @@
 # Phase 3 — AI Foundation and Idea Generation
 
-- **Status:** Ready for implementation
-- **Prerequisites:** Phase 1 and Phase 2 complete; ADR-014 accepted
+- **Status:** Ready for review
+- **Prerequisites:** Phase 1 and Phase 2 complete; ADR-014 and ADR-015 accepted
 - **Decision owners:** Product Architect / Technical Lead
 
 ## 1. Goal and boundaries
@@ -9,7 +9,7 @@
 Phase 3 lets a workspace owner generate exactly 20 creator-specific ideas from
 the current AI-ready Content DNA version, inspect generation history, and
 classify every idea. It introduces the narrow provider-neutral AI foundation,
-one OpenAI adapter, traceable AI runs/batches/ideas, safe generation controls,
+one AvalAI adapter, traceable AI runs/batches/ideas, safe generation controls,
 and accessible English/Persian UX.
 
 Required lineage:
@@ -78,7 +78,7 @@ PostgreSQL enums for these evolving values.
 | Concern | Requirement |
 | --- | --- |
 | identity/ownership | `id` UUID primary key and non-null `workspace_id` FK. |
-| operation | constrained `kind = IDEA_GENERATION`; non-null `provider = openai`, `model = gpt-5.6-terra`, `prompt_version = idea-generation/v1`. |
+| operation | constrained `kind = IDEA_GENERATION`; new runs use `provider = avalai`, `model = gpt-5.6-luna`, `prompt_version = idea-generation/v1`. The migration retains the prior OpenAI/Terra pair for historical runs. |
 | actual settings | validated `generation_settings` JSONB, limited to safe audit settings (structured schema name/version, reasoning effort, output cap, timeout, retry policy, service tier). |
 | outcome | `status` is PENDING/RUNNING/COMPLETED/FAILED; nullable safe `error_category`. |
 | safe result | nullable canonical `output_snapshot` JSONB only on COMPLETED; nullable neutral `usage` JSONB. |
@@ -139,7 +139,7 @@ The successful output snapshot is exactly this canonical shape:
 
 `category` is omitted when absent, never empty or `null`. The snapshot preserves
 canonical validated model output; idea rows are authoritative for mutable state.
-OpenAI strict output represents `category` as required `string | null`; app
+AvalAI Responses strict output represents `category` as required `string | null`; app
 normalization changes blank/null to absence before snapshot/row persistence.
 
 Zod remains authoritative even after Structured Outputs. Normalize before
@@ -158,7 +158,7 @@ semantic/cross-batch deduplication exists. Invalid provider output persists zero
 ideas, records durable `error_category = INVALID_OUTPUT`, and returns the
 application error `AI_OUTPUT_INVALID`.
 
-## 5. AI service and OpenAI boundary
+## 5. AI service and AvalAI boundary
 
 ```text
 Ideas UI / server entrypoint
@@ -167,19 +167,21 @@ Ideas application service
         ↓
 AI module: provider-neutral GenerateIdeas contract
         ↓
-OpenAI adapter
+AvalAI adapter
         ↓
-OpenAI Responses API
+AvalAI Responses API
 ```
 
 The Ideas module sends domain input and gets only canonical output and safe
-neutral usage/failure metadata. It never imports OpenAI SDK/types. The official
-Node/TypeScript SDK belongs exclusively inside the adapter when implementation
-is approved.
+neutral usage/failure metadata. It never imports AvalAI or OpenAI SDK/types.
+The official Node/TypeScript OpenAI SDK belongs exclusively inside the AvalAI
+adapter.
 
-The adapter follows ADR-014 exactly:
+The adapter follows ADR-014 except for the provider, endpoint, and model
+selection superseded by ADR-015:
 
-- Responses API, model `gpt-5.6-terra`;
+- AvalAI's fixed `https://api.avalai.ir/v1` endpoint through the OpenAI SDK,
+  using the Responses API and model `gpt-5.6-luna`;
 - strict `text.format` JSON Schema named `idea_generation_v1`, root object,
   `schemaVersion: 1`, `minItems = maxItems = 20`, required `title`,
   `description`, `category: string | null`, and `additionalProperties: false`;
@@ -212,10 +214,10 @@ Where supplied, retain only optional numeric provider-neutral usage values in
 - `reasoningTokens`; and
 - `computeUnits`.
 
-Absence is valid. Do not persist an OpenAI-specific usage envelope.
+Absence is valid. Do not persist an AvalAI- or OpenAI-specific usage envelope.
 
-Content DNA is approved server-to-OpenAI generation context. Never send the
-OpenAI key, application credentials, secrets, or unrelated account data to the
+Content DNA is approved server-to-AvalAI generation context. Never send the
+AvalAI key, application credentials, secrets, or unrelated account data to the
 browser or provider. Create `safety_identifier` server-side as HMAC-SHA-256 of
 internal user ID with a dedicated secret: stable for the user, but disclosing no
 raw user ID, email, or PII.
@@ -228,6 +230,11 @@ application-state storage, not all provider retention; ordinary abuse-monitoring
 retention and account-level ZDR/MAM controls remain out of scope. Continue the
 Content DNA privacy notice asking creators not to enter unnecessary sensitive
 data.
+
+For the manual AvalAI compatibility/cost smoke only, the adapter may expose
+the canonical `avalai-request-id` through its adapter-local observability seam.
+It is not part of the provider-neutral application result, is not persisted,
+and is never exposed to the browser or used to retain a raw provider response.
 
 ## 7. Authorization, generation input, and idempotency
 
@@ -288,7 +295,7 @@ live reservations in each window. If either limit is full, return
 `RATE_LIMITED` and commit no batch, run, or reservation. Otherwise insert the
 PENDING batch/run pair and live reservation atomically, then commit.
 
-Immediately before calling OpenAI, a second short transaction locks the pair,
+Immediately before calling AvalAI, a second short transaction locks the pair,
 conditionally moves both `PENDING → RUNNING`, sets `started_at`, and sets the
 reservation's `invoked_at`. Call the provider only when this succeeds; that
 consumes quota. If invocation never occurs, release the reservation when
@@ -314,7 +321,7 @@ uses conditional expected-status updates. No partial successful batch exists.
 ```text
 PENDING records + reservation committed
         ↓ conditional PENDING → RUNNING
-OpenAI call outside transaction
+AvalAI call outside transaction
         ↓ parse + canonical Zod validation
 lock/re-read RUNNING pair
         ↓ one short transaction
@@ -341,7 +348,7 @@ Persist these safe provider-neutral categories on a failed run and paired batch:
 | Category | Applies when | Returned application error |
 | --- | --- | --- |
 | `TIMEOUT` | Local 60-second deadline expires. | `PROVIDER_ERROR` |
-| `RATE_LIMITED` | OpenAI rate-limits an invoked call. Workspace policy returns it with no record. | `RATE_LIMITED` |
+| `RATE_LIMITED` | AvalAI rate-limits an invoked call. Workspace policy returns it with no record. | `RATE_LIMITED` |
 | `PROVIDER_UNAVAILABLE` | Transport or provider HTTP 408/409/5xx prevents a result. | `PROVIDER_ERROR` |
 | `INVALID_OUTPUT` | Refusal, incomplete/missing/parse/schema/Zod failure. | `AI_OUTPUT_INVALID` |
 | `INTERRUPTED` | Stale recovery or loss of active attempt. | `PROVIDER_ERROR` |
@@ -350,7 +357,7 @@ Persist these safe provider-neutral categories on a failed run and paired batch:
 This is one layered taxonomy, not competing error systems: category is durable
 AI operational metadata; application code is stable transport/UI behavior.
 Phase 3 extends the existing application error vocabulary with `RATE_LIMITED`,
-`PROVIDER_ERROR`, and `AI_OUTPUT_INVALID`. Raw OpenAI errors never reach users;
+`PROVIDER_ERROR`, and `AI_OUTPUT_INVALID`. Raw AvalAI errors never reach users;
 localized messages are safe and actionable.
 
 ## 11. Idea decisions
@@ -369,7 +376,7 @@ add a decision-event/history table or bulk action.
 The Ideas route is localized and workspace-scoped. Use Server Components for
 authorization, initial DTO loading, and non-interactive rendering; keep client
 components to generation/decision interaction. React must not call Drizzle or
-OpenAI directly.
+AvalAI directly.
 
 Provide clear states for no Content DNA, incomplete DNA, ready language
 selection and **Generate 20 Ideas**, PENDING/RUNNING, rate limit, current-DNA
@@ -415,7 +422,7 @@ teams. Apply only through the reviewed Drizzle migration workflow.
 
 ## 14. Testing strategy
 
-CI must never call live OpenAI. Use a deterministic fake/mocked provider behind
+CI must never call live AvalAI. Use a deterministic fake/mocked provider behind
 the provider-neutral contract. A real-provider verification, if performed, is a
 manual smoke test with non-sensitive test DNA and non-production credentials;
 it is outside CI and acceptance gating.
@@ -467,7 +474,8 @@ required by `docs/agents/frontend-standards.md`.
 
 - [ ] Only current AI-ready DNA and one of its allowed languages generate;
       stale base version returns `CONFLICT` before provider invocation.
-- [ ] The adapter uses exactly ADR-014 policy; OpenAI types never cross the
+- [ ] The adapter uses ADR-014 policy as amended by ADR-015; provider SDK types
+      never cross the
       boundary.
 - [ ] Structured output and canonical Zod both run; malformed, refused, or
       incomplete output writes zero ideas, records durable
@@ -511,7 +519,7 @@ authorize ticket creation.
         ↓
 3. Provider-neutral AI contract and deterministic fake
         ↓
-4. OpenAI adapter/configuration/privacy boundary
+4. AvalAI adapter/configuration/privacy boundary
         ↓
 5. Generation service: DNA, idempotency, lifecycle, quota, stale recovery
         ↓
@@ -528,7 +536,7 @@ ticket may introduce deferred scope.
 
 ## 18. Source-of-truth review
 
-The PRD, Architecture, ADR-002/003/005/010/011/012/013/014, Phase 2
+The PRD, Architecture, ADR-002/003/005/010/011/012/013/014/015, Phase 2
 specification, frontend standards, and supplied resolved Phase 3 planning
 decisions were reviewed. They align on provider-neutral AI, structured runtime
 validation, immutable DNA lineage, 20-idea batches, derived USED state,
@@ -546,6 +554,7 @@ The Product Architect explicitly resolved the earlier documentation conflicts:
   than creating another.
 
 No unresolved source-of-truth contradictions remain. Architecture §§22 and
-24–25 are aligned: ADR-014 is the provider/model ADR Architecture anticipated,
-while relational source IDs, batch request facts, prompt version, and actual
-settings satisfy traceability without storing raw prompts.
+24–25 are aligned: ADR-014 and ADR-015 supply the provider-neutral contract and
+current AvalAI/Luna production choice that Architecture anticipated, while
+relational source IDs, batch request facts, prompt version, and actual settings
+satisfy traceability without storing raw prompts.

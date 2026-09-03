@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-const mockOpenAIClient = vi.hoisted(() => ({
+const mockAvalAIClient = vi.hoisted(() => ({
   constructorOptions: undefined as unknown,
   create: vi.fn(),
 }));
@@ -12,11 +12,11 @@ vi.mock("openai", () => {
     static RateLimitError = class extends Error {};
 
     readonly responses = {
-      create: (...args: unknown[]) => mockOpenAIClient.create(...args),
+      create: (...args: unknown[]) => mockAvalAIClient.create(...args),
     };
 
     constructor(options: unknown) {
-      mockOpenAIClient.constructorOptions = options;
+      mockAvalAIClient.constructorOptions = options;
     }
   }
 
@@ -24,17 +24,20 @@ vi.mock("openai", () => {
 });
 
 import {
-  createOpenAIResponsesClient,
-  createOpenAIGenerateIdeasProvider,
+  AVALAI_API_BASE_URL,
+  createAvalAIResponsesClient,
+  createAvalAIGenerateIdeasProvider,
   createSafetyIdentifier,
-  openAIClientConfiguration,
-  openAIGenerationSettings,
-  type OpenAIResponsesClient,
-} from "./openai-generate-ideas-provider";
+  extractAvalAIRequestId,
+  avalAIClientConfiguration,
+  avalAIGenerationSettings,
+  type AvalAIResponsesClient,
+  type AvalAITransportResponse,
+} from "./avalai-generate-ideas-provider";
 import type { GenerateIdeasRequest } from "@/modules/ai/domain/generate-ideas";
 
 const environment = {
-  OPENAI_API_KEY: "sk-test-only",
+  AVALAI_API_KEY: "avalai-test-only",
   AI_SAFETY_IDENTIFIER_SECRET: "a-test-only-safety-secret-that-is-long-enough",
 } as const;
 
@@ -92,19 +95,19 @@ function response(overrides: Record<string, unknown> = {}) {
 }
 
 function createClient(result: unknown): {
-  client: OpenAIResponsesClient;
+  client: AvalAIResponsesClient;
   create: ReturnType<typeof vi.fn>;
 } {
   const create = vi.fn().mockResolvedValue(result);
-  const client: OpenAIResponsesClient = { responses: { create } };
+  const client: AvalAIResponsesClient = { responses: { create } };
 
   return { client, create };
 }
 
-describe("OpenAI idea-generation adapter", () => {
+describe("AvalAI idea-generation adapter", () => {
   it("sends the approved Responses request shape and safe prompt boundary", async () => {
     const { client, create } = createClient(response());
-    const provider = createOpenAIGenerateIdeasProvider({
+    const provider = createAvalAIGenerateIdeasProvider({
       userId: "user-123",
       environment,
       client,
@@ -136,7 +139,7 @@ describe("OpenAI idea-generation adapter", () => {
     expect(create).toHaveBeenCalledOnce();
     const [body, options] = create.mock.calls[0] as [Record<string, unknown>, unknown];
     expect(body).toMatchObject({
-      model: "gpt-5.6-terra",
+      model: "gpt-5.6-luna",
       reasoning: { effort: "medium" },
       service_tier: "default",
       max_output_tokens: 16000,
@@ -196,7 +199,7 @@ describe("OpenAI idea-generation adapter", () => {
 
   it("uses the requested Persian content language without creating bilingual output instructions", async () => {
     const { client, create } = createClient(response());
-    const provider = createOpenAIGenerateIdeasProvider({
+    const provider = createAvalAIGenerateIdeasProvider({
       userId: "user-123",
       environment,
       client,
@@ -207,6 +210,27 @@ describe("OpenAI idea-generation adapter", () => {
     const [body] = create.mock.calls[0] as [Record<string, unknown>];
     expect(body.instructions).toContain("fa");
     expect(body.instructions).not.toContain("bilingual");
+  });
+
+  it("keeps AvalAI request correlation in the adapter-local observability seam", async () => {
+    const onProviderRequestId = vi.fn();
+    const transportResponse: AvalAITransportResponse = {
+      data: response(),
+      providerRequestId: "avalai-request-123",
+    };
+    const { client } = createClient(transportResponse);
+    const provider = createAvalAIGenerateIdeasProvider({
+      userId: "user-123",
+      environment,
+      client,
+      onProviderRequestId,
+    });
+
+    const result = await provider.generateIdeas(request);
+
+    expect(result).not.toHaveProperty("providerRequestId");
+    expect(onProviderRequestId).toHaveBeenCalledOnce();
+    expect(onProviderRequestId).toHaveBeenCalledWith("avalai-request-123");
   });
 
   it("rejects refusal, incomplete, missing, malformed, and non-canonical output safely", async () => {
@@ -226,7 +250,7 @@ describe("OpenAI idea-generation adapter", () => {
 
     for (const testCase of cases) {
       const { client } = createClient(testCase.response);
-      const provider = createOpenAIGenerateIdeasProvider({
+      const provider = createAvalAIGenerateIdeasProvider({
         userId: "user-123",
         environment,
         client,
@@ -246,12 +270,14 @@ describe("OpenAI idea-generation adapter", () => {
     ["conflict", { status: 409 }, "PROVIDER_UNAVAILABLE"],
     ["server error", { status: 503 }, "PROVIDER_UNAVAILABLE"],
     ["transport", { name: "APIConnectionError" }, "PROVIDER_UNAVAILABLE"],
+    ["invalid API key", { status: 401 }, "UNKNOWN"],
+    ["invalid model", { status: 404 }, "UNKNOWN"],
     ["unknown", { message: "provider secret response body" }, "UNKNOWN"],
   ] as const)(
     "maps %s to a safe category without exposing raw details",
     async (_, error, category) => {
       const { client } = createClient(Promise.reject(error));
-      const provider = createOpenAIGenerateIdeasProvider({
+      const provider = createAvalAIGenerateIdeasProvider({
         userId: "user-123",
         environment,
         client,
@@ -266,7 +292,7 @@ describe("OpenAI idea-generation adapter", () => {
 
   it("does not retry the mocked SDK call", async () => {
     const { client, create } = createClient(response());
-    const provider = createOpenAIGenerateIdeasProvider({
+    const provider = createAvalAIGenerateIdeasProvider({
       userId: "user-123",
       environment,
       client,
@@ -291,7 +317,7 @@ describe("OpenAI idea-generation adapter", () => {
         id: "secret-response-id",
       }),
     );
-    const provider = createOpenAIGenerateIdeasProvider({
+    const provider = createAvalAIGenerateIdeasProvider({
       userId: "user-123",
       environment,
       client,
@@ -309,7 +335,7 @@ describe("OpenAI idea-generation adapter", () => {
   });
 });
 
-describe("OpenAI safety identifier", () => {
+describe("AvalAI safety identifier", () => {
   it("is deterministic, keyed, and does not expose the raw user ID", () => {
     const first = createSafetyIdentifier("user-1", environment.AI_SAFETY_IDENTIFIER_SECRET);
     const same = createSafetyIdentifier("user-1", environment.AI_SAFETY_IDENTIFIER_SECRET);
@@ -322,11 +348,25 @@ describe("OpenAI safety identifier", () => {
     expect(first).not.toContain("user-1");
     expect(first).toMatch(/^[a-f0-9]{64}$/);
   });
+
+  it("extracts only the canonical AvalAI request header", () => {
+    const headers = {
+      get: (name: string) =>
+        name === "avalai-request-id"
+          ? "  avalai-request-456  "
+          : name === "x-request-id"
+            ? "legacy-request-id"
+            : null,
+    };
+
+    expect(extractAvalAIRequestId(headers)).toBe("avalai-request-456");
+    expect(extractAvalAIRequestId({ get: () => null })).toBeUndefined();
+  });
 });
 
-describe("OpenAI client settings", () => {
+describe("AvalAI client settings", () => {
   it("keeps the approved neutral audit settings stable", () => {
-    expect(openAIGenerationSettings).toEqual({
+    expect(avalAIGenerationSettings).toEqual({
       structuredOutput: { schemaName: "idea_generation_v1", schemaVersion: 1 },
       reasoningEffort: "medium",
       maxOutputTokens: 16000,
@@ -334,7 +374,8 @@ describe("OpenAI client settings", () => {
       retryPolicy: { maxRetries: 0 },
       serviceTier: "default",
     });
-    expect(openAIClientConfiguration).toEqual({
+    expect(avalAIClientConfiguration).toEqual({
+      baseURL: AVALAI_API_BASE_URL,
       timeout: 60000,
       maxRetries: 0,
       logLevel: "off",
@@ -342,13 +383,36 @@ describe("OpenAI client settings", () => {
   });
 
   it("constructs a server-side SDK client without requiring a request", () => {
-    createOpenAIResponsesClient(environment);
+    createAvalAIResponsesClient(environment);
 
-    expect(mockOpenAIClient.constructorOptions).toEqual({
-      apiKey: "sk-test-only",
+    expect(mockAvalAIClient.constructorOptions).toEqual({
+      apiKey: "avalai-test-only",
+      baseURL: AVALAI_API_BASE_URL,
       timeout: 60000,
       maxRetries: 0,
       logLevel: "off",
     });
+  });
+
+  it("reads avalai-request-id from the SDK withResponse transport seam", async () => {
+    const withResponse = vi.fn().mockResolvedValue({
+      data: response(),
+      response: {
+        headers: {
+          get: (name: string) => (name === "avalai-request-id" ? "request-from-header" : null),
+        },
+      },
+    });
+    const sdkRequest = Object.assign(Promise.resolve(response()), { withResponse });
+    mockAvalAIClient.create.mockReturnValueOnce(sdkRequest);
+
+    const client = createAvalAIResponsesClient(environment);
+    const transportResponse = await client.responses.create({});
+
+    expect(transportResponse).toEqual({
+      data: response(),
+      providerRequestId: "request-from-header",
+    });
+    expect(withResponse).toHaveBeenCalledOnce();
   });
 });

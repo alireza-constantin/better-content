@@ -5,6 +5,11 @@
 - **Decision owners:** Product Architect / Technical Lead
 - **Applies to:** Phase 3 idea generation only
 
+**Supersession note:** ADR-015 supersedes this ADR only for the direct
+production provider, endpoint, and model selection. Its provider-neutral
+contract, Responses-oriented behavior, strict validation, privacy, timeout,
+retry, usage, and error policies remain in force.
+
 ## Context
 
 ADR-011 requires a provider-neutral AI boundary, validated structured output,
@@ -30,7 +35,7 @@ provider-selection UI.
 
 ## Decision
 
-### OpenAI / GPT-5.6 Terra selection
+### Original OpenAI / GPT-5.6 Terra selection
 
 Phase 3 uses **OpenAI only**, with **`gpt-5.6-terra`**, through the
 **Responses API** (`POST /v1/responses`). OpenAI documents Terra as the

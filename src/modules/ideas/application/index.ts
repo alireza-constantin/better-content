@@ -1,4 +1,12 @@
-import { createOpenAIGenerateIdeasProvider } from "@/modules/ai/infrastructure/openai";
+import { cookies } from "next/headers";
+
+import { createAvalAIGenerateIdeasProvider } from "@/modules/ai/infrastructure/avalai";
+import {
+  createFakeGenerateIdeasProvider,
+  fakeGenerateIdeasScenarios,
+  type FakeGenerateIdeasScenario,
+} from "@/modules/ai/testing/fake-generate-ideas-provider";
+import { recordE2eProviderInvocation } from "@/modules/ai/testing/e2e-provider-telemetry";
 
 import { createIdeaGenerationBatchApplicationService } from "./batch-history-service";
 import { createIdeaDecisionApplicationService } from "./idea-decision-service";
@@ -26,8 +34,29 @@ export {
   type IdeaGenerationResult,
 } from "./generation-service";
 
+const e2eProviderScenarioCookie = "better-content-e2e-provider-scenario";
+
+function getE2eProviderScenario(value: string | undefined): FakeGenerateIdeasScenario {
+  return value && fakeGenerateIdeasScenarios.includes(value as FakeGenerateIdeasScenario)
+    ? (value as FakeGenerateIdeasScenario)
+    : "success";
+}
+
+async function createIdeaGenerationProvider(userId: string) {
+  if (process.env.BETTER_CONTENT_E2E === "1") {
+    const cookieStore = await cookies();
+
+    return createFakeGenerateIdeasProvider({
+      onInvocation: recordE2eProviderInvocation,
+      scenario: getE2eProviderScenario(cookieStore.get(e2eProviderScenarioCookie)?.value),
+    });
+  }
+
+  return createAvalAIGenerateIdeasProvider({ userId });
+}
+
 const ideaGenerationApplicationService = createIdeaGenerationApplicationService({
-  providerFactory: (userId) => createOpenAIGenerateIdeasProvider({ userId }),
+  providerFactory: createIdeaGenerationProvider,
 });
 const ideaGenerationBatchApplicationService = createIdeaGenerationBatchApplicationService({
   generateIdeas: ideaGenerationApplicationService.generateIdeas,

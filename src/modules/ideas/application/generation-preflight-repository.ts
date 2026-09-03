@@ -23,8 +23,8 @@ import type {
 } from "./generation-types";
 
 const IDEA_GENERATION_KIND = "IDEA_GENERATION" as const;
-const IDEA_GENERATION_PROVIDER = "openai" as const;
-const IDEA_GENERATION_MODEL = "gpt-5.6-terra" as const;
+const IDEA_GENERATION_PROVIDER = "avalai" as const;
+const IDEA_GENERATION_MODEL = "gpt-5.6-luna" as const;
 const IDEA_GENERATION_PROMPT_VERSION = "idea-generation/v1" as const;
 const TEN_MINUTES_MS = 10 * 60 * 1_000;
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1_000;

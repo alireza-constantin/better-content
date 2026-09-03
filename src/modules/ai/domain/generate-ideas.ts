@@ -164,7 +164,7 @@ export function parseGenerateIdeasResult(input: unknown): GenerateIdeasResult {
 }
 
 /**
- * The only Phase 3 AI port. Implementations may be OpenAI, a deterministic
+ * The only Phase 3 AI port. Implementations may be AvalAI, a deterministic
  * test fake, or a future approved provider, but callers see this contract only.
  */
 export interface GenerateIdeasProvider {

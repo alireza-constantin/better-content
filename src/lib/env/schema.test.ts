@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseOpenAIEnvironment, parseServerEnvironment } from "./schema";
+import { parseAvalAIEnvironment, parseServerEnvironment } from "./schema";
 
 const validEnvironment = {
   DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/better_content",
@@ -37,77 +37,48 @@ describe("server environment validation", () => {
     ).toThrow("DATABASE_URL must not be exposed");
   });
 
-  it("validates OpenAI credentials separately from the base server environment", () => {
+  it("validates AvalAI credentials separately from the base server environment", () => {
     expect(
-      parseOpenAIEnvironment({
-        OPENAI_API_KEY: "sk-test-only",
+      parseAvalAIEnvironment({
+        AVALAI_API_KEY: "avalai-test-only",
         AI_SAFETY_IDENTIFIER_SECRET: "a-test-only-safety-secret-that-is-long-enough",
       }),
     ).toEqual({
-      OPENAI_API_KEY: "sk-test-only",
+      AVALAI_API_KEY: "avalai-test-only",
       AI_SAFETY_IDENTIFIER_SECRET: "a-test-only-safety-secret-that-is-long-enough",
     });
 
-    expect(() => parseOpenAIEnvironment({ OPENAI_API_KEY: "sk-test-only" })).toThrow();
+    expect(() => parseAvalAIEnvironment({ AVALAI_API_KEY: "avalai-test-only" })).toThrow();
   });
 
-  it("rejects OpenAI secrets exposed through NEXT_PUBLIC_ variables", () => {
+  it("rejects AvalAI secrets exposed through NEXT_PUBLIC_ variables", () => {
     expect(() =>
-      parseOpenAIEnvironment({
-        OPENAI_API_KEY: "sk-test-only",
+      parseAvalAIEnvironment({
+        AVALAI_API_KEY: "avalai-test-only",
         AI_SAFETY_IDENTIFIER_SECRET: "a-test-only-safety-secret-that-is-long-enough",
-        NEXT_PUBLIC_OPENAI_API_KEY: "sk-test-only",
+        NEXT_PUBLIC_AVALAI_API_KEY: "avalai-test-only",
       }),
-    ).toThrow("OPENAI_API_KEY must not be exposed");
+    ).toThrow("AVALAI_API_KEY must not be exposed");
 
     expect(() =>
-      parseOpenAIEnvironment({
-        OPENAI_API_KEY: "sk-test-only",
+      parseAvalAIEnvironment({
+        AVALAI_API_KEY: "avalai-test-only",
         AI_SAFETY_IDENTIFIER_SECRET: "a-test-only-safety-secret-that-is-long-enough",
         NEXT_PUBLIC_AI_SAFETY_IDENTIFIER_SECRET: "unsafe",
       }),
     ).toThrow("AI_SAFETY_IDENTIFIER_SECRET must not be exposed");
   });
 
-  it("accepts only the official or loopback credential-free OpenAI base URL", () => {
-    expect(
-      parseOpenAIEnvironment({
-        OPENAI_API_KEY: "sk-test-only",
-        AI_SAFETY_IDENTIFIER_SECRET: "a-test-only-safety-secret-that-is-long-enough",
-        OPENAI_BASE_URL: "http://127.0.0.1:4318/v1",
-      }),
-    ).toMatchObject({ OPENAI_BASE_URL: "http://127.0.0.1:4318/v1" });
-
-    expect(() =>
-      parseOpenAIEnvironment({
-        OPENAI_API_KEY: "sk-test-only",
-        AI_SAFETY_IDENTIFIER_SECRET: "a-test-only-safety-secret-that-is-long-enough",
-        OPENAI_BASE_URL: "https://user:password@example.test/v1",
-      }),
-    ).toThrow("official OpenAI API or a loopback");
-
-    expect(() =>
-      parseOpenAIEnvironment({
-        OPENAI_API_KEY: "sk-test-only",
-        AI_SAFETY_IDENTIFIER_SECRET: "a-test-only-safety-secret-that-is-long-enough",
-        OPENAI_BASE_URL: "https://example.test/v1",
-      }),
-    ).toThrow("official OpenAI API or a loopback");
-
-    expect(() =>
-      parseOpenAIEnvironment({
-        OPENAI_API_KEY: "sk-test-only",
-        AI_SAFETY_IDENTIFIER_SECRET: "a-test-only-safety-secret-that-is-long-enough",
-        OPENAI_BASE_URL: "http://api.openai.com/v1",
-      }),
-    ).toThrow("official OpenAI API or a loopback");
-
-    expect(() =>
-      parseOpenAIEnvironment({
-        OPENAI_API_KEY: "sk-test-only",
-        AI_SAFETY_IDENTIFIER_SECRET: "a-test-only-safety-secret-that-is-long-enough",
-        OPENAI_BASE_URL: "https://api.openai.com/v1?key=secret",
-      }),
-    ).toThrow("official OpenAI API or a loopback");
-  });
+  it.each(["AI_BASE_URL", "OPENAI_BASE_URL"] as const)(
+    "rejects arbitrary production base URL configuration (%s)",
+    (key) => {
+      expect(() =>
+        parseAvalAIEnvironment({
+          AVALAI_API_KEY: "avalai-test-only",
+          AI_SAFETY_IDENTIFIER_SECRET: "a-test-only-safety-secret-that-is-long-enough",
+          [key]: "https://attacker.example/v1",
+        }),
+      ).toThrow(`${key} is not supported`);
+    },
+  );
 });

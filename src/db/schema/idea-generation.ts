@@ -53,8 +53,16 @@ export const aiRuns = pgTable(
   },
   (table) => [
     check("ai_runs_kind_check", sql`${table.kind} = 'IDEA_GENERATION'`),
-    check("ai_runs_provider_check", sql`${table.provider} = 'openai'`),
-    check("ai_runs_model_check", sql`${table.model} = 'gpt-5.6-terra'`),
+    // Keep the prior provider/model pair valid for historical runs while the
+    // application writes only the ADR-015 AvalAI/Luna pair going forward.
+    check(
+      "ai_runs_provider_check",
+      sql`(${table.provider} = 'avalai' AND ${table.model} = 'gpt-5.6-luna') OR (${table.provider} = 'openai' AND ${table.model} = 'gpt-5.6-terra')`,
+    ),
+    check(
+      "ai_runs_model_check",
+      sql`(${table.provider} = 'avalai' AND ${table.model} = 'gpt-5.6-luna') OR (${table.provider} = 'openai' AND ${table.model} = 'gpt-5.6-terra')`,
+    ),
     check("ai_runs_prompt_version_check", sql`${table.promptVersion} = 'idea-generation/v1'`),
     check(
       "ai_runs_status_check",

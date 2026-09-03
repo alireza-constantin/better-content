@@ -4,7 +4,11 @@ import { z } from "zod";
 
 import { db } from "@/db";
 import { getServerSession } from "@/lib/auth/server";
-import { ApplicationError, type ApplicationErrorCode } from "@/lib/errors/app-error";
+import {
+  ApplicationError,
+  type ApplicationErrorCode,
+  type RateLimitSource,
+} from "@/lib/errors/app-error";
 import { logger } from "@/lib/logging/server";
 import {
   createGenerateIdeasFailure,
@@ -62,6 +66,7 @@ export type IdeaGenerationBatchDto = Readonly<{
   requestedCount: 20;
   status: GenerationLifecycle;
   errorCategory: FailureCategory | null;
+  rateLimitSource: RateLimitSource | null;
   createdAt: Date;
   startedAt: Date | null;
   completedAt: Date | null;
@@ -118,14 +123,18 @@ function toBatchDto(batch: GenerationPair["batch"]): IdeaGenerationBatchDto {
     throw new ApplicationError("INTERNAL_ERROR", "The generation language invariant is invalid.");
   }
 
+  const status = parseStoredBatchStatus(batch.status);
+  const errorCategory = parseStoredErrorCategory(batch.errorCategory);
+
   return {
     id: batch.id,
     aiRunId: batch.aiRunId,
     contentDnaVersionId: batch.contentDnaVersionId,
     requestedLanguage: requestedLanguage.data,
     requestedCount: IDEA_GENERATION_COUNT,
-    status: parseStoredBatchStatus(batch.status),
-    errorCategory: parseStoredErrorCategory(batch.errorCategory),
+    status,
+    errorCategory,
+    rateLimitSource: status === "FAILED" && errorCategory === "RATE_LIMITED" ? "provider" : null,
     createdAt: batch.createdAt,
     startedAt: batch.startedAt,
     completedAt: batch.completedAt,
@@ -137,7 +146,10 @@ function toPairResult(pair: GenerationPair, replayed: boolean): IdeaGenerationRe
   return { batch: toBatchDto(pair.batch), replayed };
 }
 
-function mapFailureToApplicationError(category: FailureCategory): ApplicationError {
+function mapFailureToApplicationError(
+  category: FailureCategory,
+  rateLimitSource: RateLimitSource = "provider",
+): ApplicationError {
   const code: ApplicationErrorCode =
     category === "RATE_LIMITED"
       ? "RATE_LIMITED"
@@ -150,7 +162,11 @@ function mapFailureToApplicationError(category: FailureCategory): ApplicationErr
     PROVIDER_ERROR: "Idea generation could not be completed.",
   };
 
-  return new ApplicationError(code, messageByCode[code]);
+  return new ApplicationError(
+    code,
+    messageByCode[code],
+    category === "RATE_LIMITED" ? { rateLimitSource } : undefined,
+  );
 }
 
 function getFailureCategory(pair: GenerationPair): FailureCategory {
@@ -275,7 +291,9 @@ export function createIdeaGenerationApplicationService(
           workspaceId: parsedInput.workspaceId,
           errorCode: "RATE_LIMITED",
         });
-        throw new ApplicationError("RATE_LIMITED", "Idea generation is temporarily rate limited.");
+        throw new ApplicationError("RATE_LIMITED", "Idea generation is temporarily rate limited.", {
+          rateLimitSource: "workspace",
+        });
       }
 
       if (preflight.kind === "replay") {

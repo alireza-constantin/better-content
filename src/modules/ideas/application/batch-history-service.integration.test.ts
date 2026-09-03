@@ -183,6 +183,7 @@ describe("idea generation batch application services", () => {
     expect(history.batches.map((batch) => batch.id)).toEqual([second.batch.id, first.batch.id]);
     expect(history.batches[0]).toMatchObject({
       status: "COMPLETED",
+      rateLimitSource: null,
       contentDnaVersionNumber: 1,
       requestedLanguage: "en",
       requestedCount: 20,
@@ -204,8 +205,8 @@ describe("idea generation batch application services", () => {
         id: runId,
         workspaceId: context.workspace.id,
         kind: "IDEA_GENERATION",
-        provider: "openai",
-        model: "gpt-5.6-terra",
+        provider: "avalai",
+        model: "gpt-5.6-luna",
         promptVersion: "idea-generation/v1",
         generationSettings: ideaGenerationSettings,
         status: "RUNNING",
@@ -248,6 +249,7 @@ describe("idea generation batch application services", () => {
       id: batchId,
       status: "FAILED",
       errorCategory: "INTERRUPTED",
+      rateLimitSource: null,
       ideaCount: 0,
       ideas: [],
       canRetry: true,
@@ -327,6 +329,7 @@ describe("idea generation batch application services", () => {
     ).resolves.toMatchObject({
       status: "FAILED",
       errorCategory: "PROVIDER_UNAVAILABLE",
+      rateLimitSource: null,
       ideaCount: 0,
       ideas: [],
       canRetry: true,

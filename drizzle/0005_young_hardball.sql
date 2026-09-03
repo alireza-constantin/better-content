@@ -1,0 +1,4 @@
+ALTER TABLE "ai_runs" DROP CONSTRAINT "ai_runs_provider_check";--> statement-breakpoint
+ALTER TABLE "ai_runs" DROP CONSTRAINT "ai_runs_model_check";--> statement-breakpoint
+ALTER TABLE "ai_runs" ADD CONSTRAINT "ai_runs_provider_check" CHECK (("ai_runs"."provider" = 'avalai' AND "ai_runs"."model" = 'gpt-5.6-luna') OR ("ai_runs"."provider" = 'openai' AND "ai_runs"."model" = 'gpt-5.6-terra'));--> statement-breakpoint
+ALTER TABLE "ai_runs" ADD CONSTRAINT "ai_runs_model_check" CHECK (("ai_runs"."provider" = 'avalai' AND "ai_runs"."model" = 'gpt-5.6-luna') OR ("ai_runs"."provider" = 'openai' AND "ai_runs"."model" = 'gpt-5.6-terra'));

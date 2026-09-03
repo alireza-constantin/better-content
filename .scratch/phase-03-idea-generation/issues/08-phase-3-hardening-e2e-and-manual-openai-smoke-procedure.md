@@ -4,7 +4,10 @@
 
 **Blocked by:** 01: Define Idea Generation domain contracts and canonical validation; 02: Add Phase 3 persistence schema and reviewed migration; 03: Establish the provider-neutral AI contract and deterministic fake; 04: Implement the Phase 3 OpenAI adapter and privacy boundary; 05: Orchestrate safe, idempotent idea generation; 06: Deliver authorized batch history, detail, retry, and idea decisions; 07: Build the localized, accessible Ideas workspace UI.
 
-**Status:** complete
+**Status:** resolved
+
+This status records Ticket 08's historical scope only. Phase 3 remains
+**Ready for review** in `docs/phases/phase-03-idea-generation.md`.
 
 ## Goal
 
@@ -102,9 +105,17 @@ git diff --check
 - 06: Deliver authorized batch history, detail, retry, and idea decisions.
 - 07: Build the localized, accessible Ideas workspace UI.
 
-## Comments
+## Historical completion record
 
 - 2026-09-03: Implemented the Phase 3 hardening pass without changing the four approved Phase 3 tables or adding a migration. Added deterministic Playwright coverage for incomplete DNA, active/delayed generation, provider failure and retry, quota exhaustion, stale-DNA conflict, the full idea-decision workflow, desktop/mobile behavior, focus restoration, and EN/FA LTR/RTL checks.
 - 2026-09-03: E2E exercises the real OpenAI adapter against a loopback-only Responses HTTP mock with fake credentials; CI performs no live OpenAI call. The local endpoint override is restricted by environment validation to official OpenAI or loopback /v1 URLs, and the manual smoke procedure leaves it unset.
 - 2026-09-03: Hardened the Ideas workspace so conflict and rate-limit notices are not cleared by an unnecessary refresh, and dialog focus is restored only after the rejecting transition has settled. Added [docs/phase-03-manual-openai-smoke.md](../../../docs/phase-03-manual-openai-smoke.md), which is opt-in, non-production, sanitized, and explicitly outside CI/acceptance gating.
 - 2026-09-03 verification: db:migrate:test, format:check, lint, typecheck, build, and git diff --check passed; 23 unit files/143 unit tests, 7 integration files/80 integration tests, and 12 Playwright tests passed. Final review found and corrected official-endpoint HTTPS/query validation, mock-server shutdown cleanup, and missing cross-workspace E2E non-enumeration coverage; the final report records the review outcome. The three ticket-requested skills named frontend-design, vercel-react-best-practices, and web-design-guidelines were unavailable in this workspace; the installed design-taste-frontend guidance and repository frontend standards were used instead.
+
+
+## Later superseding work
+
+Ticket 08's OpenAI references above are historical execution evidence, not the
+current production-provider policy. Ticket 09 and ADR-015 superseded the
+production provider, endpoint, credential, model, and manual compatibility
+procedure with AvalAI. Tickets 10 and 11 record subsequent closure verification.

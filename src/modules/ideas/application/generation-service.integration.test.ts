@@ -180,8 +180,8 @@ async function createManualAttempt(
       id: runId,
       workspaceId: context.workspace.id,
       kind: "IDEA_GENERATION",
-      provider: "openai",
-      model: "gpt-5.6-terra",
+      provider: "avalai",
+      model: "gpt-5.6-luna",
       promptVersion: "idea-generation/v1",
       generationSettings: ideaGenerationSettings,
       status: options.status,
@@ -540,10 +540,12 @@ describe("idea generation application service", () => {
     await service.generateIdeas(input(context));
     await expect(service.generateIdeas(input(context))).rejects.toMatchObject({
       code: "RATE_LIMITED",
+      rateLimitSource: "workspace",
     });
 
     expect(fake.invocationCount).toBe(3);
     expect(await countRows(schema.ideaGenerationBatches)).toBe(3);
+    expect(await countRows(schema.aiRuns)).toBe(3);
     expect(await countRows(schema.workspaceGenerationQuotaReservations)).toBe(3);
 
     clock.set(new Date("2026-09-01T10:10:01.000Z"));
@@ -594,7 +596,10 @@ describe("idea generation application service", () => {
       });
 
       const request = input(context);
-      await expect(service.generateIdeas(request)).rejects.toMatchObject({ code });
+      await expect(service.generateIdeas(request)).rejects.toMatchObject({
+        code,
+        ...(category === "RATE_LIMITED" ? { rateLimitSource: "provider" } : {}),
+      });
       expect(fake.invocationCount).toBe(1);
       expect(await countRows(schema.ideas)).toBe(0);
       expect(await countRows(schema.workspaceGenerationQuotaReservations)).toBe(1);
