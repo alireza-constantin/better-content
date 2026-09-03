@@ -1,6 +1,6 @@
 # Phase 3 — AI Foundation and Idea Generation
 
-- **Status:** Ready for review
+- **Status:** resolved
 - **Prerequisites:** Phase 1 and Phase 2 complete; ADR-014 and ADR-015 accepted
 - **Decision owners:** Product Architect / Technical Lead
 
