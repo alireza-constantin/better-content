@@ -4,7 +4,7 @@
 
 **Blocked by:** 02 — Establish Content-generation persistence and database invariants.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 ## Goal
 
@@ -96,6 +96,49 @@ Make operation acceptance concurrency-safe and side-effect-free on every rejecti
 - Blocked by Ticket 02.
 - Uses Ticket 01 contracts.
 - Blocks Ticket 06.
+
+## Answer
+
+Implemented Ticket 05 only. Added the Content application acceptance service
+and repository under `src/modules/content/application/`.
+
+1. The application boundary authenticates and authorizes the current workspace
+owner, canonicalizes the request with Ticket 01 rules, computes the workspace-
+scoped fingerprint, and returns replay/conflict before mutable validation or
+quota evaluation. The repository performs the remaining checks and writes in
+one short PostgreSQL transaction.
+2. Same-key/same-fingerprint requests return the original Attempt; mismatches
+return `CONFLICT`. Replay does not recheck Idea state, DNA, language support,
+or quota.
+3. New requests require an `ACCEPTED` Idea whose batch belongs to the requested
+workspace. The repository resolves the authoritative current DNA, reuses the
+Phase 2 `getContentDnaReadiness` function, requires `AI_READY`, matches the
+submitted base version, and checks requested-language support. The Attempt
+stores the current immutable DNA version, never the Idea batch's historical
+version.
+4. Content quota uses its separate reservation table with PostgreSQL advisory
+workspace serialization: 2 live/invoked slots per rolling 10 minutes and 8
+per rolling 24 hours. Denial maps to `RATE_LIMITED` with source `workspace`.
+5. Quota acceptance recovers stale PENDING pairs at 105 seconds through a
+shared conditional paired-failure primitive, setting Attempt and AI Run to
+`FAILED` / `INTERRUPTED` and releasing only the uninvoked reservation. No
+provider is called and concurrent recovery is safe.
+6. Successful acceptance creates exactly one PENDING Attempt, one same-
+workspace PENDING `CONTENT_SCRIPT_GENERATION` AI Run with ADR-016 settings,
+and one live reservation. No Content, Draft, Content Version, prompt, output,
+or provider telemetry is created.
+
+Added 19 deterministic PostgreSQL integration tests covering eligibility,
+ownership/nondisclosure, current DNA/readiness and lineage, idempotency,
+quota windows/isolation/concurrency, stale recovery, side-effect-free Idea
+acceptance, and transaction rollback.
+
+Verification: `db:up`, `db:check`, `db:migrate:test`, `format:check`, `lint`,
+`typecheck`, `test` (27 unit files / 228 tests and 9 integration files / 107
+tests), `build`, focused Ticket 05 tests, and `git diff --check` passed.
+
+The AvalAI/fake provider, RUNNING recovery, retry, Content artifacts, routes,
+UI, and Ticket 06 work remain unimplemented by design.
 
 ## Expected verification commands
 
