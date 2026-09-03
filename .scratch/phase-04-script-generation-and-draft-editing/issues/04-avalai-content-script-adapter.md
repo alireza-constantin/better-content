@@ -4,7 +4,7 @@
 
 **Blocked by:** 03 — Add the provider-neutral Content Script boundary and deterministic fake.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 ## Goal
 
