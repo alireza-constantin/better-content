@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   getCurrentContentDna: vi.fn(),
-  getIdeaContentGenerationHistory: vi.fn(),
   getIdeaGenerationBatchHistory: vi.fn(),
   getIdeaLibrary: vi.fn(),
   getOrCreateDefaultWorkspace: vi.fn(),
@@ -20,9 +19,6 @@ vi.mock("@/modules/workspace/application", () => ({
 }));
 vi.mock("@/modules/dna/application", () => ({
   getCurrentContentDna: mocks.getCurrentContentDna,
-}));
-vi.mock("@/modules/content/application", () => ({
-  getIdeaContentGenerationHistory: mocks.getIdeaContentGenerationHistory,
 }));
 vi.mock("@/modules/ideas/application", () => ({
   getIdeaGenerationBatchHistory: mocks.getIdeaGenerationBatchHistory,
@@ -63,11 +59,6 @@ beforeEach(() => {
     statusFilter: "NEW",
     generationBatchId: null,
     ideas: [],
-  });
-  mocks.getIdeaContentGenerationHistory.mockResolvedValue({
-    sourceIdea: { id: "accepted-idea", title: "Accepted idea" },
-    isUsed: false,
-    attempts: [],
   });
 });
 
@@ -117,7 +108,7 @@ describe("Ideas route", () => {
     });
   });
 
-  it("loads Ticket 09 Attempt history only for accepted Ideas in the selected Library result", async () => {
+  it("does not load Ticket 09 Attempt history for Library cards", async () => {
     mocks.getIdeaLibrary.mockResolvedValue({
       statusFilter: "ACCEPTED",
       generationBatchId: null,
@@ -129,11 +120,7 @@ describe("Ideas route", () => {
 
     await IdeasPage({ searchParams: Promise.resolve({ view: "accepted" }) });
 
-    expect(mocks.getIdeaContentGenerationHistory).toHaveBeenCalledOnce();
-    expect(mocks.getIdeaContentGenerationHistory).toHaveBeenCalledWith({
-      workspaceId: "workspace-1",
-      sourceIdeaId: "accepted-idea",
-    });
+    expect(mocks.getIdeaLibrary).toHaveBeenCalledOnce();
   });
 
   it("does not provision or query private data without a session", async () => {

@@ -42,9 +42,11 @@ async function generateAndAcceptFirstIdea(page: Page): Promise<void> {
   await page.goto("/en/ideas");
   await page.getByRole("button", { name: "Generate 20 Ideas" }).click();
   await expect(page.getByRole("heading", { name: "Ideas", exact: true })).toBeVisible();
-  const card = page.locator("article").first();
-  await card.getByRole("button", { name: "Accept" }).click();
-  await expect(card.getByText("Accepted", { exact: true })).toBeVisible();
+  await page.locator("article").first().getByRole("button", { name: "Accept" }).click();
+  await page.goto("/en/ideas?view=accepted");
+  await expect(
+    page.locator("article").first().getByText("Accepted", { exact: true }),
+  ).toBeVisible();
 }
 
 async function openScriptDialog(page: Page): Promise<Locator> {
@@ -219,7 +221,10 @@ async function seedActiveAttempts(email: string): Promise<void> {
   }
 }
 
-test("accepted Idea synchronously generates Content and lands in the real localized editor", async ({
+// Ticket 12 removes the Idea-card entry point by design. These Ticket 09
+// browser flows remain as coverage for the reusable capability and will move
+// to the Ticket 13 Production Queue surface.
+test.skip("accepted Idea synchronously generates Content and lands in the real localized editor", async ({
   page,
 }) => {
   const email = emailFor("content-success").toLowerCase();
@@ -247,13 +252,17 @@ test("accepted Idea synchronously generates Content and lands in the real locali
   expect(after.lastRequestedFormat).toBe("LONG_VIDEO");
 });
 
-test("only accepted Ideas expose Script generation", async ({ page }) => {
+test("Idea Library cards do not expose first-generation Script UI", async ({ page }) => {
   const email = emailFor("content-eligibility").toLowerCase();
   await signUp(page, email);
   await createReadyContentDna(page);
   await page.goto("/en/ideas");
   await page.getByRole("button", { name: "Generate 20 Ideas" }).click();
   await expect(page.getByRole("heading", { name: "Ideas", exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("list", { name: "Generated ideas" }).locator(":scope > li"),
+  ).toHaveCount(20);
+  await page.goto("/en/ideas?view=all");
 
   const card = page.locator("article").first();
   await expect(card.getByRole("button", { name: "Generate Script" })).toHaveCount(0);
@@ -267,7 +276,7 @@ test("only accepted Ideas expose Script generation", async ({ page }) => {
   await expect(card.getByRole("button", { name: "Generate Script" })).toHaveCount(0);
 });
 
-test("stale DNA conflict keeps the synchronous form safe and invokes no provider", async ({
+test.skip("stale DNA conflict keeps the synchronous form safe and invokes no provider", async ({
   page,
 }) => {
   const email = emailFor("content-stale-dna").toLowerCase();
@@ -293,7 +302,7 @@ test("stale DNA conflict keeps the synchronous form safe and invokes no provider
   await dnaPage.close();
 });
 
-test("provider failure is retained and Ticket 07 retry redirects after synchronous success", async ({
+test.skip("provider failure is retained and Ticket 07 retry redirects after synchronous success", async ({
   page,
 }) => {
   const email = emailFor("content-provider-retry").toLowerCase();
@@ -321,7 +330,7 @@ test("provider failure is retained and Ticket 07 retry redirects after synchrono
   expect(await readContentCount(email)).toBe(1);
 });
 
-test("workspace and provider rate-limit feedback remain distinct", async ({ page }) => {
+test.skip("workspace and provider rate-limit feedback remain distinct", async ({ page }) => {
   const workspaceEmail = emailFor("content-workspace-rate-limit").toLowerCase();
   await signUp(page, workspaceEmail);
   await createReadyContentDna(page);
@@ -367,7 +376,7 @@ test("workspace and provider rate-limit feedback remain distinct", async ({ page
   await providerContext.close();
 });
 
-test("renders persisted PENDING and RUNNING Attempts without polling or provider work", async ({
+test.skip("renders persisted PENDING and RUNNING Attempts without polling or provider work", async ({
   page,
 }) => {
   const email = emailFor("content-active-history").toLowerCase();
@@ -388,7 +397,7 @@ test("renders persisted PENDING and RUNNING Attempts without polling or provider
   expect(await readContentProviderTelemetry(page)).toEqual(before);
 });
 
-test("supports Persian RTL Script form keyboard focus and mixed-direction instructions", async ({
+test.skip("supports Persian RTL Script form keyboard focus and mixed-direction instructions", async ({
   page,
 }) => {
   const email = emailFor("content-rtl").toLowerCase();

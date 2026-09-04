@@ -16,17 +16,11 @@ import type {
 const mocks = vi.hoisted(() => ({
   decision: vi.fn(),
   generate: vi.fn(),
-  generateContent: vi.fn(),
   push: vi.fn(),
   refresh: vi.fn(),
   retry: vi.fn(),
-  retryContent: vi.fn(),
 }));
 
-vi.mock("@/modules/content/application/content-actions", () => ({
-  generateContentScriptAction: mocks.generateContent,
-  retryContentGenerationAttemptAction: mocks.retryContent,
-}));
 vi.mock("../application/ideas-actions", () => ({
   generateIdeasAction: mocks.generate,
   retryIdeaGenerationAction: mocks.retry,
@@ -135,7 +129,6 @@ function renderWorkspace(
   return render(
     <NextIntlClientProvider locale={locale} messages={locale === "fa" ? fa : en}>
       <IdeasWorkspace
-        contentGenerationHistory={{}}
         dna={dna}
         initialHistory={history}
         initialLibrary={options.currentLibrary ?? library()}
@@ -221,10 +214,11 @@ describe("Ideas Workspace Library presentation", () => {
       }),
     });
 
-    expect(screen.getByText("No content yet")).toBeTruthy();
+    expect(screen.getByText("In content queue")).toBeTruthy();
     expect(screen.getByText("1 Content")).toBeTruthy();
     expect(screen.getByText("2 Contents")).toBeTruthy();
-    expect(screen.getAllByRole("button", { name: "Generate Script" })).toHaveLength(3);
+    expect(screen.queryByRole("button", { name: "Generate Script" })).toBeNull();
+    expect(screen.queryByText(/Attempts/)).toBeNull();
   });
 
   it("uses Persian direction while preserving mixed Idea text without transformation", () => {

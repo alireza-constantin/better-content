@@ -9,7 +9,7 @@ Content Production Queue in future Ticket 13, not to each Idea card.
 
 **Blocked by:** 09 — Deliver Generate Script UI and synchronous operation feedback; 10 — Deliver the Content list and Script editor with serialized autosave.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 ## Goal
 
@@ -319,3 +319,24 @@ npm run build
 npm run test:e2e
 git diff --check
 ```
+
+## Answer
+
+Implemented the unified workspace-wide Idea Library for `/ideas` with
+independent server-side status and owned Past Run filters. The default is New
+plus All runs; safe URL normalization preserves the independent dimensions and
+normalizes unsupported views and malformed or foreign batch IDs without
+disclosure. The grouped Library read derives Content counts without persisted
+USED/hasContent/count fields or per-card Attempt-history queries. Accepted cards
+show a compact queue indicator for zero linked Content and a derived Content
+count otherwise; Ticket 09 generation services remain available for Ticket 13,
+but the primary Generate Script action and full Attempt history are not mounted
+on Library cards. Existing decision actions remain authoritative. EN/FA
+localized copy, content-language direction, RTL/LTR layout, responsive filters,
+authorization, and nondisclosure coverage were verified.
+
+Focused route, URL, application, and presentation tests passed. The full
+deterministic E2E suite passed with 20 tests passed and 6 Ticket 09 card-flow
+tests skipped because their former Idea-card Script UI is intentionally outside
+Ticket 12 and belongs to Ticket 13's Production Queue. No schema or migration
+was added.

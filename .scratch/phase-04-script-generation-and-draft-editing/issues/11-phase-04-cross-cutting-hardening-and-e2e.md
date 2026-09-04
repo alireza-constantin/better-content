@@ -2,7 +2,7 @@
 
 **What to build:** Verify and harden the assembled Phase 4 implementation across the complete deterministic browser matrix, database/application boundaries, production provider composition, internationalization, accessibility, security, autosave concurrency, and the opt-in live AvalAI smoke, then mark implementation Ready for review without declaring Phase 4 Complete.
 
-**Blocked by:** 09 — Deliver the reusable Generate Script UI and synchronous operation feedback; 10 — Deliver the Content list and Script editor with serialized autosave; 12 — Add the compact workspace-wide Idea Library and status views; future Ticket 13 — Deliver the Production Queue and compact Idea → Content workflow.
+**Blocked by:** 09 — Deliver the reusable Generate Script UI and synchronous operation feedback; 10 — Deliver the Content list and Script editor with serialized autosave; 12 — Add the compact workspace-wide Idea Library and status views; 13 — Add the Content Production Queue and Idea-to-Content workflow.
 
 **Status:** ready-for-agent
 
@@ -125,7 +125,7 @@ Produce complete Phase 4 implementation evidence at stable seams without turning
 
 ## Dependencies and blockers
 
-- Blocked by Tickets 09, 10, and 12, and by future Ticket 13; transitively requires Tickets 01–08. Ticket 11 must not begin until both Ticket 12 and Ticket 13 are resolved.
+- Blocked by Tickets 09, 10, 12, and 13; transitively requires Tickets 01–08. Ticket 11 must not begin until both Ticket 12 and Ticket 13 are resolved.
 - This is the final implementation ticket. Final Product Architect closure review occurs afterward and is not an implementation ticket.
 
 ## Expected verification commands

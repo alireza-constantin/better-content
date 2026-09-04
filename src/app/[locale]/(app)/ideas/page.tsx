@@ -1,23 +1,11 @@
 import { getTranslations } from "next-intl/server";
 
 import { getServerSession } from "@/lib/auth/server";
-import {
-  getIdeaContentGenerationHistory,
-  type IdeaContentGenerationHistoryDto,
-} from "@/modules/content/application";
 import { getCurrentContentDna } from "@/modules/dna/application";
-import {
-  getIdeaGenerationBatchHistory,
-  getIdeaLibrary,
-  type IdeaLibraryDto,
-} from "@/modules/ideas/application";
+import { getIdeaGenerationBatchHistory, getIdeaLibrary } from "@/modules/ideas/application";
 import { parseIdeaLibraryUrlState } from "@/modules/ideas/presentation/idea-library-url-state";
 import { IdeasWorkspace } from "@/modules/ideas/presentation/ideas-workspace";
-import type {
-  IdeasContentGenerationHistory,
-  IdeasDnaSummary,
-  IdeasLanguage,
-} from "@/modules/ideas/presentation/ideas-types";
+import type { IdeasDnaSummary, IdeasLanguage } from "@/modules/ideas/presentation/ideas-types";
 import { getOrCreateDefaultWorkspace } from "@/modules/workspace/application";
 
 function toDnaSummary(current: Awaited<ReturnType<typeof getCurrentContentDna>>): IdeasDnaSummary {
@@ -46,22 +34,6 @@ function toDnaSummary(current: Awaited<ReturnType<typeof getCurrentContentDna>>)
   };
 }
 
-async function loadContentGenerationHistory(
-  workspaceId: string,
-  library: IdeaLibraryDto,
-): Promise<IdeasContentGenerationHistory> {
-  const acceptedIdeas = library.ideas.filter((idea) => idea.status === "ACCEPTED");
-
-  const entries = await Promise.all(
-    acceptedIdeas.map(async (idea): Promise<readonly [string, IdeaContentGenerationHistoryDto]> => [
-      idea.id,
-      await getIdeaContentGenerationHistory({ workspaceId, sourceIdeaId: idea.id }),
-    ]),
-  );
-
-  return Object.fromEntries(entries);
-}
-
 export default async function IdeasPage({
   searchParams,
 }: Readonly<{
@@ -85,14 +57,12 @@ export default async function IdeasPage({
     }),
     getTranslations("Ideas"),
   ]);
-  const contentGenerationHistory = await loadContentGenerationHistory(workspace.id, library);
   const dnaSummary = toDnaSummary(currentDna);
 
   return (
     <section className="mx-auto w-full max-w-6xl">
       <IdeasWorkspace
         dna={dnaSummary}
-        contentGenerationHistory={contentGenerationHistory}
         initialHistory={history}
         initialLibrary={library}
         key={dnaSummary.currentVersion?.id ?? dnaSummary.status}

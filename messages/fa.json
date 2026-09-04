@@ -264,7 +264,7 @@
     "libraryStatusACCEPTED": "پذیرفته‌شده",
     "libraryStatusREJECTED": "ردشده",
     "libraryIdeaProvenance": "نسخهٔ DNA {version}",
-    "libraryNoContent": "هنوز محتوایی ندارد",
+    "libraryInContentQueue": "در صف تولید محتوا",
     "libraryContentCount": "{count, plural, one {# محتوا} other {# محتوا}}",
     "batchLabel": "نسخهٔ DNA {number}",
     "statusPending": "در انتظار",

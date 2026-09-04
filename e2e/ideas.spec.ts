@@ -512,6 +512,7 @@ test("uses keyboard for generation and decision controls", async ({ page }) => {
   ).toHaveCount(20);
   await expect(generateButton).toBeEnabled();
   await expect(generateButton).toBeFocused();
+  await page.goto("/en/ideas?view=all");
 
   const firstCard = page.locator("article").first();
   const acceptButton = firstCard.getByRole("button", { name: "Accept" });
@@ -569,7 +570,7 @@ test("keeps English UI chrome and Persian generated content distinct", async ({ 
 
   await createReadyContentDna(page);
   await seedCompletedPersianBatch(email);
-  await page.goto("/en/ideas");
+  await page.goto("/en/ideas?view=all");
 
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
   await expect(page.locator("html")).toHaveAttribute("dir", "ltr");
@@ -675,17 +676,25 @@ test("covers active, completed, provider rate-limit, retry, and decision transit
 
   const pending = await seedBatch(email, { status: "PENDING" });
   await page.goto("/en/ideas?batchId=" + pending.batchId);
-  await expect(page.getByText("Pending", { exact: true })).toBeVisible();
+  await expect(
+    page.locator('[aria-labelledby="ideas-selected-run-title"]').getByText("Pending", {
+      exact: true,
+    }),
+  ).toBeVisible();
   await expect(page.getByText("No matching ideas", { exact: true })).toBeVisible();
   await expect(page.getByRole("list", { name: "Generated ideas" })).toHaveCount(0);
 
   const active = await seedBatch(email, { status: "RUNNING" });
   await page.goto("/en/ideas?batchId=" + active.batchId);
-  await expect(page.getByText("Running", { exact: true })).toBeVisible();
+  await expect(
+    page.locator('[aria-labelledby="ideas-selected-run-title"]').getByText("Running", {
+      exact: true,
+    }),
+  ).toBeVisible();
   await expect(page.getByText("No matching ideas", { exact: true })).toBeVisible();
   await expect(page.getByRole("list", { name: "Generated ideas" })).toHaveCount(0);
 
-  await page.goto("/en/ideas?batchId=" + completed.batchId);
+  await page.goto("/en/ideas?view=all&batchId=" + completed.batchId);
   const list = page.getByRole("list", { name: "Generated ideas" });
   await expect(list.locator(":scope > li")).toHaveCount(20);
   const firstCard = page.locator("article").filter({ hasText: completed.firstIdeaTitle }).first();
@@ -818,17 +827,17 @@ test("uses one Ideas Library for cross-batch status and Past Runs intersections"
   await page.goto(`/en/ideas?view=saved&batchId=${older.batchId}`);
   await expect(page.locator("article").filter({ hasText: older.firstIdeaTitle })).toHaveCount(1);
 
-  await page.goto(`/en/ideas?batchId=${older.batchId}`);
+  await page.goto(`/en/ideas?view=all&batchId=${older.batchId}`);
   await page.locator("article").first().getByRole("button", { name: "Accept" }).click();
   await page.goto(`/en/ideas?view=accepted&batchId=${older.batchId}`);
-  await expect(page.getByRole("button", { name: "Generate Script" })).toHaveCount(1);
+  await expect(page.getByRole("button", { name: "Generate Script" })).toHaveCount(0);
+  await expect(page.getByText("In content queue", { exact: true })).toBeVisible();
   await page.goto("/en/ideas?view=accepted");
   await expect(page.getByRole("link", { name: "All runs" })).toHaveAttribute(
     "aria-current",
     "page",
   );
-
-  await page.goto(`/en/ideas?batchId=${older.batchId}`);
+  await page.goto(`/en/ideas?view=all&batchId=${older.batchId}`);
   await page.locator("article").first().getByRole("button", { name: "Reject" }).click();
   const rejectionDialog = page.getByRole("dialog", { name: "Reject this idea" });
   await rejectionDialog.getByRole("button", { name: "Reject idea" }).click();
@@ -843,4 +852,33 @@ test("uses one Ideas Library for cross-batch status and Past Runs intersections"
   await expect(
     page.getByRole("list", { name: "Generated ideas" }).locator(":scope > li"),
   ).toHaveCount(20);
+});
+
+test("normalizes a foreign Past Run without disclosing its Ideas", async ({ browser, page }) => {
+  const ownerEmail = emailFor("ideas-library-owner").toLowerCase();
+  const foreignEmail = emailFor("ideas-library-foreign").toLowerCase();
+
+  await signUp(page, ownerEmail);
+  await createReadyContentDna(page);
+  const ownerBatch = await seedBatch(ownerEmail, { status: "COMPLETED" });
+
+  const foreignContext = await browser.newContext();
+  const foreignPage = await foreignContext.newPage();
+  try {
+    await signUp(foreignPage, foreignEmail);
+    await createReadyContentDna(foreignPage);
+  } finally {
+    await foreignContext.close();
+  }
+  const foreignBatch = await seedBatch(foreignEmail, { status: "COMPLETED" });
+
+  await page.goto(`/en/ideas?view=saved&batchId=${foreignBatch.batchId}`);
+  await expect(page.getByRole("link", { name: "All runs" })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+  await expect(page.getByRole("link", { name: "Saved" })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("link", { name: /DNA version/ })).toHaveCount(1);
+  await expect(page.getByText(foreignBatch.firstIdeaTitle, { exact: true })).toHaveCount(0);
+  await expect(page.getByText(ownerBatch.firstIdeaTitle, { exact: true })).toHaveCount(0);
 });

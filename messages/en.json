@@ -264,7 +264,7 @@
     "libraryStatusACCEPTED": "Accepted",
     "libraryStatusREJECTED": "Rejected",
     "libraryIdeaProvenance": "DNA version {version}",
-    "libraryNoContent": "No content yet",
+    "libraryInContentQueue": "In content queue",
     "libraryContentCount": "{count, plural, one {# Content} other {# Contents}}",
     "batchLabel": "DNA version {number}",
     "statusPending": "Pending",
