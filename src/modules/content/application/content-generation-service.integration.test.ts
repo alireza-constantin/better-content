@@ -10,12 +10,21 @@ import * as schema from "@/db/schema";
 import { getTestDatabaseUrl } from "@/db/test-environment";
 import { ApplicationError } from "@/lib/errors/app-error";
 import {
+  createGenerateContentScriptSuccess,
+  type GenerateContentScriptRequest,
+} from "@/modules/ai/domain/generate-content-script";
+import { FakeGenerateContentScriptProvider } from "@/modules/ai/testing/fake-generate-content-script-provider";
+import {
   fingerprintContentScriptGenerationRequest,
   parseCanonicalContentScriptGenerationRequest,
 } from "@/modules/content/domain/content-script-contracts";
 import {
   contentScriptGenerationSettings,
+  completeContentGenerationInvocation,
+  failContentGenerationInvocation,
+  findContentByGenerationAttemptId,
   reserveContentGenerationOperation,
+  startContentGenerationInvocation,
 } from "./content-generation-repository";
 import {
   parseContentDnaPayload,
@@ -211,6 +220,8 @@ async function countRows(
     | typeof schema.contentGenerationAttempts
     | typeof schema.aiRuns
     | typeof schema.contents
+    | typeof schema.contentDrafts
+    | typeof schema.contentVersions
     | typeof schema.workspaceContentGenerationQuotaReservations,
 ) {
   const [result] = await database.select({ value: count() }).from(table);
@@ -728,5 +739,472 @@ describe("content generation acceptance", () => {
     ).toBe(true);
     expect(await countRows(schema.contentGenerationAttempts)).toBe(2);
     expect(await countRows(schema.workspaceContentGenerationQuotaReservations)).toBe(2);
+  });
+});
+
+describe("content generation execution", () => {
+  it("starts after durable RUNNING state and atomically creates the initial Content artifacts", async () => {
+    const context = await createContext();
+    const fake = new FakeGenerateContentScriptProvider({
+      recordRequests: true,
+      usage: { inputTokens: 12, outputTokens: 34, totalTokens: 46 },
+      providerRequestCorrelation: "avalai-content-request-1",
+    });
+    let statusAtProviderCall: string | undefined;
+    const provider = {
+      generateContentScript: vi.fn(async (providerRequest: GenerateContentScriptRequest) => {
+        const [attempt] = await database
+          .select()
+          .from(schema.contentGenerationAttempts)
+          .where(eq(schema.contentGenerationAttempts.sourceIdeaId, context.idea.id));
+        statusAtProviderCall = attempt?.status;
+        return fake.generateContentScript(providerRequest);
+      }),
+    };
+    const service = createContentGenerationApplicationService({
+      database,
+      getAuthenticatedUserId: async () => context.user.id,
+      providerFactory: () => provider,
+    });
+
+    const result = await service.generateContentScript(request(context));
+    const [content] = await database
+      .select()
+      .from(schema.contents)
+      .where(eq(schema.contents.id, result.contentId ?? ""));
+    const [draft] = content
+      ? await database
+          .select()
+          .from(schema.contentDrafts)
+          .where(eq(schema.contentDrafts.contentId, content.id))
+      : [];
+    const [version] = content
+      ? await database
+          .select()
+          .from(schema.contentVersions)
+          .where(eq(schema.contentVersions.contentId, content.id))
+      : [];
+    const [attempt] = await database
+      .select()
+      .from(schema.contentGenerationAttempts)
+      .where(eq(schema.contentGenerationAttempts.id, result.attempt.id));
+    const [run] = await database
+      .select()
+      .from(schema.aiRuns)
+      .where(eq(schema.aiRuns.id, result.attempt.aiRunId));
+    const [reservation] = await database
+      .select()
+      .from(schema.workspaceContentGenerationQuotaReservations)
+      .where(eq(schema.workspaceContentGenerationQuotaReservations.attemptId, result.attempt.id));
+
+    expect(provider.generateContentScript).toHaveBeenCalledTimes(1);
+    expect(fake.invocationCount).toBe(1);
+    expect(statusAtProviderCall).toBe("RUNNING");
+    expect(result).toMatchObject({
+      replayed: false,
+      attempt: { status: "COMPLETED", errorCategory: null },
+    });
+    expect(result.contentId).toEqual(expect.any(String));
+    expect(content).toMatchObject({
+      id: result.contentId,
+      workspaceId: context.workspace.id,
+      sourceIdeaId: context.idea.id,
+      contentLanguage: "en",
+      format: "SHORT_VIDEO",
+      sourceGenerationAttemptId: result.attempt.id,
+    });
+    expect(draft).toMatchObject({ contentId: result.contentId, revision: 1 });
+    expect(version).toMatchObject({
+      contentId: result.contentId,
+      versionNumber: 1,
+      source: "AI_GENERATED",
+      aiRunId: result.attempt.aiRunId,
+      createdByUserId: context.user.id,
+    });
+    expect(run).toMatchObject({
+      status: "COMPLETED",
+      outputSnapshot: draft?.document,
+      usage: { inputTokens: 12, outputTokens: 34, totalTokens: 46 },
+      providerRequestCorrelation: "avalai-content-request-1",
+    });
+    expect(version?.document).toEqual(draft?.document);
+    expect(run?.outputSnapshot).toEqual(version?.document);
+    expect(attempt?.status).toBe("COMPLETED");
+    expect(reservation?.invokedAt).not.toBeNull();
+    expect(reservation?.releasedAt).toBeNull();
+    expect(
+      await findContentByGenerationAttemptId(database, context.workspace.id, result.attempt.id),
+    ).toMatchObject({ id: result.contentId });
+    expect(fake.lastRequest).toMatchObject({
+      generationKind: "CONTENT_SCRIPT_GENERATION",
+      sourceIdea: { title: "A useful idea", description: "A useful description" },
+      contentDna: readyPayload,
+      requestedLanguage: "en",
+      format: "SHORT_VIDEO",
+      instructions: "Use a practical example.",
+    });
+  });
+
+  it.each([
+    ["refusal", "INVALID_OUTPUT", "AI_OUTPUT_INVALID"],
+    ["incomplete", "INVALID_OUTPUT", "AI_OUTPUT_INVALID"],
+    ["malformed", "INVALID_OUTPUT", "AI_OUTPUT_INVALID"],
+    ["timeout", "TIMEOUT", "PROVIDER_ERROR"],
+    ["rate-limited", "RATE_LIMITED", "RATE_LIMITED"],
+    ["provider-unavailable", "PROVIDER_UNAVAILABLE", "PROVIDER_ERROR"],
+    ["interrupted", "INTERRUPTED", "PROVIDER_ERROR"],
+    ["unknown", "UNKNOWN", "PROVIDER_ERROR"],
+  ] as const)(
+    "durably records provider-neutral %s without creating artifacts",
+    async (scenario, category, applicationCode) => {
+      const context = await createContext();
+      const fake = new FakeGenerateContentScriptProvider({ scenario });
+      const service = createContentGenerationApplicationService({
+        database,
+        getAuthenticatedUserId: async () => context.user.id,
+        providerFactory: () => fake,
+      });
+
+      await expect(service.generateContentScript(request(context))).rejects.toMatchObject({
+        code: applicationCode,
+        ...(category === "RATE_LIMITED" ? { rateLimitSource: "provider" } : {}),
+      });
+
+      const [attempt] = await database
+        .select()
+        .from(schema.contentGenerationAttempts)
+        .where(eq(schema.contentGenerationAttempts.sourceIdeaId, context.idea.id));
+      const [run] = attempt
+        ? await database.select().from(schema.aiRuns).where(eq(schema.aiRuns.id, attempt.aiRunId))
+        : [];
+      const [reservation] = attempt
+        ? await database
+            .select()
+            .from(schema.workspaceContentGenerationQuotaReservations)
+            .where(eq(schema.workspaceContentGenerationQuotaReservations.attemptId, attempt.id))
+        : [];
+
+      expect(fake.invocationCount).toBe(1);
+      expect(attempt).toMatchObject({ status: "FAILED", errorCategory: category });
+      expect(run).toMatchObject({
+        status: "FAILED",
+        errorCategory: category,
+        outputSnapshot: null,
+      });
+      expect(reservation?.invokedAt).not.toBeNull();
+      expect(reservation?.releasedAt).toBeNull();
+      expect(await countRows(schema.contents)).toBe(0);
+      expect(await countRows(schema.contentDrafts)).toBe(0);
+      expect(await countRows(schema.contentVersions)).toBe(0);
+    },
+  );
+
+  it("maps a defensively invalid oversized result to INVALID_OUTPUT without truncation", async () => {
+    const context = await createContext();
+    const fake = new FakeGenerateContentScriptProvider({
+      output: { schemaVersion: 1, script: { text: "x".repeat(50_001) } },
+    });
+    const service = createContentGenerationApplicationService({
+      database,
+      getAuthenticatedUserId: async () => context.user.id,
+      providerFactory: () => fake,
+    });
+
+    await expect(service.generateContentScript(request(context))).rejects.toMatchObject({
+      code: "AI_OUTPUT_INVALID",
+    });
+    const [attempt] = await database
+      .select()
+      .from(schema.contentGenerationAttempts)
+      .where(eq(schema.contentGenerationAttempts.sourceIdeaId, context.idea.id));
+    const [run] = await database
+      .select()
+      .from(schema.aiRuns)
+      .where(eq(schema.aiRuns.id, attempt?.aiRunId ?? ""));
+
+    expect(attempt).toMatchObject({ status: "FAILED", errorCategory: "INVALID_OUTPUT" });
+    expect(run).toMatchObject({ status: "FAILED", outputSnapshot: null });
+    expect(await countRows(schema.contents)).toBe(0);
+    expect(await countRows(schema.contentDrafts)).toBe(0);
+    expect(await countRows(schema.contentVersions)).toBe(0);
+  });
+
+  it("uses accepted Idea and DNA facts even when their mutable sources change during execution", async () => {
+    const initial = new Date("2026-09-01T10:00:00.000Z");
+    let now = initial;
+    const context = await createContext();
+    const fake = new FakeGenerateContentScriptProvider({ recordRequests: true });
+    let announceProviderStart!: () => void;
+    let releaseProvider!: () => void;
+    const providerStarted = new Promise<void>((resolve) => {
+      announceProviderStart = resolve;
+    });
+    const providerReleased = new Promise<void>((resolve) => {
+      releaseProvider = resolve;
+    });
+    const provider = {
+      generateContentScript: vi.fn(async (providerRequest: GenerateContentScriptRequest) => {
+        announceProviderStart();
+        await providerReleased;
+        return fake.generateContentScript(providerRequest);
+      }),
+    };
+    const service = createContentGenerationApplicationService({
+      database,
+      getAuthenticatedUserId: async () => context.user.id,
+      providerFactory: () => provider,
+      clock: () => now,
+    });
+    const generation = service.generateContentScript(request(context));
+
+    await providerStarted;
+    for (const status of ["SAVED", "NEW", "REJECTED"] as const) {
+      await database
+        .update(schema.ideas)
+        .set({ status })
+        .where(eq(schema.ideas.id, context.idea.id));
+    }
+    const changedDna = await addCurrentDnaVersion(
+      context.dna,
+      context.user.id,
+      parseContentDnaPayload({
+        ...readyPayload,
+        identity: { creatorOrBrandDescription: "A later DNA version." },
+      }),
+      2,
+    );
+    now = new Date(initial.getTime() + 1_000);
+    releaseProvider();
+    const result = await generation;
+
+    expect(changedDna.versionId).not.toBe(result.attempt.contentDnaVersionId);
+    expect(fake.lastRequest).toMatchObject({
+      sourceIdea: { title: "A useful idea", description: "A useful description" },
+      contentDna: readyPayload,
+    });
+    expect(result.attempt.status).toBe("COMPLETED");
+  });
+
+  it("allows concurrent execution callers to produce at most one provider call and one Content", async () => {
+    const context = await createContext();
+    const fake = new FakeGenerateContentScriptProvider();
+    const service = createContentGenerationApplicationService({
+      database,
+      getAuthenticatedUserId: async () => context.user.id,
+      providerFactory: () => fake,
+    });
+    const operation = request(context);
+    const results = await Promise.allSettled([
+      service.generateContentScript(operation),
+      service.generateContentScript(operation),
+    ]);
+
+    expect(results.every((result) => result.status === "fulfilled")).toBe(true);
+    expect(fake.invocationCount).toBe(1);
+    expect(await countRows(schema.contents)).toBe(1);
+    expect(await countRows(schema.contentDrafts)).toBe(1);
+    expect(await countRows(schema.contentVersions)).toBe(1);
+    const [attempt] = await database
+      .select()
+      .from(schema.contentGenerationAttempts)
+      .where(eq(schema.contentGenerationAttempts.sourceIdeaId, context.idea.id));
+    expect(attempt?.status).toBe("COMPLETED");
+  });
+
+  it("recovers stale RUNNING work without a provider call and retains invoked quota", async () => {
+    const initial = new Date("2026-09-01T10:00:00.000Z");
+    let now = initial;
+    const context = await createContext();
+    const service = createContentGenerationApplicationService({
+      database,
+      getAuthenticatedUserId: async () => context.user.id,
+      clock: () => now,
+    });
+    const accepted = await service.acceptContentGeneration(request(context));
+    const started = await startContentGenerationInvocation(
+      database,
+      context.workspace.id,
+      accepted.attempt.id,
+      accepted.attempt.aiRunId,
+      () => initial,
+    );
+    const fake = new FakeGenerateContentScriptProvider();
+
+    expect(started.started).toBe(true);
+    now = new Date(initial.getTime() + 105_001);
+    const recovery = await service.recoverStaleRunningAttempts({
+      workspaceId: context.workspace.id,
+    });
+    const lateFailure = await failContentGenerationInvocation(
+      database,
+      context.workspace.id,
+      accepted.attempt.id,
+      accepted.attempt.aiRunId,
+      "UNKNOWN",
+      () => new Date(initial.getTime() + 106_000),
+    );
+    const [reservation] = await database
+      .select()
+      .from(schema.workspaceContentGenerationQuotaReservations)
+      .where(eq(schema.workspaceContentGenerationQuotaReservations.attemptId, accepted.attempt.id));
+
+    expect(recovery).toEqual({ recovered: 1 });
+    expect(fake.invocationCount).toBe(0);
+    expect(lateFailure.attempt).toMatchObject({ status: "FAILED", errorCategory: "INTERRUPTED" });
+    expect(lateFailure.run).toMatchObject({ status: "FAILED", errorCategory: "INTERRUPTED" });
+    expect(reservation?.invokedAt).toEqual(initial);
+    expect(reservation?.releasedAt).toBeNull();
+    expect(await countRows(schema.contents)).toBe(0);
+  });
+
+  it("lets stale RUNNING recovery win against a late provider success", async () => {
+    const initial = new Date("2026-09-01T10:00:00.000Z");
+    let now = initial;
+    const context = await createContext();
+    const fake = new FakeGenerateContentScriptProvider();
+    let announceProviderStart!: () => void;
+    let releaseProvider!: () => void;
+    const providerStarted = new Promise<void>((resolve) => {
+      announceProviderStart = resolve;
+    });
+    const providerReleased = new Promise<void>((resolve) => {
+      releaseProvider = resolve;
+    });
+    const provider = {
+      generateContentScript: async (providerRequest: GenerateContentScriptRequest) => {
+        announceProviderStart();
+        await providerReleased;
+        return fake.generateContentScript(providerRequest);
+      },
+    };
+    const service = createContentGenerationApplicationService({
+      database,
+      getAuthenticatedUserId: async () => context.user.id,
+      providerFactory: () => provider,
+      clock: () => now,
+    });
+    const generation = service.generateContentScript(request(context));
+
+    await providerStarted;
+    now = new Date(initial.getTime() + 105_001);
+    await expect(
+      service.recoverStaleRunningAttempts({ workspaceId: context.workspace.id }),
+    ).resolves.toEqual({ recovered: 1 });
+    releaseProvider();
+    await expect(generation).rejects.toMatchObject({ code: "PROVIDER_ERROR" });
+
+    const [attempt] = await database
+      .select()
+      .from(schema.contentGenerationAttempts)
+      .where(eq(schema.contentGenerationAttempts.sourceIdeaId, context.idea.id));
+    expect(fake.invocationCount).toBe(1);
+    expect(attempt).toMatchObject({ status: "FAILED", errorCategory: "INTERRUPTED" });
+    expect(await countRows(schema.contents)).toBe(0);
+    expect(await countRows(schema.contentDrafts)).toBe(0);
+    expect(await countRows(schema.contentVersions)).toBe(0);
+  });
+
+  it("rolls back all success artifacts when final persistence fails, then recovers the remaining RUNNING pair", async () => {
+    const initial = new Date("2026-09-01T10:00:00.000Z");
+    let now = initial;
+    const context = await createContext();
+    const service = createContentGenerationApplicationService({
+      database,
+      getAuthenticatedUserId: async () => context.user.id,
+      clock: () => now,
+    });
+    const accepted = await service.acceptContentGeneration(request(context));
+    const started = await startContentGenerationInvocation(
+      database,
+      context.workspace.id,
+      accepted.attempt.id,
+      accepted.attempt.aiRunId,
+      () => initial,
+    );
+    const generated = createGenerateContentScriptSuccess({
+      schemaVersion: 1,
+      script: { text: "A canonical script." },
+    });
+
+    if (!generated.ok) {
+      throw new Error("The test result should be successful.");
+    }
+
+    await expect(
+      completeContentGenerationInvocation(
+        database,
+        context.workspace.id,
+        accepted.attempt.id,
+        accepted.attempt.aiRunId,
+        "missing-user-for-final-persistence",
+        generated,
+        () => initial,
+      ),
+    ).rejects.toBeDefined();
+
+    const [attemptAfterFailure] = await database
+      .select()
+      .from(schema.contentGenerationAttempts)
+      .where(eq(schema.contentGenerationAttempts.id, accepted.attempt.id));
+    const [runAfterFailure] = await database
+      .select()
+      .from(schema.aiRuns)
+      .where(eq(schema.aiRuns.id, accepted.attempt.aiRunId));
+
+    expect(started.started).toBe(true);
+    expect(attemptAfterFailure?.status).toBe("RUNNING");
+    expect(runAfterFailure?.status).toBe("RUNNING");
+    expect(await countRows(schema.contents)).toBe(0);
+    expect(await countRows(schema.contentDrafts)).toBe(0);
+    expect(await countRows(schema.contentVersions)).toBe(0);
+
+    now = new Date(initial.getTime() + 105_001);
+    await expect(
+      service.recoverStaleRunningAttempts({ workspaceId: context.workspace.id }),
+    ).resolves.toEqual({ recovered: 1 });
+    expect(
+      await findContentByGenerationAttemptId(database, context.workspace.id, accepted.attempt.id),
+    ).toBeUndefined();
+  });
+
+  it("discards duplicate completion and late failure after a terminal success", async () => {
+    const context = await createContext();
+    const fake = new FakeGenerateContentScriptProvider();
+    const service = createContentGenerationApplicationService({
+      database,
+      getAuthenticatedUserId: async () => context.user.id,
+      providerFactory: () => fake,
+    });
+    const result = await service.generateContentScript(request(context));
+    const duplicate = await completeContentGenerationInvocation(
+      database,
+      context.workspace.id,
+      result.attempt.id,
+      result.attempt.aiRunId,
+      context.user.id,
+      {
+        ok: true,
+        output: {
+          schemaVersion: 1,
+          script: { text: "A late different script." },
+        },
+      },
+      () => new Date(),
+    );
+    const lateFailure = await failContentGenerationInvocation(
+      database,
+      context.workspace.id,
+      result.attempt.id,
+      result.attempt.aiRunId,
+      "UNKNOWN",
+      () => new Date(),
+    );
+
+    expect(duplicate).toMatchObject({ completed: false, contentId: result.contentId });
+    expect(lateFailure.attempt.status).toBe("COMPLETED");
+    expect(lateFailure.run.status).toBe("COMPLETED");
+    expect(await countRows(schema.contents)).toBe(1);
+    expect(await countRows(schema.contentDrafts)).toBe(1);
+    expect(await countRows(schema.contentVersions)).toBe(1);
   });
 });

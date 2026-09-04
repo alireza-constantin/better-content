@@ -9,7 +9,10 @@ import {
   aiRuns,
   contentDna,
   contentDnaVersions,
+  contentDrafts,
   contentGenerationAttempts,
+  contentVersions,
+  contents,
   ideaGenerationBatches,
   ideas,
   workspaceContentGenerationQuotaReservations,
@@ -28,6 +31,7 @@ import {
   type ContentDnaPayload,
 } from "@/modules/dna/domain/content-dna-payload";
 import { requireWorkspaceOwner } from "@/modules/workspace/application";
+import type { GenerateContentScriptSuccess } from "@/modules/ai/domain/generate-content-script";
 import type { CanonicalContentScriptGenerationRequest } from "../domain/content-script-contracts";
 import { parseCanonicalIdea, type CanonicalIdea } from "@/modules/ideas/domain";
 
@@ -38,6 +42,7 @@ const CONTENT_SCRIPT_GENERATION_PROMPT_VERSION = "content-script-generation/v1" 
 const TEN_MINUTES_MS = 10 * 60 * 1_000;
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1_000;
 const PENDING_STALE_MS = 105 * 1_000;
+const RUNNING_STALE_MS = 105 * 1_000;
 const TEN_MINUTE_QUOTA = 2;
 const TWENTY_FOUR_HOUR_QUOTA = 8;
 
@@ -55,6 +60,17 @@ export type ContentGenerationWriter = Pick<typeof db, "select" | "insert" | "upd
 export type ContentGenerationPair = Readonly<{
   attempt: typeof contentGenerationAttempts.$inferSelect;
   run: typeof aiRuns.$inferSelect;
+}>;
+
+export type ContentGenerationInvocationResult = Readonly<{
+  started: boolean;
+  pair: ContentGenerationPair;
+}>;
+
+export type ContentGenerationCompletionResult = Readonly<{
+  completed: boolean;
+  pair: ContentGenerationPair;
+  contentId: string | null;
 }>;
 
 export type ContentGenerationPreflightResult =
@@ -144,6 +160,106 @@ export async function findContentGenerationPairByIdempotencyKey(
     );
 
   return pair;
+}
+
+export async function findContentByGenerationAttemptId(
+  database: Pick<typeof db, "select">,
+  workspaceId: string,
+  attemptId: string,
+): Promise<typeof contents.$inferSelect | undefined> {
+  const [content] = await database
+    .select()
+    .from(contents)
+    .where(
+      and(eq(contents.workspaceId, workspaceId), eq(contents.sourceGenerationAttemptId, attemptId)),
+    );
+
+  return content;
+}
+
+async function lockContentGenerationPair(
+  database: ContentGenerationWriter,
+  workspaceId: string,
+  attemptId: string,
+  runId: string,
+): Promise<ContentGenerationPair | undefined> {
+  const [attempt] = await database
+    .select()
+    .from(contentGenerationAttempts)
+    .where(
+      and(
+        eq(contentGenerationAttempts.workspaceId, workspaceId),
+        eq(contentGenerationAttempts.id, attemptId),
+        eq(contentGenerationAttempts.aiRunId, runId),
+      ),
+    )
+    .for("update");
+
+  if (!attempt) {
+    return undefined;
+  }
+
+  const [run] = await database
+    .select()
+    .from(aiRuns)
+    .where(
+      and(
+        eq(aiRuns.workspaceId, workspaceId),
+        eq(aiRuns.id, runId),
+        eq(aiRuns.kind, CONTENT_SCRIPT_GENERATION_KIND),
+      ),
+    )
+    .for("update");
+
+  return run ? { attempt, run } : undefined;
+}
+
+export async function loadAcceptedContentGenerationInputs(
+  database: Pick<typeof db, "select">,
+  pair: ContentGenerationPair,
+): Promise<Readonly<{ sourceIdea: CanonicalIdea; contentDna: ContentDnaPayload }>> {
+  const [ideaRecord] = await database
+    .select({ idea: ideas })
+    .from(ideas)
+    .innerJoin(ideaGenerationBatches, eq(ideas.batchId, ideaGenerationBatches.id))
+    .where(
+      and(
+        eq(ideas.id, pair.attempt.sourceIdeaId),
+        eq(ideaGenerationBatches.workspaceId, pair.attempt.workspaceId),
+      ),
+    );
+
+  if (!ideaRecord) {
+    throw new ApplicationError("INTERNAL_ERROR", "The accepted source Idea could not be loaded.");
+  }
+
+  const [dnaRecord] = await database
+    .select({ version: contentDnaVersions })
+    .from(contentDnaVersions)
+    .innerJoin(contentDna, eq(contentDnaVersions.contentDnaId, contentDna.id))
+    .where(
+      and(
+        eq(contentDnaVersions.id, pair.attempt.contentDnaVersionId),
+        eq(contentDna.workspaceId, pair.attempt.workspaceId),
+      ),
+    );
+
+  if (!dnaRecord) {
+    throw new ApplicationError("INTERNAL_ERROR", "The accepted Content DNA could not be loaded.");
+  }
+
+  try {
+    return {
+      sourceIdea: parseCanonicalIdea({
+        title: ideaRecord.idea.title,
+        description: ideaRecord.idea.description,
+        ...(ideaRecord.idea.category === null ? {} : { category: ideaRecord.idea.category }),
+      }),
+      contentDna: parseContentDnaPayload(dnaRecord.version.payload),
+    };
+  } catch {
+    throw new ApplicationError("INTERNAL_ERROR", "The accepted generation inputs are invalid.");
+  }
 }
 
 type IdeaWithOwningBatch = Readonly<{
@@ -389,6 +505,230 @@ export async function reserveContentGenerationOperation(
   };
 }
 
+export async function startContentGenerationInvocation(
+  database: typeof db,
+  workspaceId: string,
+  attemptId: string,
+  runId: string,
+  clock: () => Date,
+): Promise<ContentGenerationInvocationResult> {
+  return database.transaction(async (transaction) => {
+    await lockContentGenerationWorkspace(transaction, workspaceId);
+    const pair = await lockContentGenerationPair(transaction, workspaceId, attemptId, runId);
+
+    if (!pair) {
+      throw new ApplicationError(
+        "INTERNAL_ERROR",
+        "The Content generation operation was not found.",
+      );
+    }
+
+    if (pair.attempt.status !== "PENDING" || pair.run.status !== "PENDING") {
+      return { started: false, pair };
+    }
+
+    const [reservation] = await transaction
+      .select()
+      .from(workspaceContentGenerationQuotaReservations)
+      .where(
+        and(
+          eq(workspaceContentGenerationQuotaReservations.workspaceId, workspaceId),
+          eq(workspaceContentGenerationQuotaReservations.attemptId, attemptId),
+        ),
+      )
+      .for("update");
+
+    if (!reservation || reservation.invokedAt !== null || reservation.releasedAt !== null) {
+      throw new ApplicationError(
+        "INTERNAL_ERROR",
+        "The Content generation quota reservation is inconsistent.",
+      );
+    }
+
+    const startedAt = clock();
+    const [updatedRun] = await transaction
+      .update(aiRuns)
+      .set({ status: "RUNNING", startedAt })
+      .where(and(eq(aiRuns.id, runId), eq(aiRuns.status, "PENDING")))
+      .returning();
+    const [updatedAttempt] = await transaction
+      .update(contentGenerationAttempts)
+      .set({ status: "RUNNING", startedAt })
+      .where(
+        and(
+          eq(contentGenerationAttempts.id, attemptId),
+          eq(contentGenerationAttempts.status, "PENDING"),
+        ),
+      )
+      .returning();
+
+    if (!updatedRun || !updatedAttempt) {
+      throw new ApplicationError(
+        "INTERNAL_ERROR",
+        "The Content generation operation could not start.",
+      );
+    }
+
+    const [updatedReservation] = await transaction
+      .update(workspaceContentGenerationQuotaReservations)
+      .set({ invokedAt: startedAt })
+      .where(
+        and(
+          eq(workspaceContentGenerationQuotaReservations.id, reservation.id),
+          isNull(workspaceContentGenerationQuotaReservations.invokedAt),
+          isNull(workspaceContentGenerationQuotaReservations.releasedAt),
+        ),
+      )
+      .returning();
+
+    if (!updatedReservation) {
+      throw new ApplicationError(
+        "INTERNAL_ERROR",
+        "The Content generation quota reservation could not start.",
+      );
+    }
+
+    return { started: true, pair: { attempt: updatedAttempt, run: updatedRun } };
+  });
+}
+
+export async function completeContentGenerationInvocation(
+  database: typeof db,
+  workspaceId: string,
+  attemptId: string,
+  runId: string,
+  userId: string,
+  result: GenerateContentScriptSuccess,
+  clock: () => Date,
+): Promise<ContentGenerationCompletionResult> {
+  return database.transaction(async (transaction) => {
+    const pair = await lockContentGenerationPair(transaction, workspaceId, attemptId, runId);
+
+    if (!pair) {
+      throw new ApplicationError(
+        "INTERNAL_ERROR",
+        "The Content generation operation was not found.",
+      );
+    }
+
+    if (pair.attempt.status !== "RUNNING" || pair.run.status !== "RUNNING") {
+      const content = await findContentByGenerationAttemptId(transaction, workspaceId, attemptId);
+      return { completed: false, pair, contentId: content?.id ?? null };
+    }
+
+    const completedAt = clock();
+    const contentId = randomUUID();
+
+    const [content] = await transaction
+      .insert(contents)
+      .values({
+        id: contentId,
+        workspaceId: pair.attempt.workspaceId,
+        sourceIdeaId: pair.attempt.sourceIdeaId,
+        contentLanguage: pair.attempt.requestedLanguage,
+        format: pair.attempt.format,
+        sourceGenerationAttemptId: pair.attempt.id,
+        createdAt: completedAt,
+      })
+      .returning();
+
+    if (!content) {
+      throw new ApplicationError("INTERNAL_ERROR", "The generated Content could not be created.");
+    }
+
+    const [draft] = await transaction
+      .insert(contentDrafts)
+      .values({
+        contentId,
+        document: result.output,
+        revision: 1,
+        createdAt: completedAt,
+        updatedAt: completedAt,
+      })
+      .returning();
+
+    if (!draft) {
+      throw new ApplicationError(
+        "INTERNAL_ERROR",
+        "The generated Content Draft could not be created.",
+      );
+    }
+
+    const [version] = await transaction
+      .insert(contentVersions)
+      .values({
+        contentId,
+        versionNumber: 1,
+        document: result.output,
+        source: "AI_GENERATED",
+        aiRunId: pair.run.id,
+        createdByUserId: userId,
+        createdAt: completedAt,
+      })
+      .returning();
+
+    if (!version) {
+      throw new ApplicationError(
+        "INTERNAL_ERROR",
+        "The initial Content Version could not be created.",
+      );
+    }
+
+    const [updatedRun] = await transaction
+      .update(aiRuns)
+      .set({
+        status: "COMPLETED",
+        outputSnapshot: result.output,
+        usage: result.usage ?? null,
+        providerRequestCorrelation: result.providerRequestCorrelation ?? null,
+        completedAt,
+      })
+      .where(and(eq(aiRuns.id, runId), eq(aiRuns.status, "RUNNING")))
+      .returning();
+    const [updatedAttempt] = await transaction
+      .update(contentGenerationAttempts)
+      .set({ status: "COMPLETED", completedAt })
+      .where(
+        and(
+          eq(contentGenerationAttempts.id, attemptId),
+          eq(contentGenerationAttempts.status, "RUNNING"),
+        ),
+      )
+      .returning();
+
+    if (!updatedRun || !updatedAttempt) {
+      throw new ApplicationError(
+        "INTERNAL_ERROR",
+        "The Content generation completion was not applied.",
+      );
+    }
+
+    return { completed: true, pair: { attempt: updatedAttempt, run: updatedRun }, contentId };
+  });
+}
+
+export async function failContentGenerationInvocation(
+  database: typeof db,
+  workspaceId: string,
+  attemptId: string,
+  runId: string,
+  category: FailureCategory,
+  clock: () => Date,
+): Promise<ContentGenerationPair> {
+  return database.transaction(async (transaction) => {
+    const pair = await lockContentGenerationPair(transaction, workspaceId, attemptId, runId);
+
+    if (!pair) {
+      throw new ApplicationError(
+        "INTERNAL_ERROR",
+        "The Content generation operation was not found.",
+      );
+    }
+
+    return failContentGenerationPairInTransaction(transaction, pair, category, clock());
+  });
+}
+
 async function lockPendingCandidates(
   database: ContentGenerationWriter,
   workspaceId: string,
@@ -529,6 +869,66 @@ export async function recoverStalePendingContentGenerationAttemptsInTransaction(
   for (const candidate of candidates) {
     await failContentGenerationPairInTransaction(database, candidate, "INTERRUPTED", recoveredAt);
     recovered += 1;
+  }
+
+  return recovered;
+}
+
+export async function recoverStaleRunningContentGenerationAttemptsInTransaction(
+  database: ContentGenerationWriter,
+  workspaceId: string,
+  recoveredAt: Date,
+): Promise<number> {
+  const cutoff = new Date(recoveredAt.getTime() - RUNNING_STALE_MS);
+  const candidates = await database
+    .select({ attemptId: contentGenerationAttempts.id, runId: aiRuns.id })
+    .from(contentGenerationAttempts)
+    .innerJoin(
+      aiRuns,
+      and(
+        eq(contentGenerationAttempts.aiRunId, aiRuns.id),
+        eq(contentGenerationAttempts.workspaceId, aiRuns.workspaceId),
+      ),
+    )
+    .where(
+      and(
+        eq(contentGenerationAttempts.workspaceId, workspaceId),
+        eq(contentGenerationAttempts.status, "RUNNING"),
+        eq(aiRuns.status, "RUNNING"),
+        lte(contentGenerationAttempts.startedAt, cutoff),
+      ),
+    );
+
+  let recovered = 0;
+
+  for (const candidate of candidates) {
+    const pair = await lockContentGenerationPair(
+      database,
+      workspaceId,
+      candidate.attemptId,
+      candidate.runId,
+    );
+
+    if (
+      !pair ||
+      pair.attempt.status !== "RUNNING" ||
+      pair.run.status !== "RUNNING" ||
+      pair.attempt.startedAt === null ||
+      pair.attempt.startedAt > cutoff
+    ) {
+      continue;
+    }
+
+    const failedPair = await failContentGenerationPairInTransaction(
+      database,
+      pair,
+      "INTERRUPTED",
+      recoveredAt,
+    );
+
+    if (failedPair.attempt.status === "FAILED" && failedPair.run.status === "FAILED") {
+      recovered += 1;
+    }
   }
 
   return recovered;

@@ -7,6 +7,12 @@ import { getServerSession } from "@/lib/auth/server";
 import { ApplicationError, type RateLimitSource } from "@/lib/errors/app-error";
 import { logger } from "@/lib/logging/server";
 import {
+  createGenerateContentScriptFailure,
+  parseGenerateContentScriptResult,
+  type GenerateContentScriptProvider,
+  type GenerateContentScriptResult,
+} from "@/modules/ai/domain/generate-content-script";
+import {
   fingerprintContentScriptGenerationRequest,
   parseCanonicalContentScriptGenerationRequest,
   contentScriptFormatSchema,
@@ -19,12 +25,18 @@ import { requireWorkspaceOwner } from "@/modules/workspace/application";
 
 import {
   failContentGenerationPairInTransaction,
+  failContentGenerationInvocation,
+  findContentByGenerationAttemptId,
   findContentGenerationPairByIdempotencyKey,
+  loadAcceptedContentGenerationInputs,
   lockContentGenerationWorkspace,
   parseStoredContentGenerationErrorCategory,
   parseStoredContentGenerationStatus,
   recoverStalePendingContentGenerationAttemptsInTransaction,
+  recoverStaleRunningContentGenerationAttemptsInTransaction,
   reserveContentGenerationOperation,
+  startContentGenerationInvocation,
+  completeContentGenerationInvocation,
   type ContentGenerationPair,
   type ContentGenerationPreflightResult,
 } from "./content-generation-repository";
@@ -54,9 +66,18 @@ export type ContentGenerationAcceptanceResult = Readonly<{
   replayed: boolean;
 }>;
 
+export type ContentGenerationResult = Readonly<{
+  attempt: ContentGenerationAttemptDto;
+  contentId: string | null;
+  replayed: boolean;
+}>;
+
 export type ContentGenerationApplicationServiceDependencies = Readonly<{
   database?: typeof db;
   getAuthenticatedUserId?: () => Promise<string | null>;
+  providerFactory?: (
+    userId: string,
+  ) => GenerateContentScriptProvider | Promise<GenerateContentScriptProvider>;
   clock?: () => Date;
   logger?: Pick<typeof logger, "info" | "warn" | "error">;
 }>;
@@ -118,6 +139,30 @@ function toAttemptDto(pair: ContentGenerationPair): ContentGenerationAttemptDto 
   };
 }
 
+function mapFailureToApplicationError(
+  category: FailureCategory,
+  rateLimitSource: RateLimitSource = "provider",
+): ApplicationError {
+  if (category === "RATE_LIMITED") {
+    return new ApplicationError("RATE_LIMITED", "Content generation is temporarily rate limited.", {
+      rateLimitSource,
+    });
+  }
+
+  if (category === "INVALID_OUTPUT") {
+    return new ApplicationError(
+      "AI_OUTPUT_INVALID",
+      "The AI returned an invalid Content Script result.",
+    );
+  }
+
+  return new ApplicationError("PROVIDER_ERROR", "Content generation could not be completed.");
+}
+
+function getFailureCategory(pair: ContentGenerationPair): FailureCategory {
+  return parseStoredContentGenerationErrorCategory(pair.attempt.errorCategory) ?? "UNKNOWN";
+}
+
 function logOperation(
   serviceLogger: Pick<typeof logger, "info" | "warn" | "error">,
   level: "info" | "warn" | "error",
@@ -129,6 +174,7 @@ function logOperation(
     aiRunId?: string;
     errorCode?: ApplicationError["code"];
     errorCategory?: FailureCategory;
+    transition?: string;
   }>,
 ): void {
   serviceLogger[level](event, {
@@ -137,9 +183,10 @@ function logOperation(
     ...(context.attemptId ? { entityId: context.attemptId } : {}),
     ...(context.aiRunId ? { aiRunId: context.aiRunId } : {}),
     module: "content",
-    operation: "acceptContentGeneration",
+    operation: "generateContentScript",
     ...(context.errorCode ? { errorCode: context.errorCode } : {}),
     ...(context.errorCategory ? { errorCategory: context.errorCategory } : {}),
+    ...(context.transition ? { transition: context.transition } : {}),
   });
 }
 
@@ -185,8 +232,9 @@ export function createContentGenerationApplicationService(
   dependencies: ContentGenerationApplicationServiceDependencies = {},
 ): Readonly<{
   acceptContentGeneration(input: unknown): Promise<ContentGenerationAcceptanceResult>;
-  generateContentScript(input: unknown): Promise<ContentGenerationAcceptanceResult>;
+  generateContentScript(input: unknown): Promise<ContentGenerationResult>;
   recoverStalePendingAttempts(input: unknown): Promise<Readonly<{ recovered: number }>>;
+  recoverStaleRunningAttempts(input: unknown): Promise<Readonly<{ recovered: number }>>;
 }> {
   const database = dependencies.database ?? db;
   const getAuthenticatedUserId =
@@ -294,10 +342,280 @@ export function createContentGenerationApplicationService(
     return { recovered };
   }
 
+  async function recoverStaleRunningAttempts(
+    input: unknown,
+  ): Promise<Readonly<{ recovered: number }>> {
+    const userId = await getAuthenticatedUserId();
+
+    if (!userId) {
+      throw new ApplicationError("UNAUTHORIZED", "Authentication is required.");
+    }
+
+    const { workspaceId } = parseRecoveryInput(input);
+    await requireWorkspaceOwner(userId, workspaceId, database);
+    const recovered = await database.transaction(async (transaction) => {
+      await lockContentGenerationWorkspace(transaction, workspaceId);
+      await requireWorkspaceOwner(userId, workspaceId, transaction);
+      return recoverStaleRunningContentGenerationAttemptsInTransaction(
+        transaction,
+        workspaceId,
+        clock(),
+      );
+    });
+
+    if (recovered > 0) {
+      logOperation(serviceLogger, "info", "content.generate.stale_running_recovered", {
+        userId,
+        workspaceId,
+        transition: "RUNNING->FAILED",
+        errorCategory: "INTERRUPTED",
+      });
+    }
+
+    return { recovered };
+  }
+
+  async function resolveCurrentPair(
+    userId: string,
+    pair: ContentGenerationPair,
+    replayed: boolean,
+  ): Promise<ContentGenerationResult> {
+    const status = parseStoredContentGenerationStatus(pair.attempt.status);
+
+    if (status === "FAILED") {
+      const category = getFailureCategory(pair);
+      const applicationError = mapFailureToApplicationError(category);
+      logOperation(serviceLogger, "warn", "content.generate.failed", {
+        userId,
+        workspaceId: pair.attempt.workspaceId,
+        attemptId: pair.attempt.id,
+        aiRunId: pair.run.id,
+        errorCode: applicationError.code,
+        errorCategory: category,
+      });
+      throw applicationError;
+    }
+
+    const content =
+      status === "COMPLETED"
+        ? await findContentByGenerationAttemptId(
+            database,
+            pair.attempt.workspaceId,
+            pair.attempt.id,
+          )
+        : undefined;
+
+    if (status === "COMPLETED" && !content) {
+      throw new ApplicationError(
+        "INTERNAL_ERROR",
+        "The completed Content generation has no resulting Content.",
+      );
+    }
+
+    return {
+      attempt: toAttemptDto(pair),
+      contentId: content?.id ?? null,
+      replayed,
+    };
+  }
+
+  async function failAfterInvocation(
+    userId: string,
+    workspaceId: string,
+    attemptId: string,
+    aiRunId: string,
+    category: FailureCategory,
+  ): Promise<ContentGenerationPair> {
+    try {
+      return await failContentGenerationInvocation(
+        database,
+        workspaceId,
+        attemptId,
+        aiRunId,
+        category,
+        clock,
+      );
+    } catch {
+      logOperation(serviceLogger, "error", "content.generate.persistence_failed", {
+        userId,
+        workspaceId,
+        attemptId,
+        aiRunId,
+        errorCode: "INTERNAL_ERROR",
+        errorCategory: category,
+      });
+      throw new ApplicationError(
+        "INTERNAL_ERROR",
+        "The Content generation result could not be durably recorded.",
+      );
+    }
+  }
+
+  async function generateContentScript(input: unknown): Promise<ContentGenerationResult> {
+    const userId = await getAuthenticatedUserId();
+
+    if (!userId) {
+      throw new ApplicationError("UNAUTHORIZED", "Authentication is required.");
+    }
+
+    const parsedInput = parseRequest(input);
+    const acceptance = await acceptContentGeneration(parsedInput);
+    const pair = await findContentGenerationPairByIdempotencyKey(
+      database,
+      parsedInput.workspaceId,
+      parsedInput.idempotencyKey,
+    );
+
+    if (!pair) {
+      throw new ApplicationError(
+        "INTERNAL_ERROR",
+        "The Content generation operation was not found.",
+      );
+    }
+
+    const initialStatus = parseStoredContentGenerationStatus(pair.attempt.status);
+
+    if (initialStatus !== "PENDING") {
+      return resolveCurrentPair(userId, pair, acceptance.replayed);
+    }
+
+    let invocation: Awaited<ReturnType<typeof startContentGenerationInvocation>>;
+
+    try {
+      invocation = await startContentGenerationInvocation(
+        database,
+        parsedInput.workspaceId,
+        pair.attempt.id,
+        pair.run.id,
+        clock,
+      );
+    } catch {
+      logOperation(serviceLogger, "error", "content.generate.persistence_failed", {
+        userId,
+        workspaceId: parsedInput.workspaceId,
+        attemptId: pair.attempt.id,
+        aiRunId: pair.run.id,
+        errorCode: "INTERNAL_ERROR",
+      });
+      throw new ApplicationError(
+        "INTERNAL_ERROR",
+        "The Content generation operation could not start.",
+      );
+    }
+
+    if (!invocation.started) {
+      return resolveCurrentPair(userId, invocation.pair, true);
+    }
+
+    const runningPair = invocation.pair;
+
+    let providerResult: GenerateContentScriptResult;
+
+    try {
+      const acceptedInputs = await loadAcceptedContentGenerationInputs(database, runningPair);
+      const provider = dependencies.providerFactory
+        ? await dependencies.providerFactory(userId)
+        : undefined;
+
+      if (!provider) {
+        throw new Error("The Content Script provider is not configured.");
+      }
+
+      providerResult = parseGenerateContentScriptResult(
+        await provider.generateContentScript({
+          generationKind: "CONTENT_SCRIPT_GENERATION",
+          sourceIdea: acceptedInputs.sourceIdea,
+          contentDna: acceptedInputs.contentDna,
+          requestedLanguage: runningPair.attempt.requestedLanguage,
+          format: runningPair.attempt.format,
+          ...(runningPair.attempt.instructions === null
+            ? {}
+            : { instructions: runningPair.attempt.instructions }),
+        }),
+      );
+    } catch {
+      providerResult = createGenerateContentScriptFailure("UNKNOWN");
+    }
+
+    if (!providerResult.ok) {
+      const failedPair = await failAfterInvocation(
+        userId,
+        parsedInput.workspaceId,
+        runningPair.attempt.id,
+        runningPair.run.id,
+        providerResult.errorCategory,
+      );
+
+      if (failedPair.attempt.status === "COMPLETED") {
+        return resolveCurrentPair(userId, failedPair, false);
+      }
+
+      const applicationError = mapFailureToApplicationError(
+        getFailureCategory(failedPair),
+        "provider",
+      );
+      logOperation(serviceLogger, "warn", "content.generate.failed", {
+        userId,
+        workspaceId: parsedInput.workspaceId,
+        attemptId: failedPair.attempt.id,
+        aiRunId: failedPair.run.id,
+        errorCode: applicationError.code,
+        errorCategory: getFailureCategory(failedPair),
+        transition: "RUNNING->FAILED",
+      });
+      throw applicationError;
+    }
+
+    let completion: Awaited<ReturnType<typeof completeContentGenerationInvocation>>;
+
+    try {
+      completion = await completeContentGenerationInvocation(
+        database,
+        parsedInput.workspaceId,
+        runningPair.attempt.id,
+        runningPair.run.id,
+        userId,
+        providerResult,
+        clock,
+      );
+    } catch {
+      logOperation(serviceLogger, "error", "content.generate.persistence_failed", {
+        userId,
+        workspaceId: parsedInput.workspaceId,
+        attemptId: runningPair.attempt.id,
+        aiRunId: runningPair.run.id,
+        errorCode: "INTERNAL_ERROR",
+      });
+      throw new ApplicationError(
+        "INTERNAL_ERROR",
+        "The Content generation result could not be durably recorded.",
+      );
+    }
+
+    if (!completion.completed) {
+      return resolveCurrentPair(userId, completion.pair, false);
+    }
+
+    logOperation(serviceLogger, "info", "content.generate.completed", {
+      userId,
+      workspaceId: parsedInput.workspaceId,
+      attemptId: completion.pair.attempt.id,
+      aiRunId: completion.pair.run.id,
+      transition: "RUNNING->COMPLETED",
+    });
+
+    return {
+      attempt: toAttemptDto(completion.pair),
+      contentId: completion.contentId,
+      replayed: false,
+    };
+  }
+
   return {
     acceptContentGeneration,
-    generateContentScript: acceptContentGeneration,
+    generateContentScript,
     recoverStalePendingAttempts,
+    recoverStaleRunningAttempts,
   };
 }
 

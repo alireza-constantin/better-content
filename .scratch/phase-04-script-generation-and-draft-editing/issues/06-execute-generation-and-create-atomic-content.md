@@ -4,7 +4,7 @@
 
 **Blocked by:** 03 — Add the provider-neutral Content Script boundary and deterministic fake; 05 — Accept Content-generation requests and reserve quota safely.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 ## Goal
 
@@ -109,3 +109,55 @@ npm run test
 npm run build
 git diff --check
 ```
+
+## Answer
+
+Implemented Ticket 06 only.
+
+### Implemented
+
+- Added provider-neutral Content Script execution to the Content application
+  service through `generateContentScript`.
+- Added a conditional PENDING → RUNNING transaction that locks the workspace
+  and paired rows, sets one shared start timestamp, and marks the reservation
+  invoked before the provider call.
+- Added immutable accepted-input loading by the stored Idea and DNA-version
+  identifiers without rechecking Idea status, current DNA pointer, or DNA
+  readiness after acceptance.
+- Added one-shot neutral-provider invocation with defensive result parsing and
+  safe provider/validation failure mapping.
+- Added an all-or-nothing success transaction creating exactly one Content,
+  Draft revision 1, immutable AI-generated Version 1, canonical AI Run output,
+  usage/correlation, and paired COMPLETED state.
+- Added paired provider failure persistence, safe persistence-failure handling,
+  RUNNING stale recovery at 105 seconds, invoked-quota retention, and late
+  result/duplicate terminal-winner handling.
+
+### Tests
+
+Added deterministic fake-backed integration coverage for successful lineage,
+start ordering, all neutral failure categories, oversized output, accepted
+Idea/DNA stability, concurrent callers, stale RUNNING recovery, completion /
+recovery races, duplicate completion, late failure, and final-persistence
+rollback followed by stale recovery.
+
+### Verification
+
+- `npm run db:up` — passed.
+- `npm run db:check` — passed.
+- `npm run db:migrate:test` — passed.
+- `npm run format:check` — passed.
+- `npm run lint` — passed.
+- `npm run typecheck` — passed.
+- `npm run test` — passed: 27 unit files / 228 tests and 9 integration files /
+  123 tests.
+- `npm run build` — passed.
+- `git diff --check` — passed.
+
+### Scope / deviations
+
+No UI, routes, actions, jobs, retry, draft editing, content reads/list, polling,
+cancellation, or Phase 5 behavior was implemented. No database migration was
+needed; Ticket 02 persistence is used unchanged. The external two-axis review
+workers did not return within bounded waits, so that review was inconclusive;
+the repository checks and full test/build verification passed.
