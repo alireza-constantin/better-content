@@ -2,7 +2,7 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 
-import { and, count, eq, gte, isNull, lte, sql } from "drizzle-orm";
+import { and, count, eq, gte, isNull, lte } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
@@ -31,9 +31,14 @@ import {
   type ContentDnaPayload,
 } from "@/modules/dna/domain/content-dna-payload";
 import { requireWorkspaceOwner } from "@/modules/workspace/application";
+import { lockWorkspaceForUpdate } from "@/modules/workspace/application";
 import type { GenerateContentScriptSuccess } from "@/modules/ai/domain/generate-content-script";
 import type { CanonicalContentScriptGenerationRequest } from "../domain/content-script-contracts";
 import { parseCanonicalIdea, type CanonicalIdea } from "@/modules/ideas/domain";
+import {
+  clearIdeaProductionQueuePositionInTransaction,
+  normalizeProductionQueuePositionsInTransaction,
+} from "./production-queue-repository";
 
 const CONTENT_SCRIPT_GENERATION_KIND = "CONTENT_SCRIPT_GENERATION" as const;
 const CONTENT_SCRIPT_GENERATION_PROVIDER = "avalai" as const;
@@ -134,7 +139,7 @@ export async function lockContentGenerationWorkspace(
   database: ContentGenerationWriter,
   workspaceId: string,
 ): Promise<void> {
-  await database.execute(sql`select pg_advisory_xact_lock(hashtextextended(${workspaceId}, 0))`);
+  await lockWorkspaceForUpdate(database, workspaceId);
 }
 
 export async function findContentGenerationPairByIdempotencyKey(
@@ -602,6 +607,7 @@ export async function completeContentGenerationInvocation(
   clock: () => Date,
 ): Promise<ContentGenerationCompletionResult> {
   return database.transaction(async (transaction) => {
+    await lockContentGenerationWorkspace(transaction, workspaceId);
     const pair = await lockContentGenerationPair(transaction, workspaceId, attemptId, runId);
 
     if (!pair) {
@@ -702,6 +708,15 @@ export async function completeContentGenerationInvocation(
         "The Content generation completion was not applied.",
       );
     }
+
+    // The source Idea leaves the derived initial queue in the same atomic
+    // transaction as Content, Draft, Version #1, and lifecycle completion.
+    await clearIdeaProductionQueuePositionInTransaction(
+      transaction,
+      workspaceId,
+      pair.attempt.sourceIdeaId,
+    );
+    await normalizeProductionQueuePositionsInTransaction(transaction, workspaceId);
 
     return { completed: true, pair: { attempt: updatedAttempt, run: updatedRun }, contentId };
   });

@@ -267,7 +267,7 @@ test("opens the persisted Content list and saves an empty Draft through the real
   await expect(contentRows).toHaveCount(3);
   await expect(contentRows.nth(0)).toContainText("Short video");
   await expect(contentRows.nth(1)).toContainText("Persian");
-  await expect(contentRows.nth(2)).toContainText("Last edited");
+  await expect(contentRows.nth(2)).toContainText("Edited");
 
   await contentList.getByRole("link").nth(2).click();
   await expect(page).toHaveURL(new RegExp(`/en/content/${fixture.emptyContentId}$`));

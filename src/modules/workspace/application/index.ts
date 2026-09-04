@@ -1,5 +1,6 @@
 export {
   getOrCreateDefaultWorkspace,
+  lockWorkspaceForUpdate,
   requireWorkspaceMembership,
   requireWorkspaceOwner,
   type Workspace,

@@ -8,12 +8,15 @@ import {
 
 import {
   getContentDetail,
+  getContentByIdea,
   getContentDraft,
   getContentGenerationAttemptDetail,
   getContentGenerationAttemptResult,
   getIdeaContentGenerationHistory,
   getIdeaContentUsage,
   listContent,
+  getProductionQueue,
+  reorderProductionQueue,
   retryContentGenerationAttempt,
   generateContentScript,
   saveContentDraft,
@@ -24,12 +27,14 @@ import type {
 } from "./content-generation-service";
 import type {
   ContentDetailDto,
+  ContentByIdeaDto,
   ContentDraftDto,
   ContentGenerationAttemptDetailDto,
   ContentListItemDto,
   IdeaContentGenerationHistoryDto,
   IdeaContentUsageDto,
 } from "./content-read-service";
+import type { ProductionQueueItemDto } from "./production-queue-service";
 
 export type ContentActionFailure = Readonly<{
   ok: false;
@@ -39,8 +44,12 @@ export type ContentActionFailure = Readonly<{
 
 export type ListContentActionResult =
   Readonly<{ ok: true; content: readonly ContentListItemDto[] }> | ContentActionFailure;
+export type ProductionQueueActionResult =
+  Readonly<{ ok: true; queue: readonly ProductionQueueItemDto[] }> | ContentActionFailure;
 export type GetContentDetailActionResult =
   Readonly<{ ok: true; content: ContentDetailDto }> | ContentActionFailure;
+export type GetContentByIdeaActionResult =
+  Readonly<{ ok: true; content: ContentByIdeaDto }> | ContentActionFailure;
 export type GetContentDraftActionResult = GetContentDetailActionResult;
 export type SaveContentDraftActionResult =
   Readonly<{ ok: true; draft: ContentDraftDto }> | ContentActionFailure;
@@ -132,11 +141,41 @@ export async function listContentAction(input: unknown): Promise<ListContentActi
   }
 }
 
+export async function getProductionQueueAction(
+  input: unknown,
+): Promise<ProductionQueueActionResult> {
+  try {
+    return { ok: true, queue: await getProductionQueue(input) };
+  } catch (error) {
+    return failureFrom(error);
+  }
+}
+
+export async function reorderProductionQueueAction(
+  input: unknown,
+): Promise<ProductionQueueActionResult> {
+  try {
+    return { ok: true, queue: await reorderProductionQueue(input) };
+  } catch (error) {
+    return failureFrom(error);
+  }
+}
+
 export async function getContentDetailAction(
   input: unknown,
 ): Promise<GetContentDetailActionResult> {
   try {
     return { ok: true, content: await getContentDetail(input) };
+  } catch (error) {
+    return failureFrom(error);
+  }
+}
+
+export async function getContentByIdeaAction(
+  input: unknown,
+): Promise<GetContentByIdeaActionResult> {
+  try {
+    return { ok: true, content: await getContentByIdea(input) };
   } catch (error) {
     return failureFrom(error);
   }

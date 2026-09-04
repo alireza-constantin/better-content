@@ -745,6 +745,10 @@ describe("content generation acceptance", () => {
 describe("content generation execution", () => {
   it("starts after durable RUNNING state and atomically creates the initial Content artifacts", async () => {
     const context = await createContext();
+    await database
+      .update(schema.ideas)
+      .set({ productionQueuePosition: 1 })
+      .where(eq(schema.ideas.id, context.idea.id));
     const fake = new FakeGenerateContentScriptProvider({
       recordRequests: true,
       usage: { inputTokens: 12, outputTokens: 34, totalTokens: 46 },
@@ -830,6 +834,11 @@ describe("content generation execution", () => {
     expect(version?.document).toEqual(draft?.document);
     expect(run?.outputSnapshot).toEqual(version?.document);
     expect(attempt?.status).toBe("COMPLETED");
+    const [sourceIdea] = await database
+      .select({ productionQueuePosition: schema.ideas.productionQueuePosition })
+      .from(schema.ideas)
+      .where(eq(schema.ideas.id, context.idea.id));
+    expect(sourceIdea?.productionQueuePosition).toBeNull();
     expect(reservation?.invokedAt).not.toBeNull();
     expect(reservation?.releasedAt).toBeNull();
     expect(
@@ -858,6 +867,10 @@ describe("content generation execution", () => {
     "durably records provider-neutral %s without creating artifacts",
     async (scenario, category, applicationCode) => {
       const context = await createContext();
+      await database
+        .update(schema.ideas)
+        .set({ productionQueuePosition: 1 })
+        .where(eq(schema.ideas.id, context.idea.id));
       const fake = new FakeGenerateContentScriptProvider({ scenario });
       const service = createContentGenerationApplicationService({
         database,
@@ -896,6 +909,11 @@ describe("content generation execution", () => {
       expect(await countRows(schema.contents)).toBe(0);
       expect(await countRows(schema.contentDrafts)).toBe(0);
       expect(await countRows(schema.contentVersions)).toBe(0);
+      const [sourceIdea] = await database
+        .select({ productionQueuePosition: schema.ideas.productionQueuePosition })
+        .from(schema.ideas)
+        .where(eq(schema.ideas.id, context.idea.id));
+      expect(sourceIdea?.productionQueuePosition).toBe(1);
     },
   );
 

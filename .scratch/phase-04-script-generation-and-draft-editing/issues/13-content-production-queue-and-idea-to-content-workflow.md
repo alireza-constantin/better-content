@@ -8,7 +8,7 @@ retry while reusing the established generation workflow.
 
 **Blocked by:** 12 — Add unified workspace-wide Idea Library filters and compact cards.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 ## Goal
 
@@ -264,43 +264,43 @@ layouts without horizontal overflow.
 
 ## Acceptance criteria
 
-- [ ] A reviewed migration adds nullable positive-integer queue ordering and
+- [x] A reviewed migration adds nullable positive-integer queue ordering and
       deterministically seeds only existing Accepted, zero-Content Ideas using
       Batch creation order, Idea position, and stable Idea ID; it does not use
       `statusChangedAt` as historical acceptance time.
-- [ ] No queue status, queue membership column, queue membership table,
+- [x] No queue status, queue membership column, queue membership table,
       persisted Content count, persisted `hasContent`, or persisted `USED` is
       introduced; Idea states remain exactly NEW/SAVED/ACCEPTED/REJECTED.
-- [ ] Queue membership is derived exactly from Accepted status plus zero linked
+- [x] Queue membership is derived exactly from Accepted status plus zero linked
       Content and never from queue position.
-- [ ] A newly Accepted zero-Content Idea appends at the end with a distinct
+- [x] A newly Accepted zero-Content Idea appends at the end with a distinct
       positive position; re-accepting such an Idea appends again; re-accepting
       an Idea with Content does not queue it.
-- [ ] Save, Reject, and first successful Content clear queue position and keep
+- [x] Save, Reject, and first successful Content clear queue position and keep
       remaining positions valid; failed generation leaves queue membership and
       position intact.
-- [ ] Every queue-position assignment, clear, and rewrite uses the authorized
+- [x] Every queue-position assignment, clear, and rewrite uses the authorized
       workspace-row serialization boundary with workspace-first lock order.
-- [ ] Reorder verifies the exact current queue member set, rejects duplicate,
+- [x] Reorder verifies the exact current queue member set, rejects duplicate,
       missing, stale, and foreign IDs safely with `CONFLICT`, assigns positions
       `1..N` transactionally, and never partially applies.
-- [ ] Concurrent queue mutations cannot commit duplicate positions and valid
+- [x] Concurrent queue mutations cannot commit duplicate positions and valid
       non-queued Ideas end with `NULL` position.
-- [ ] Queue order persists across refresh, navigation, logout/login, and later
+- [x] Queue order persists across refresh, navigation, logout/login, and later
       sessions.
-- [ ] Queue generation reuses Ticket 09, Ticket 05, and Ticket 06; no second
+- [x] Queue generation reuses Ticket 09, Ticket 05, and Ticket 06; no second
       generation orchestration exists; first successful Content clears queue
       position within the Ticket 06 atomic success transaction.
-- [ ] Failed generation remains queued and retry delegates to the existing
+- [x] Failed generation remains queued and retry delegates to the existing
       Ticket 07/Ticket 09 path.
-- [ ] Content supports the Generated Content Library, narrow source-Idea
+- [x] Content supports the Generated Content Library, narrow source-Idea
       filtering for zero/one/multiple Content, editor links, compact activity,
       and Generate Another for an eligible Accepted Idea.
-- [ ] Ticket 12’s compact Idea cards show derived queue/Content state without
+- [x] Ticket 12’s compact Idea cards show derived queue/Content state without
       inline full Attempt history or primary first-generation Generate UI.
-- [ ] Authorization and nondisclosure are proven for queue reads, reorder,
+- [x] Authorization and nondisclosure are proven for queue reads, reorder,
       generation, retries, and source-Idea filtering.
-- [ ] EN/FA, LTR/RTL, responsive, keyboard, screen-reader, touch, focus,
+- [x] EN/FA, LTR/RTL, responsive, keyboard, screen-reader, touch, focus,
       status, and conflict behavior meet the documented requirements.
 
 ## Required tests
@@ -362,6 +362,128 @@ layouts without horizontal overflow.
   foreign-ID nondisclosure, EN/FA RTL/LTR, and responsive/mobile behavior.
 
 No live provider call is required for this ticket’s deterministic tests.
+
+## Implementation report
+
+1. **Files changed:** Added the reviewed queue migration and migration test;
+   queue repository/service/actions; Content-by-Idea read model and service;
+   Production Queue and source-Idea Content context components; and queue,
+   library, route, Idea Library, localization, integration, and browser-test
+   updates. Existing Ticket 06, Ticket 07, Ticket 09, and Ticket 10 seams were
+   extended rather than duplicated.
+2. **Migration/backfill:** `production_queue_position` is nullable with a
+   positive-value check. The migration backfills only `ACCEPTED` Ideas with no
+   linked Content, partitioned by workspace and ordered by batch creation time,
+   Idea position, and stable Idea ID. It does not consult `status_changed_at`.
+3. **Queue read architecture:** Membership is a workspace-provenanced query
+   of `ACCEPTED` plus `count(contents.id) = 0`; position alone never creates a
+   member. The DTO exposes only safe Idea fields, positive ordering metadata,
+   and compact latest-attempt state.
+4. **Workspace-lock implementation:** Queue mutations authorize first, lock
+   the workspace row with `FOR UPDATE`, lock workspace Ideas in stable ID
+   order, derive authoritative membership, then assign/clear/normalize or
+   rewrite positions in the same transaction. Ticket 06 completion acquires
+   this boundary before generation/domain locks. The pre-existing advisory
+   lock remains only for unrelated default-workspace provisioning and Idea
+   generation behavior.
+5. **Entry/exit/reorder:** Accept appends an eligible zero-Content Idea;
+   re-accepting one with Content does not queue it. Save, Reject, and first
+   successful Content clear the position and normalize remaining members.
+   Reorder requires an exact current member set and returns `CONFLICT` for
+   duplicates, missing/stale/foreign IDs without partial application.
+6. **Ticket 06 integration:** The existing atomic Content + Draft + Version
+   #1 + AI Run + Attempt success transaction now clears the source Idea’s
+   position. Provider calls remain outside the transaction; provider failure
+   and rollback preserve the queue item and priority.
+7. **DnD and accessible reorder:** Native pointer drag-and-drop persists the
+   full server-authoritative order. Each row has a visible 44px drag handle
+   with an accessible name and keyboard ArrowUp/ArrowDown behavior, plus a
+   localized screen-reader instruction. No permanent visual Move buttons or
+   extra library were introduced. Motion is limited to existing state/spinner
+   feedback and is gated with `motion-safe` where applicable.
+8. **First-generation flow:** Queue Generate opens the existing Ticket 09
+   Generate Script dialog and invokes the existing Ticket 05 → Ticket 06
+   path. Successful generation redirects to the real Content editor and the
+   source Idea leaves the derived queue while remaining `ACCEPTED`.
+9. **Failure/retry:** Failed generation retains `ACCEPTED`, zero Content, and
+   the existing position. The queue shows only compact safe failure state and
+   delegates Retry to the existing Ticket 07/Ticket 09 retry path.
+10. **Content-by-Idea:** `/content?ideaId=...` proves Idea ownership through
+    its Generation Batch workspace, returns zero/one/multiple Content and
+    durable activity without foreign-ID disclosure, and preserves editor
+    links.
+11. **Generate Another:** The source-Idea context reuses the same form and
+    generation path to create distinct Content aggregates without modifying
+    existing Content or Draft records.
+12. **Idea Library integration:** Ticket 12 remains compact. Accepted zero-
+    Content Ideas show the derived queue state; Accepted Ideas with Content
+    link their derived count to the source-Idea Content context. Attempt audit
+    history and primary first-generation controls remain out of Idea cards.
+13. **EN/FA/RTL/accessibility:** All new copy uses next-intl. The UI was
+    checked in English/LTR and Persian/RTL, including mixed Persian/English
+    titles and descriptions. Logical layout keeps queue ordering top-to-bottom
+    in RTL, preserves `dir="auto"` creator text, keeps focus visible, uses
+    44px queue controls, and announces safe failure/conflict states.
+14. **Concurrency tests:** Integration coverage verifies deterministic
+    backfill, derived membership, exact conflict handling/no partial update,
+    concurrent Accept ordering, Save/Reject entry/exit, first-success queue
+    clearing, failed-generation preservation, and Content-by-Idea
+    nondisclosure. Existing Ticket 06 race/late-result tests remain green.
+15. **E2E results and six former skips:** The deterministic browser suite is
+    30/30 passing. All six former Ticket 09 Idea-card generation skips were
+    removed and rewritten through the correct Production Queue or Content
+    workflow: queued success/editor landing; stale DNA conflict; provider
+    failure plus queue retry; workspace/provider rate-limit feedback;
+    persisted PENDING/RUNNING activity; and Persian RTL generation form
+    behavior. No `test.skip` remains in the E2E suite.
+16. **Full verification:** `db:up`, `db:check`, `db:migrate:test`,
+    `format:check`, `lint`, `typecheck`, `build`, `git diff --check`, the
+    deterministic unit remainder (36 files / 258 tests), integration tests
+    (12 files / 155 tests), and E2E (30 tests) pass. The aggregate `npm run
+    test` was also run and has one pre-existing failure: the opt-in AvalAI
+    manual smoke harness times out at its five-second test limit; the
+    deterministic unit remainder and all integration tests pass when that
+    harness is excluded.
+17. **Deviations/risks:** No Ticket 11 or Phase 5 work was added. The native
+    browser drag API is intentionally kept dependency-free; keyboard and
+    touch-safe 44px controls provide the non-pointer equivalent. The existing
+    Next.js development server emits intermittent `destination stream closed
+    early` warnings during browser teardown, but the final 30-test run passed.
+
+### UI refinement report
+
+1. **Production Queue density:** Replaced tall card-like rows with a cohesive
+   separator-based sortable list. Desktop rows are approximately 64–76px,
+   while mobile rows stack only the action group that needs extra width.
+2. **Priority number:** Replaced “Priority N” wording with muted, tabular,
+   zero-padded ordinals (`01`, `02`, …) that remain visually secondary.
+3. **Reorder accessibility:** Removed permanent up/down arrow buttons while
+   retaining a prominent 44px drag handle with localized instructions and
+   keyboard ArrowUp/ArrowDown support. The browser test now asserts the old
+   buttons are absent and verifies keyboard persistence.
+4. **Content Draft layout:** Replaced the table-like metadata treatment with
+   compact, accessible editor links in a responsive two-column desktop grid
+   and one-column mobile layout. Existing DTO fields are summarized as
+   `Format · Language` and localized `Edited …` text.
+5. **EN/FA/RTL and responsive verification:** Inspected 1280x900 English and
+   Persian views plus 390x844 English and Persian views with ten queue Ideas,
+   long Persian/mixed-direction text, and two drafts. No horizontal overflow
+   was observed; queue order stayed top-to-bottom in RTL.
+6. **Skills used:** `implement`, `tdd`, `shadcn`, `impeccable`,
+   `emil-design-eng`, and `animate`. No `frontend-design` or
+   `web-design-guidelines` skill was available in this environment; no
+   `pick-ui-library` consultation was needed because no new UI library was
+   introduced.
+7. **Screenshots/viewports inspected:** Local in-app browser screenshots at
+   1280x900 and 390x844 in both locales, including seeded queue/draft states.
+8. **Tests changed:** Updated the Content list unit assertions for compact
+   cards, updated the legacy Content E2E label assertion, and updated the
+   queue E2E flow to assert no permanent arrow controls and exercise the
+   accessible keyboard handle. The complete browser suite remains green.
+9. **Remaining compromise:** Native drag-and-drop does not provide a moving
+   ghost preview as rich as a dedicated sortable library, but it keeps the
+   interaction direct and dependency-free while the keyboard equivalent and
+   server conflict recovery remain explicit and test-covered.
 
 ## Explicit non-goals
 

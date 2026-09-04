@@ -45,9 +45,12 @@ describe("ContentList", () => {
     mocks.getTranslations.mockImplementation(async () => {
       const messages = mocks.locale === "fa" ? fa.Content : en.Content;
 
-      return (key: string, values?: Readonly<Record<string, string>>) => {
+      return (key: string, values?: Readonly<Record<string, string | number>>) => {
         const message = messages[key as keyof typeof messages] as string;
-        return values?.title ? message.replace("{title}", values.title) : message;
+        return Object.entries(values ?? {}).reduce(
+          (result, [name, value]) => result.replace(`{${name}}`, String(value)),
+          message,
+        );
       };
     });
   });
@@ -82,21 +85,20 @@ describe("ContentList", () => {
     await renderList(content);
 
     const list = screen.getByRole("list", { name: "Content Drafts" });
+    expect(list.className).toContain("sm:grid-cols-2");
     const rows = within(list).getAllByRole("listitem");
     expect(rows).toHaveLength(2);
     expect(within(rows[0]!).getByRole("heading", { name: "Later-edited idea" })).toBeTruthy();
     expect(within(rows[1]!).getByRole("heading", { name: "Earlier-edited idea" })).toBeTruthy();
-    expect(within(rows[0]!).getByText("Long video")).toBeTruthy();
-    expect(within(rows[0]!).getByText("Persian")).toBeTruthy();
+    expect(within(rows[0]!).getByText(/Long video/)).toBeTruthy();
+    expect(within(rows[0]!).getByText(/Persian/)).toBeTruthy();
     expect(within(rows[0]!).getByText(/Sep 10, 2026/)).toBeTruthy();
 
     expect(screen.queryByText(/Content title/i)).toBeNull();
     expect(screen.queryByText(/Search|Filter|Archive|Delete|Published|Metrics/i)).toBeNull();
-    expect(within(rows[0]!).getAllByRole("term")).toHaveLength(3);
     expect(within(rows[0]!).getByRole("link").getAttribute("href")).toBe("/content/content-2");
-    expect(within(rows[0]!).getByRole("link").querySelector("dl")?.className).toContain(
-      "sm:grid-cols-3",
-    );
+    expect(within(rows[0]!).getByRole("link").querySelector("dl")).toBeNull();
+    expect(within(rows[0]!).getByRole("link").className).toContain("min-h-32");
   });
 
   it("keeps content-language metadata explicit for RTL content", async () => {
@@ -115,7 +117,11 @@ describe("ContentList", () => {
     if (!row) throw new Error("Content row was not rendered.");
 
     expect(title.getAttribute("dir")).toBe("auto");
-    expect(within(row).getByText("Persian").getAttribute("lang")).toBeNull();
+    expect(
+      within(row)
+        .getByText(/Persian/)
+        .getAttribute("lang"),
+    ).toBeNull();
     expect(within(row).getByRole("link").getAttribute("href")).toBe("/content/content-1");
   });
 
@@ -131,8 +137,7 @@ describe("ContentList", () => {
     );
 
     expect(screen.getByRole("list", { name: "پیش‌نویس‌های محتوا" })).toBeTruthy();
-    expect(screen.getByText("قالب")).toBeTruthy();
-    expect(screen.getByText("فارسی")).toBeTruthy();
+    expect(screen.getByText(/فارسی/)).toBeTruthy();
     expect(
       screen.getByRole("link", { name: "باز کردن ویرایشگر اسکریپت برای ایدهٔ محتوایی" }),
     ).toBeTruthy();

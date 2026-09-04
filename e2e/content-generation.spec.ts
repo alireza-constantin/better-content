@@ -43,15 +43,27 @@ async function generateAndAcceptFirstIdea(page: Page): Promise<void> {
   await page.getByRole("button", { name: "Generate 20 Ideas" }).click();
   await expect(page.getByRole("heading", { name: "Ideas", exact: true })).toBeVisible();
   await page.locator("article").first().getByRole("button", { name: "Accept" }).click();
-  await page.goto("/en/ideas?view=accepted");
-  await expect(
-    page.locator("article").first().getByText("Accepted", { exact: true }),
-  ).toBeVisible();
+  await page.goto("/en/content");
+  await expect(page.getByRole("heading", { name: "Production Queue" })).toBeVisible();
+}
+
+async function generateAndAcceptIdeas(page: Page, count: number): Promise<void> {
+  await page.goto("/en/ideas");
+  await page.getByRole("button", { name: "Generate 20 Ideas" }).click();
+  await expect(page.getByRole("list", { name: "Generated ideas" })).toBeVisible();
+  for (let index = 0; index < count; index += 1) {
+    await page.getByRole("button", { name: "Accept" }).first().click();
+  }
+  await page.goto("/en/content");
+  await expect(page.getByRole("heading", { name: "Production Queue" })).toBeVisible();
 }
 
 async function openScriptDialog(page: Page): Promise<Locator> {
-  const card = page.locator("article").first();
-  await card.getByRole("button", { name: "Generate Script" }).click();
+  const queueItem = page
+    .getByRole("list", { name: "Ideas in the Production Queue" })
+    .locator(":scope > li")
+    .first();
+  await queueItem.getByRole("button", { name: "Generate" }).click();
   const dialog = page.getByRole("dialog", { name: "Generate a Script" });
   await expect(dialog).toBeVisible();
   return dialog;
@@ -221,10 +233,7 @@ async function seedActiveAttempts(email: string): Promise<void> {
   }
 }
 
-// Ticket 12 removes the Idea-card entry point by design. These Ticket 09
-// browser flows remain as coverage for the reusable capability and will move
-// to the Ticket 13 Production Queue surface.
-test.skip("accepted Idea synchronously generates Content and lands in the real localized editor", async ({
+test("queued Idea synchronously generates Content and lands in the real localized editor", async ({
   page,
 }) => {
   const email = emailFor("content-success").toLowerCase();
@@ -276,7 +285,7 @@ test("Idea Library cards do not expose first-generation Script UI", async ({ pag
   await expect(card.getByRole("button", { name: "Generate Script" })).toHaveCount(0);
 });
 
-test.skip("stale DNA conflict keeps the synchronous form safe and invokes no provider", async ({
+test("stale DNA conflict keeps the synchronous form safe and invokes no provider", async ({
   page,
 }) => {
   const email = emailFor("content-stale-dna").toLowerCase();
@@ -302,7 +311,7 @@ test.skip("stale DNA conflict keeps the synchronous form safe and invokes no pro
   await dnaPage.close();
 });
 
-test.skip("provider failure is retained and Ticket 07 retry redirects after synchronous success", async ({
+test("provider failure is retained and Ticket 07 retry redirects after synchronous success", async ({
   page,
 }) => {
   const email = emailFor("content-provider-retry").toLowerCase();
@@ -316,36 +325,37 @@ test.skip("provider failure is retained and Ticket 07 retry redirects after sync
   const dialog = page.getByRole("dialog", { name: "Generate a Script" });
   await expect(dialog.getByText("The invoked service did not return a safe result.")).toBeVisible();
   await dialog.getByRole("button", { name: "Cancel" }).last().click();
-  const card = page.locator("article").first();
-  await expect(card.getByRole("heading", { name: "Script generation history" })).toBeVisible();
-  await expect(
-    card.getByText("The provider was unavailable for this invoked Attempt."),
-  ).toBeVisible();
-  await expect(card.getByRole("button", { name: "Retry Script generation" })).toBeVisible();
+  const card = page
+    .getByRole("list", { name: "Ideas in the Production Queue" })
+    .locator(":scope > li")
+    .first();
+  await expect(card.getByText("The last generation failed. Retry when ready.")).toBeVisible();
+  await expect(card.getByRole("button", { name: "Retry" })).toBeVisible();
 
   await setContentProviderScenario(page, "success");
-  await card.getByRole("button", { name: "Retry Script generation" }).click();
+  await card.getByRole("button", { name: "Retry" }).click();
   await expect(page).toHaveURL(/\/en\/content\/[0-9a-f-]{36}$/);
   await expect(page.getByRole("heading", { name: "Script editor" })).toBeVisible();
   expect(await readContentCount(email)).toBe(1);
 });
 
-test.skip("workspace and provider rate-limit feedback remain distinct", async ({ page }) => {
+test("workspace and provider rate-limit feedback remain distinct", async ({ page }) => {
   const workspaceEmail = emailFor("content-workspace-rate-limit").toLowerCase();
   await signUp(page, workspaceEmail);
   await createReadyContentDna(page);
   await generateAndAcceptFirstIdea(page);
   await setContentProviderScenario(page, "success");
 
+  const owner = await findOwnerContentData(workspaceEmail);
   for (let index = 0; index < 2; index += 1) {
-    await page.goto("/en/ideas");
-    await openScriptDialog(page);
+    await page.goto(`/en/content?ideaId=${owner.ideaId}`);
+    await page.getByRole("button", { name: "Generate Another" }).click();
     await submitScript(page);
     await expect(page).toHaveURL(/\/en\/content\/[0-9a-f-]{36}$/);
   }
 
-  await page.goto("/en/ideas");
-  await openScriptDialog(page);
+  await page.goto(`/en/content?ideaId=${owner.ideaId}`);
+  await page.getByRole("button", { name: "Generate Another" }).click();
   const workspaceBefore = await readContentProviderTelemetry(page);
   await submitScript(page);
   const workspaceDialog = page.getByRole("dialog", { name: "Generate a Script" });
@@ -376,7 +386,7 @@ test.skip("workspace and provider rate-limit feedback remain distinct", async ({
   await providerContext.close();
 });
 
-test.skip("renders persisted PENDING and RUNNING Attempts without polling or provider work", async ({
+test("renders persisted PENDING and RUNNING Attempts without polling or provider work", async ({
   page,
 }) => {
   const email = emailFor("content-active-history").toLowerCase();
@@ -386,8 +396,8 @@ test.skip("renders persisted PENDING and RUNNING Attempts without polling or pro
   await seedActiveAttempts(email);
   const before = await readContentProviderTelemetry(page);
 
-  await page.goto("/en/ideas");
-  const card = page.locator("article").first();
+  await page.goto(`/en/content?ideaId=${(await findOwnerContentData(email)).ideaId}`);
+  const card = page.getByRole("region", { name: "Script generation history" });
   await expect(card.getByRole("heading", { name: "Script generation history" })).toBeVisible();
   await expect(card.getByText("Pending", { exact: true })).toBeVisible();
   await expect(card.getByText("Running", { exact: true })).toBeVisible();
@@ -397,7 +407,7 @@ test.skip("renders persisted PENDING and RUNNING Attempts without polling or pro
   expect(await readContentProviderTelemetry(page)).toEqual(before);
 });
 
-test.skip("supports Persian RTL Script form keyboard focus and mixed-direction instructions", async ({
+test("supports Persian RTL Script form keyboard focus and mixed-direction instructions", async ({
   page,
 }) => {
   const email = emailFor("content-rtl").toLowerCase();
@@ -405,10 +415,15 @@ test.skip("supports Persian RTL Script form keyboard focus and mixed-direction i
   await createReadyContentDna(page, "Persian");
   await page.goto("/fa/ideas");
   await page.getByRole("button", { name: "تولید ۲۰ ایده" }).click();
-  await expect(page.getByRole("heading", { name: "20 ایده برای بررسی" })).toBeVisible();
+  await expect(page.getByRole("list", { name: "ایده‌های تولیدشده" })).toBeVisible();
   const card = page.locator("article").first();
   await card.getByRole("button", { name: "پذیرش" }).click();
-  const trigger = card.getByRole("button", { name: "تولید اسکریپت" });
+  await page.goto("/fa/content");
+  const queueItem = page
+    .getByRole("list", { name: "ایده‌های صف تولید" })
+    .locator(":scope > li")
+    .first();
+  const trigger = queueItem.getByRole("button", { name: "تولید" });
   await trigger.focus();
   await trigger.press("Enter");
   const dialog = page.getByRole("dialog", { name: "یک اسکریپت تولید کنید" });
@@ -422,4 +437,116 @@ test.skip("supports Persian RTL Script form keyboard focus and mixed-direction i
   await dialog.getByText(/\/۱٬۰۰۰ نویسه/).waitFor();
   await dialog.getByRole("button", { name: "لغو" }).last().click();
   await expect(trigger).toBeFocused();
+});
+
+test("persists mouse drag and keyboard queue ordering across refresh", async ({ page }) => {
+  const email = emailFor("content-queue-order").toLowerCase();
+  await signUp(page, email);
+  await createReadyContentDna(page);
+  await generateAndAcceptIdeas(page, 3);
+
+  const queue = page.getByRole("list", { name: "Ideas in the Production Queue" });
+  const initialTitles = await queue.locator("h3").allTextContents();
+  expect(initialTitles).toHaveLength(3);
+  await queue.locator(":scope > li").nth(0).dragTo(queue.locator(":scope > li").nth(2));
+  await expect(queue.locator("h3")).toHaveText([
+    initialTitles[1]!,
+    initialTitles[2]!,
+    initialTitles[0]!,
+  ]);
+  await page.reload();
+  await expect(queue.locator("h3")).toHaveText([
+    initialTitles[1]!,
+    initialTitles[2]!,
+    initialTitles[0]!,
+  ]);
+
+  await expect(queue.getByRole("button", { name: /Move Idea up|Move Idea down/ })).toHaveCount(0);
+  const keyboardHandle = queue.locator(":scope > li").nth(1).locator('[role="button"]').first();
+  await keyboardHandle.focus();
+  await keyboardHandle.press("ArrowUp");
+  await expect(queue.locator("h3")).toHaveText([
+    initialTitles[2]!,
+    initialTitles[1]!,
+    initialTitles[0]!,
+  ]);
+  await page.reload();
+  await expect(queue.locator("h3")).toHaveText([
+    initialTitles[2]!,
+    initialTitles[1]!,
+    initialTitles[0]!,
+  ]);
+});
+
+test("removes queued Ideas through Save and Reject decisions", async ({ page }) => {
+  const saveEmail = emailFor("content-queue-save").toLowerCase();
+  await signUp(page, saveEmail);
+  await createReadyContentDna(page);
+  await generateAndAcceptFirstIdea(page);
+  const queue = page.getByRole("list", { name: "Ideas in the Production Queue" });
+  await queue
+    .locator(":scope > li")
+    .first()
+    .getByRole("button", { name: "Save for later" })
+    .click();
+  await expect(page.getByText("Your queue is clear")).toBeVisible();
+
+  const rejectEmail = emailFor("content-queue-reject").toLowerCase();
+  await signUp(page, rejectEmail);
+  await createReadyContentDna(page);
+  await generateAndAcceptFirstIdea(page);
+  const rejectQueue = page.getByRole("list", { name: "Ideas in the Production Queue" });
+  await rejectQueue.locator(":scope > li").first().getByRole("button", { name: "Reject" }).click();
+  const rejectionDialog = page.getByRole("dialog", { name: "Reject this idea" });
+  await rejectionDialog.getByLabel("Reason (optional)").fill("Not a fit right now.");
+  await rejectionDialog.getByRole("button", { name: "Reject idea" }).click();
+  await expect(page.getByText("Your queue is clear")).toBeVisible();
+});
+
+test("opens source-Idea Content context and creates distinct Generate Another records", async ({
+  page,
+}) => {
+  const email = emailFor("content-by-idea").toLowerCase();
+  await signUp(page, email);
+  await createReadyContentDna(page);
+  await generateAndAcceptFirstIdea(page);
+  await setContentProviderScenario(page, "success");
+  await openScriptDialog(page);
+  await submitScript(page);
+  await expect(page).toHaveURL(/\/en\/content\/[0-9a-f-]{36}$/);
+
+  const owner = await findOwnerContentData(email);
+  await page.goto(`/en/content?ideaId=${owner.ideaId}`);
+  await expect(page.getByText("Source Idea context")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Generate Another" })).toBeVisible();
+  await expect(page.getByRole("link", { name: /Open Script editor/ })).toHaveCount(1);
+
+  await page.getByRole("button", { name: "Generate Another" }).click();
+  await submitScript(page, { format: "Long video" });
+  await expect(page).toHaveURL(/\/en\/content\/[0-9a-f-]{36}$/);
+  await page.goto(`/en/content?ideaId=${owner.ideaId}`);
+  await expect(page.getByRole("link", { name: /Open Script editor/ })).toHaveCount(2);
+  await expect(page.getByRole("heading", { name: "Script generation history" })).toBeVisible();
+});
+
+test("links accepted Idea Library Content counts back to the source context on mobile", async ({
+  page,
+}) => {
+  const email = emailFor("content-library-link").toLowerCase();
+  await signUp(page, email);
+  await createReadyContentDna(page);
+  await generateAndAcceptFirstIdea(page);
+  await setContentProviderScenario(page, "success");
+  await openScriptDialog(page);
+  await submitScript(page);
+  const owner = await findOwnerContentData(email);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/en/ideas?view=accepted");
+  const card = page.locator("article").first();
+  await expect(card.getByText("1 Content", { exact: true })).toBeVisible();
+  await expect(card.getByRole("link")).toHaveAttribute(
+    "href",
+    `/en/content?ideaId=${owner.ideaId}`,
+  );
+  await expect(card.getByRole("button", { name: "Generate Script" })).toHaveCount(0);
 });

@@ -23,17 +23,20 @@ import {
 } from "./content-generation-repository";
 import {
   findContentDetail,
+  findContentIdeaContext,
   findContentGenerationAttemptDetail,
   findIdeaContentUsage,
   findResultingContentDetail,
   findSourceIdea,
   listContent as listContentRecords,
+  listContentForIdea,
   listContentGenerationAttemptsForIdea,
   type ContentDetailRecord,
   type ContentGenerationAttemptReadRecord,
   type ContentListRecord,
 } from "./content-read-repository";
 import { requireWorkspaceMembership } from "@/modules/workspace/application";
+import { decisionStateSchema, type DecisionState } from "@/modules/ideas/domain";
 import type { FailureCategory, GenerationLifecycle } from "@/modules/ai/domain/ai-contracts";
 
 const workspaceInputSchema = z.object({ workspaceId: z.uuid() }).strict();
@@ -99,6 +102,18 @@ export type IdeaContentGenerationHistoryDto = Readonly<{
 export type IdeaContentUsageDto = Readonly<{
   ideaId: string;
   isUsed: boolean;
+}>;
+
+export type ContentByIdeaDto = Readonly<{
+  sourceIdea: Readonly<{
+    id: string;
+    title: string;
+    description: string;
+    language: GenerationLanguage;
+    status: DecisionState;
+  }>;
+  content: readonly ContentDetailDto[];
+  history: IdeaContentGenerationHistoryDto;
 }>;
 
 export type ContentReadApplicationServiceDependencies = Readonly<{
@@ -269,6 +284,7 @@ export function createContentReadApplicationService(
   dependencies: ContentReadApplicationServiceDependencies = {},
 ): Readonly<{
   listContent(input: unknown): Promise<readonly ContentListItemDto[]>;
+  getContentByIdea(input: unknown): Promise<ContentByIdeaDto>;
   getContentDetail(input: unknown): Promise<ContentDetailDto>;
   getIdeaContentGenerationHistory(input: unknown): Promise<IdeaContentGenerationHistoryDto>;
   getContentGenerationAttemptDetail(input: unknown): Promise<ContentGenerationAttemptDetailDto>;
@@ -326,6 +342,64 @@ export function createContentReadApplicationService(
       });
 
       return result;
+    },
+
+    async getContentByIdea(input: unknown): Promise<ContentByIdeaDto> {
+      const { userId, input: parsedInput } = await authorizeRead(
+        input,
+        ideaHistoryInputSchema,
+        "The Content-by-Idea request is invalid.",
+      );
+      await recoverActiveOperations(userId, parsedInput.workspaceId);
+
+      const sourceIdea = await findContentIdeaContext(
+        database,
+        parsedInput.workspaceId,
+        parsedInput.sourceIdeaId,
+      );
+
+      if (!sourceIdea) {
+        throw notFound("source Idea");
+      }
+
+      const language = parseStoredContentLanguage(sourceIdea.language);
+      const status = decisionStateSchema.safeParse(sourceIdea.status);
+
+      if (!status.success) {
+        throw new ApplicationError("INTERNAL_ERROR", "The source Idea decision state is invalid.");
+      }
+
+      const [contentRecords, attempts, isUsed] = await Promise.all([
+        listContentForIdea(database, parsedInput.workspaceId, parsedInput.sourceIdeaId),
+        listContentGenerationAttemptsForIdea(
+          database,
+          parsedInput.workspaceId,
+          parsedInput.sourceIdeaId,
+        ),
+        findIdeaContentUsage(database, parsedInput.workspaceId, parsedInput.sourceIdeaId),
+      ]);
+
+      logRead(serviceLogger, "content.idea_context.loaded", {
+        userId,
+        workspaceId: parsedInput.workspaceId,
+        entityId: parsedInput.sourceIdeaId,
+      });
+
+      return {
+        sourceIdea: {
+          id: sourceIdea.id,
+          title: sourceIdea.title,
+          description: sourceIdea.description,
+          language,
+          status: status.data,
+        },
+        content: contentRecords.map(toContentDetail),
+        history: {
+          sourceIdea: { id: sourceIdea.id, title: sourceIdea.title },
+          isUsed,
+          attempts: attempts.map(toAttemptHistory),
+        },
+      };
     },
 
     async getContentDetail(input: unknown): Promise<ContentDetailDto> {

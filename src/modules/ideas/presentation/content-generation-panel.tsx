@@ -43,7 +43,6 @@ import type {
   ContentGenerationAttemptHistoryDto,
   IdeaContentGenerationHistoryDto,
 } from "@/modules/content/application/content-read-service";
-import type { IdeaDto } from "@/modules/ideas/application";
 
 import type { IdeasDnaSummary, IdeasLanguage } from "./ideas-types";
 
@@ -355,7 +354,7 @@ export function ContentGenerationDialog({
   onReload,
   onSubmit,
 }: Readonly<{
-  idea: IdeaDto | null;
+  idea: Pick<{ id: string; title: string }, "id" | "title"> | null;
   dna: IdeasDnaSummary;
   isSubmitting: boolean;
   notice: ContentGenerationNotice | null;

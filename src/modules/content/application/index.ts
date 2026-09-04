@@ -7,6 +7,7 @@ export {
 } from "./content-generation-service";
 export {
   acceptContentGeneration,
+  getContentByIdea,
   getContentDraft,
   generateContentScript,
   getContentDetail,
@@ -15,12 +16,15 @@ export {
   getIdeaContentGenerationHistory,
   getIdeaContentUsage,
   listContent,
+  getProductionQueue,
+  reorderProductionQueue,
   recoverStaleContentGenerationPendingAttempts,
   recoverStaleContentGenerationRunningAttempts,
   retryContentGenerationAttempt,
   saveContentDraft,
 } from "./content-application";
 export {
+  getContentByIdeaAction,
   getContentDetailAction,
   getContentDraftAction,
   getContentGenerationAttemptDetailAction,
@@ -29,12 +33,15 @@ export {
   getIdeaContentUsageAction,
   generateContentScriptAction,
   listContentAction,
+  getProductionQueueAction,
+  reorderProductionQueueAction,
   retryContentGenerationAction,
   retryContentGenerationAttemptAction,
   saveContentDraftAction,
   type ContentActionFailure,
   type ContentGenerationRetryAttemptDto,
   type GenerateContentScriptActionResult,
+  type GetContentByIdeaActionResult,
   type GetContentDetailActionResult,
   type GetContentDraftActionResult,
   type GetContentGenerationAttemptDetailActionResult,
@@ -42,9 +49,25 @@ export {
   type GetIdeaContentGenerationHistoryActionResult,
   type GetIdeaContentUsageActionResult,
   type ListContentActionResult,
+  type ProductionQueueActionResult,
   type RetryContentGenerationAttemptActionResult,
   type SaveContentDraftActionResult,
 } from "./content-actions";
+export {
+  createProductionQueueApplicationService,
+  productionQueueItemSchema,
+  productionQueueReorderInputSchema,
+  type ProductionQueueApplicationServiceDependencies,
+  type ProductionQueueItemDto,
+} from "./production-queue-service";
+export {
+  appendIdeaToProductionQueueInTransaction,
+  clearIdeaProductionQueuePositionInTransaction,
+  listProductionQueueRecords,
+  lockWorkspaceIdeasForQueueMutation,
+  normalizeProductionQueuePositionsInTransaction,
+  rewriteProductionQueuePositionsInTransaction,
+} from "./production-queue-repository";
 export {
   createContentDraftApplicationService,
   type ContentDraftApplicationServiceDependencies,
@@ -61,6 +84,7 @@ export type {
 } from "./content-draft-repository";
 export {
   createContentReadApplicationService,
+  type ContentByIdeaDto,
   type ContentDetailDto,
   type ContentDraftDto,
   type ContentGenerationAttemptDetailDto,

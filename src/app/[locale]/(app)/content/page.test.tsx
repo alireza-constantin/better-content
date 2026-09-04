@@ -6,7 +6,10 @@ const mocks = vi.hoisted(() => ({
   getServerSession: vi.fn(),
   getOrCreateDefaultWorkspace: vi.fn(),
   getTranslations: vi.fn(),
+  getCurrentContentDna: vi.fn(),
   listContent: vi.fn(),
+  getProductionQueue: vi.fn(),
+  getContentByIdea: vi.fn(),
 }));
 
 vi.mock("next-intl/server", () => ({ getTranslations: mocks.getTranslations }));
@@ -14,7 +17,14 @@ vi.mock("@/lib/auth/server", () => ({ getServerSession: mocks.getServerSession }
 vi.mock("@/modules/workspace/application", () => ({
   getOrCreateDefaultWorkspace: mocks.getOrCreateDefaultWorkspace,
 }));
-vi.mock("@/modules/content/application", () => ({ listContent: mocks.listContent }));
+vi.mock("@/modules/dna/application", () => ({
+  getCurrentContentDna: mocks.getCurrentContentDna,
+}));
+vi.mock("@/modules/content/application", () => ({
+  getContentByIdea: mocks.getContentByIdea,
+  getProductionQueue: mocks.getProductionQueue,
+  listContent: mocks.listContent,
+}));
 vi.mock("@/modules/content/presentation/content-list", () => ({
   ContentList: (props: { locale: string; content: readonly unknown[] }) => (
     <div
@@ -24,6 +34,12 @@ vi.mock("@/modules/content/presentation/content-list", () => ({
     />
   ),
 }));
+vi.mock("@/modules/content/presentation/production-queue", () => ({
+  ProductionQueue: () => <div data-testid="production-queue" />,
+}));
+vi.mock("@/modules/content/presentation/content-idea-context", () => ({
+  ContentIdeaContext: () => <div data-testid="content-idea-context" />,
+}));
 
 import ContentPage from "./page";
 
@@ -32,6 +48,7 @@ beforeEach(() => {
   mocks.getTranslations.mockResolvedValue((key: string) => key);
   mocks.getServerSession.mockResolvedValue({ user: { id: "user-1" } });
   mocks.getOrCreateDefaultWorkspace.mockResolvedValue({ id: "workspace-1" });
+  mocks.getCurrentContentDna.mockResolvedValue({ status: "NOT_CREATED", currentVersion: null });
   mocks.listContent.mockResolvedValue([
     {
       id: "content-1",
@@ -41,6 +58,7 @@ beforeEach(() => {
       lastEditedAt: new Date("2026-09-01T10:00:00.000Z"),
     },
   ]);
+  mocks.getProductionQueue.mockResolvedValue([]);
 });
 
 afterEach(cleanup);
@@ -49,12 +67,15 @@ describe("Content route", () => {
   it("loads the authorized workspace DTO and passes the route locale to presentation", async () => {
     const result = await ContentPage({
       params: Promise.resolve({ locale: "fa" }),
+      searchParams: Promise.resolve({}),
     });
     render(result);
 
     expect(mocks.getTranslations).toHaveBeenCalledWith("Content");
     expect(mocks.getOrCreateDefaultWorkspace).toHaveBeenCalledWith("user-1");
     expect(mocks.listContent).toHaveBeenCalledWith({ workspaceId: "workspace-1" });
+    expect(mocks.getCurrentContentDna).toHaveBeenCalledWith({ workspaceId: "workspace-1" });
+    expect(mocks.getProductionQueue).toHaveBeenCalledWith({ workspaceId: "workspace-1" });
     expect(screen.getByTestId("content-list").getAttribute("data-locale")).toBe("fa");
     expect(screen.getByTestId("content-list").getAttribute("data-content-count")).toBe("1");
   });
@@ -62,7 +83,9 @@ describe("Content route", () => {
   it("does not provision a workspace or query private Content without a session", async () => {
     mocks.getServerSession.mockResolvedValue(null);
 
-    await expect(ContentPage({ params: Promise.resolve({ locale: "en" }) })).resolves.toBeNull();
+    await expect(
+      ContentPage({ params: Promise.resolve({ locale: "en" }), searchParams: Promise.resolve({}) }),
+    ).resolves.toBeNull();
 
     expect(mocks.getOrCreateDefaultWorkspace).not.toHaveBeenCalled();
     expect(mocks.listContent).not.toHaveBeenCalled();

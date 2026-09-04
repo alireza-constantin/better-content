@@ -628,11 +628,18 @@ function IdeaCard({
                 {formatBatchDate(idea.createdAt, locale)}
               </time>
               {isAccepted ? (
-                <Badge variant="outline">
-                  {idea.contentCount === 0
-                    ? t("libraryInContentQueue")
-                    : t("libraryContentCount", { count: idea.contentCount })}
-                </Badge>
+                idea.contentCount === 0 ? (
+                  <Badge variant="outline">{t("libraryInContentQueue")}</Badge>
+                ) : (
+                  <Link
+                    className="rounded-sm focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+                    href={`/content?ideaId=${idea.id}`}
+                  >
+                    <Badge variant="outline">
+                      {t("libraryContentCount", { count: idea.contentCount })}
+                    </Badge>
+                  </Link>
+                )
               ) : null}
             </div>
             <fieldset className="flex flex-wrap gap-2">
@@ -678,13 +685,17 @@ function IdeaCard({
   );
 }
 
-function RejectReasonDialog({
+export type RejectReasonIdea = Readonly<
+  Pick<IdeaLibraryItemDto, "id" | "title" | "language" | "rejectionReason">
+>;
+
+export function RejectReasonDialog({
   idea,
   isSubmitting,
   onClose,
   onSubmit,
 }: Readonly<{
-  idea: IdeaLibraryItemDto | null;
+  idea: RejectReasonIdea | null;
   isSubmitting: boolean;
   onClose: () => void;
   onSubmit: (reason: string) => void;

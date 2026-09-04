@@ -102,3 +102,18 @@ export async function requireWorkspaceOwner(
 
   return result.workspace;
 }
+
+/**
+ * The shared short-transaction serialization point for workspace-scoped
+ * mutations. Authorization is deliberately performed by the caller before
+ * and again after this lock so the locked row is never treated as proof of
+ * access by itself.
+ */
+export async function lockWorkspaceForUpdate(
+  database: Pick<typeof db, "execute">,
+  workspaceId: string,
+): Promise<void> {
+  await database.execute(
+    sql`select ${workspaces.id} from ${workspaces} where ${eq(workspaces.id, workspaceId)} for update`,
+  );
+}

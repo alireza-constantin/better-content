@@ -9,7 +9,13 @@ import { getServerSession } from "@/lib/auth/server";
 import { ApplicationError } from "@/lib/errors/app-error";
 import { logger } from "@/lib/logging/server";
 import { decisionStateSchema, getDecisionUpdate } from "@/modules/ideas/domain";
-import { requireWorkspaceOwner } from "@/modules/workspace/application";
+import { lockWorkspaceForUpdate, requireWorkspaceOwner } from "@/modules/workspace/application";
+import {
+  appendIdeaToProductionQueueInTransaction,
+  clearIdeaProductionQueuePositionInTransaction,
+  listProductionQueueRecords,
+  normalizeProductionQueuePositionsInTransaction,
+} from "@/modules/content/application/production-queue-repository";
 
 import { findIdeaWithOwningBatchForUpdate } from "./idea-decision-repository";
 import { toIdeaDto, type IdeaDto } from "./idea-dto";
@@ -77,6 +83,7 @@ export function createIdeaDecisionApplicationService(
     await requireWorkspaceOwner(userId, parsedInput.workspaceId, database);
 
     const result = await database.transaction(async (transaction) => {
+      await lockWorkspaceForUpdate(transaction, parsedInput.workspaceId);
       await requireWorkspaceOwner(userId, parsedInput.workspaceId, transaction);
       const current = await findIdeaWithOwningBatchForUpdate(
         transaction,
@@ -128,6 +135,41 @@ export function createIdeaDecisionApplicationService(
 
       if (!updatedIdea) {
         throw new ApplicationError("INTERNAL_ERROR", "The idea decision was not updated.");
+      }
+
+      if (update.status !== currentState.data) {
+        if (update.status === "ACCEPTED") {
+          const queue = await listProductionQueueRecords(transaction, parsedInput.workspaceId);
+          const isQueueEligible = queue.some((record) => record.idea.id === current.idea.id);
+
+          if (isQueueEligible) {
+            await appendIdeaToProductionQueueInTransaction(
+              transaction,
+              parsedInput.workspaceId,
+              current.idea.id,
+            );
+          } else {
+            await clearIdeaProductionQueuePositionInTransaction(
+              transaction,
+              parsedInput.workspaceId,
+              current.idea.id,
+            );
+            await normalizeProductionQueuePositionsInTransaction(
+              transaction,
+              parsedInput.workspaceId,
+            );
+          }
+        } else {
+          await clearIdeaProductionQueuePositionInTransaction(
+            transaction,
+            parsedInput.workspaceId,
+            current.idea.id,
+          );
+          await normalizeProductionQueuePositionsInTransaction(
+            transaction,
+            parsedInput.workspaceId,
+          );
+        }
       }
 
       return { idea: updatedIdea, isNoop: false };

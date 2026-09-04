@@ -246,6 +246,7 @@ export const ideas = pgTable(
     status: text("status").notNull().default("NEW"),
     statusChangedAt: timestamp("status_changed_at", { withTimezone: true }).defaultNow().notNull(),
     rejectionReason: text("rejection_reason"),
+    productionQueuePosition: integer("production_queue_position"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -256,6 +257,10 @@ export const ideas = pgTable(
     check("ideas_position_check", sql`${table.position} BETWEEN 1 AND 20`),
     check("ideas_language_check", sql`${table.language} IN ('en', 'fa')`),
     check("ideas_status_check", sql`${table.status} IN ('NEW', 'SAVED', 'ACCEPTED', 'REJECTED')`),
+    check(
+      "ideas_production_queue_position_positive_check",
+      sql`${table.productionQueuePosition} IS NULL OR ${table.productionQueuePosition} > 0`,
+    ),
     check(
       "ideas_title_length_check",
       sql`char_length(${table.title}) BETWEEN 1 AND 120 AND ${table.title} !~ E'[\\r\\n]'`,

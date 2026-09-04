@@ -19,6 +19,14 @@ export type ContentSourceIdeaRecord = Readonly<{
   title: string;
 }>;
 
+export type ContentIdeaContextRecord = Readonly<{
+  id: string;
+  title: string;
+  description: string;
+  language: string;
+  status: string;
+}>;
+
 export type ContentListRecord = Readonly<{
   content: typeof contents.$inferSelect;
   sourceIdeaTitle: string;
@@ -66,6 +74,32 @@ export async function findSourceIdea(
   return record;
 }
 
+export async function findContentIdeaContext(
+  database: ContentReadDatabase,
+  workspaceId: string,
+  sourceIdeaId: string,
+): Promise<ContentIdeaContextRecord | undefined> {
+  const [record] = await database
+    .select({
+      id: ideas.id,
+      title: ideas.title,
+      description: ideas.description,
+      language: ideas.language,
+      status: ideas.status,
+    })
+    .from(ideas)
+    .innerJoin(
+      ideaGenerationBatches,
+      and(
+        eq(ideaGenerationBatches.id, ideas.batchId),
+        eq(ideaGenerationBatches.workspaceId, workspaceId),
+      ),
+    )
+    .where(eq(ideas.id, sourceIdeaId));
+
+  return record;
+}
+
 export async function listContent(
   database: ContentReadDatabase,
   workspaceId: string,
@@ -87,6 +121,36 @@ export async function listContent(
       ),
     )
     .where(eq(contents.workspaceId, workspaceId))
+    .orderBy(desc(contentDrafts.updatedAt), desc(contents.id));
+
+  return records;
+}
+
+export async function listContentForIdea(
+  database: ContentReadDatabase,
+  workspaceId: string,
+  sourceIdeaId: string,
+): Promise<readonly ContentDetailRecord[]> {
+  const records = await database
+    .select({
+      content: contents,
+      sourceIdea: {
+        id: ideas.id,
+        title: ideas.title,
+      },
+      draft: contentDrafts,
+    })
+    .from(contents)
+    .innerJoin(contentDrafts, eq(contentDrafts.contentId, contents.id))
+    .innerJoin(ideas, eq(ideas.id, contents.sourceIdeaId))
+    .innerJoin(
+      ideaGenerationBatches,
+      and(
+        eq(ideaGenerationBatches.id, ideas.batchId),
+        eq(ideaGenerationBatches.workspaceId, workspaceId),
+      ),
+    )
+    .where(and(eq(contents.workspaceId, workspaceId), eq(contents.sourceIdeaId, sourceIdeaId)))
     .orderBy(desc(contentDrafts.updatedAt), desc(contents.id));
 
   return records;

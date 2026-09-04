@@ -50,25 +50,28 @@ export async function ContentList({ content, locale }: ContentListProps) {
 
   return (
     <Card className="mt-8 overflow-hidden shadow-sm">
-      <CardHeader className="border-b">
+      <CardHeader className="flex-row items-baseline justify-between gap-4 border-b px-4 py-4 sm:px-6 sm:py-5">
         <CardTitle>
           <h2 className="text-xl font-semibold tracking-tight">{t("listLabel")}</h2>
         </CardTitle>
-        <CardDescription>{t("description")}</CardDescription>
+        <span className="shrink-0 text-sm tabular-nums text-muted-foreground">
+          {t("draftCount", { count: content.length })}
+        </span>
       </CardHeader>
-      <CardContent className="p-0">
-        <ul aria-label={t("listLabel")} className="divide-y divide-border">
+      <CardContent className="p-4 sm:p-5">
+        <ul aria-label={t("listLabel")} className="grid gap-3 sm:grid-cols-2 sm:gap-4">
           {content.map((item) => (
-            <li key={item.id}>
+            <li className="min-w-0" key={item.id}>
               <Link
                 aria-label={t("openEditorFor", { title: item.sourceIdeaTitle })}
-                className="group block min-h-11 px-6 py-5 outline-none transition-colors hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                className="group flex min-h-32 flex-col justify-between rounded-lg border bg-card p-4 outline-none transition-colors hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                 href={`/content/${item.id}`}
               >
                 <div className="flex items-start justify-between gap-4">
                   <h2
-                    className="min-w-0 text-lg font-semibold tracking-tight text-foreground group-hover:underline group-hover:underline-offset-4"
+                    className="min-w-0 truncate text-base font-semibold tracking-tight text-foreground group-hover:underline group-hover:underline-offset-4"
                     dir="auto"
+                    title={item.sourceIdeaTitle}
                   >
                     {item.sourceIdeaTitle}
                   </h2>
@@ -79,34 +82,18 @@ export async function ContentList({ content, locale }: ContentListProps) {
                     <ArrowUpRightIcon />
                   </span>
                 </div>
-                <dl className="mt-5 grid grid-cols-2 gap-x-5 gap-y-4 text-sm sm:grid-cols-3">
-                  <div>
-                    <dt className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                      {t("format")}
-                    </dt>
-                    <dd className="mt-1 font-medium text-foreground">
-                      {formatLabel(t, item.format)}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                      {t("contentLanguage")}
-                    </dt>
-                    <dd className="mt-1 font-medium text-foreground">
-                      {languageLabel(t, item.contentLanguage)}
-                    </dd>
-                  </div>
-                  <div className="col-span-2 sm:col-span-1">
-                    <dt className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-                      {t("lastEdited")}
-                    </dt>
-                    <dd className="mt-1 font-medium tabular-nums text-foreground">
-                      <time dateTime={item.lastEditedAt.toISOString()}>
-                        {formatDate(item.lastEditedAt, locale)}
-                      </time>
-                    </dd>
-                  </div>
-                </dl>
+                <div className="mt-5 space-y-1 text-sm">
+                  <p className="truncate text-foreground">
+                    {formatLabel(t, item.format)} <span aria-hidden="true">·</span>{" "}
+                    {languageLabel(t, item.contentLanguage)}
+                  </p>
+                  <p className="truncate text-xs text-muted-foreground">
+                    {t("editedAt")}{" "}
+                    <time dateTime={item.lastEditedAt.toISOString()}>
+                      {formatDate(item.lastEditedAt, locale)}
+                    </time>
+                  </p>
+                </div>
               </Link>
             </li>
           ))}
