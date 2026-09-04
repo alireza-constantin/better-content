@@ -7,6 +7,7 @@ export {
 } from "./content-generation-service";
 export {
   acceptContentGeneration,
+  getContentDraft,
   generateContentScript,
   getContentDetail,
   getContentGenerationAttemptDetail,
@@ -17,9 +18,11 @@ export {
   recoverStaleContentGenerationPendingAttempts,
   recoverStaleContentGenerationRunningAttempts,
   retryContentGenerationAttempt,
+  saveContentDraft,
 } from "./content-application";
 export {
   getContentDetailAction,
+  getContentDraftAction,
   getContentGenerationAttemptDetailAction,
   getContentGenerationAttemptResultAction,
   getIdeaContentGenerationHistoryAction,
@@ -27,16 +30,33 @@ export {
   listContentAction,
   retryContentGenerationAction,
   retryContentGenerationAttemptAction,
+  saveContentDraftAction,
   type ContentActionFailure,
   type ContentGenerationRetryAttemptDto,
   type GetContentDetailActionResult,
+  type GetContentDraftActionResult,
   type GetContentGenerationAttemptDetailActionResult,
   type GetContentGenerationAttemptResultActionResult,
   type GetIdeaContentGenerationHistoryActionResult,
   type GetIdeaContentUsageActionResult,
   type ListContentActionResult,
   type RetryContentGenerationAttemptActionResult,
+  type SaveContentDraftActionResult,
 } from "./content-actions";
+export {
+  createContentDraftApplicationService,
+  type ContentDraftApplicationServiceDependencies,
+  type SaveContentDraftInput,
+} from "./content-draft-service";
+export {
+  findContentDraftWriteTarget,
+  updateContentDraftIfRevisionMatches,
+} from "./content-draft-repository";
+export type {
+  ContentDraftWriteInput,
+  ContentDraftWriteTarget,
+  ContentDraftWriter,
+} from "./content-draft-repository";
 export {
   createContentReadApplicationService,
   type ContentDetailDto,

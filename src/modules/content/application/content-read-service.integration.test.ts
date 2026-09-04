@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { count, eq } from "drizzle-orm";
+import { and, count, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Pool } from "pg";
@@ -15,6 +15,7 @@ import {
 } from "@/modules/dna/domain/content-dna-payload";
 import { createContentGenerationApplicationService } from "./content-generation-service";
 import { contentScriptGenerationSettings } from "./content-generation-repository";
+import { createContentDraftApplicationService } from "./content-draft-service";
 import { createContentReadApplicationService } from "./content-read-service";
 
 vi.mock("@/db", () => ({ db: {} }));
@@ -213,10 +214,24 @@ function createGeneration(
 function createReads(
   context: Awaited<ReturnType<typeof createContext>>,
   clock: () => Date = () => new Date("2026-09-01T10:00:00.000Z"),
+  userId = context.user.id,
 ) {
   return createContentReadApplicationService({
     database,
-    getAuthenticatedUserId: async () => context.user.id,
+    getAuthenticatedUserId: async () => userId,
+    clock,
+    logger: { info: vi.fn(), warn: vi.fn() },
+  });
+}
+
+function createDrafts(
+  context: Awaited<ReturnType<typeof createContext>>,
+  clock: () => Date,
+  userId = context.user.id,
+) {
+  return createContentDraftApplicationService({
+    database,
+    getAuthenticatedUserId: async () => userId,
     clock,
     logger: { info: vi.fn(), warn: vi.fn() },
   });
@@ -330,7 +345,568 @@ afterAll(async () => {
   await pool.end();
 });
 
-describe("Content read application services", () => {
+describe("Content read and Draft application services", () => {
+  it("saves an exact-revision Draft with canonical human text and advances once", async () => {
+    const context = await createContext();
+    const generated = await createGeneration(
+      context,
+      new FakeGenerateContentScriptProvider(),
+      () => new Date("2026-09-01T10:00:00.000Z"),
+    ).generateContentScript(request(context));
+
+    if (!generated.contentId) throw new Error("Test Content was not created.");
+
+    const service = createDrafts(context, () => new Date("2026-09-01T10:01:00.000Z"));
+    const saved = await service.saveContentDraft({
+      workspaceId: context.workspace.id,
+      contentId: generated.contentId,
+      baseRevision: 1,
+      document: {
+        schemaVersion: 1,
+        script: { text: "  edited\r\ntext  " },
+      },
+    });
+
+    expect(saved).toEqual({
+      document: {
+        schemaVersion: 1,
+        script: { text: "  edited\ntext  " },
+      },
+      revision: 2,
+      updatedAt: new Date("2026-09-01T10:01:00.000Z"),
+    });
+    await expect(
+      createReads(context).getContentDetail({
+        workspaceId: context.workspace.id,
+        contentId: generated.contentId,
+      }),
+    ).resolves.toMatchObject({ draft: saved });
+  });
+
+  it("advances a Draft from revision 1 to 2 to 3 on exact saves", async () => {
+    const context = await createContext();
+    const generated = await createGeneration(
+      context,
+      new FakeGenerateContentScriptProvider(),
+      () => new Date("2026-09-01T10:00:00.000Z"),
+    ).generateContentScript(request(context));
+
+    if (!generated.contentId) throw new Error("Test Content was not created.");
+
+    let updatedAt = new Date("2026-09-01T10:01:00.000Z");
+    const service = createDrafts(context, () => updatedAt);
+    const second = await service.saveContentDraft({
+      workspaceId: context.workspace.id,
+      contentId: generated.contentId,
+      baseRevision: 1,
+      document: { schemaVersion: 1, script: { text: "Revision two" } },
+    });
+    updatedAt = new Date("2026-09-01T10:02:00.000Z");
+    const third = await service.saveContentDraft({
+      workspaceId: context.workspace.id,
+      contentId: generated.contentId,
+      baseRevision: second.revision,
+      document: { schemaVersion: 1, script: { text: "Revision three" } },
+    });
+
+    expect(second).toMatchObject({
+      document: { schemaVersion: 1, script: { text: "Revision two" } },
+      revision: 2,
+      updatedAt: new Date("2026-09-01T10:01:00.000Z"),
+    });
+    expect(third).toMatchObject({
+      document: { schemaVersion: 1, script: { text: "Revision three" } },
+      revision: 3,
+      updatedAt: new Date("2026-09-01T10:02:00.000Z"),
+    });
+    expect(third.updatedAt.getTime()).toBeGreaterThan(second.updatedAt.getTime());
+  });
+
+  it("preserves human whitespace and Unicode while accepting empty and boundary-sized text", async () => {
+    const context = await createContext();
+    const generated = await createGeneration(
+      context,
+      new FakeGenerateContentScriptProvider(),
+      () => new Date("2026-09-01T10:00:00.000Z"),
+    ).generateContentScript(request(context));
+
+    if (!generated.contentId) throw new Error("Test Content was not created.");
+
+    let revision = 1;
+    let updatedAt = new Date("2026-09-01T10:01:00.000Z");
+    const service = createDrafts(context, () => updatedAt);
+    const saves = [
+      { text: "", expected: "" },
+      { text: "x", expected: "x" },
+      {
+        text: "  فارسی / English \u200f!  \r\n\rline\n\nlast\t  ",
+        expected: "  فارسی / English \u200f!  \n\nline\n\nlast\t  ",
+      },
+      { text: "x".repeat(50_000), expected: "x".repeat(50_000) },
+    ];
+
+    for (const value of saves) {
+      const saved = await service.saveContentDraft({
+        workspaceId: context.workspace.id,
+        contentId: generated.contentId,
+        baseRevision: revision,
+        document: { schemaVersion: 1, script: { text: value.text } },
+      });
+
+      revision += 1;
+      updatedAt = new Date(updatedAt.getTime() + 60_000);
+      expect(saved).toEqual({
+        document: { schemaVersion: 1, script: { text: value.expected } },
+        revision,
+        updatedAt: new Date(updatedAt.getTime() - 60_000),
+      });
+    }
+
+    const beforeInvalidSave = await createReads(context).getContentDetail({
+      workspaceId: context.workspace.id,
+      contentId: generated.contentId,
+    });
+
+    await expect(
+      service.saveContentDraft({
+        workspaceId: context.workspace.id,
+        contentId: generated.contentId,
+        baseRevision: revision,
+        document: { schemaVersion: 1, script: { text: "x".repeat(50_001) } },
+      }),
+    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+    await expect(
+      service.saveContentDraft({
+        workspaceId: context.workspace.id,
+        contentId: generated.contentId,
+        baseRevision: revision,
+        document: {
+          schemaVersion: 1,
+          script: { text: "not persisted" },
+          unknown: true,
+        },
+      }),
+    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+    await expect(
+      service.saveContentDraft({
+        workspaceId: context.workspace.id,
+        contentId: generated.contentId,
+        baseRevision: revision,
+        document: {
+          schemaVersion: 1,
+          script: { text: "not persisted", unknown: true },
+        },
+      }),
+    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+
+    await expect(
+      createReads(context).getContentDetail({
+        workspaceId: context.workspace.id,
+        contentId: generated.contentId,
+      }),
+    ).resolves.toEqual(beforeInvalidSave);
+  });
+
+  it("requires baseRevision and rejects client-controlled Draft metadata", async () => {
+    const context = await createContext();
+    const generated = await createGeneration(
+      context,
+      new FakeGenerateContentScriptProvider(),
+      () => new Date("2026-09-01T10:00:00.000Z"),
+    ).generateContentScript(request(context));
+
+    if (!generated.contentId) throw new Error("Test Content was not created.");
+
+    const service = createDrafts(context, () => new Date("2026-09-01T10:01:00.000Z"));
+    const document = { schemaVersion: 1, script: { text: "valid" } };
+    const invalidInputs = [
+      {
+        workspaceId: context.workspace.id,
+        contentId: generated.contentId,
+        document,
+      },
+      {
+        workspaceId: context.workspace.id,
+        contentId: generated.contentId,
+        baseRevision: 0,
+        document,
+      },
+      {
+        workspaceId: context.workspace.id,
+        contentId: generated.contentId,
+        baseRevision: 1.5,
+        document,
+      },
+      {
+        workspaceId: context.workspace.id,
+        contentId: generated.contentId,
+        baseRevision: 1,
+        document,
+        newRevision: 2,
+      },
+      {
+        workspaceId: context.workspace.id,
+        contentId: generated.contentId,
+        baseRevision: 1,
+        document,
+        updatedAt: new Date(),
+      },
+    ];
+
+    for (const input of invalidInputs) {
+      await expect(service.saveContentDraft(input)).rejects.toMatchObject({
+        code: "VALIDATION_ERROR",
+      });
+    }
+  });
+
+  it("returns CONFLICT for stale and repeated stale saves without losing the winner", async () => {
+    const context = await createContext();
+    const generated = await createGeneration(
+      context,
+      new FakeGenerateContentScriptProvider(),
+      () => new Date("2026-09-01T10:00:00.000Z"),
+    ).generateContentScript(request(context));
+
+    if (!generated.contentId) throw new Error("Test Content was not created.");
+
+    let updatedAt = new Date("2026-09-01T10:01:00.000Z");
+    const service = createDrafts(context, () => updatedAt);
+    const winner = await service.saveContentDraft({
+      workspaceId: context.workspace.id,
+      contentId: generated.contentId,
+      baseRevision: 1,
+      document: { schemaVersion: 1, script: { text: "winner" } },
+    });
+    updatedAt = new Date("2026-09-01T10:02:00.000Z");
+
+    const staleInput = {
+      workspaceId: context.workspace.id,
+      contentId: generated.contentId,
+      baseRevision: 1,
+      document: { schemaVersion: 1, script: { text: "stale loser" } },
+    };
+    await expect(service.saveContentDraft(staleInput)).rejects.toMatchObject({
+      code: "CONFLICT",
+    });
+    await expect(service.saveContentDraft(staleInput)).rejects.toMatchObject({
+      code: "CONFLICT",
+    });
+
+    await expect(
+      createReads(context).getContentDetail({
+        workspaceId: context.workspace.id,
+        contentId: generated.contentId,
+      }),
+    ).resolves.toMatchObject({ draft: winner });
+  });
+
+  it("allows exactly one winner for two simultaneous revision-N saves", async () => {
+    const context = await createContext();
+    const generated = await createGeneration(
+      context,
+      new FakeGenerateContentScriptProvider(),
+      () => new Date("2026-09-01T10:00:00.000Z"),
+    ).generateContentScript(request(context));
+
+    if (!generated.contentId) throw new Error("Test Content was not created.");
+
+    const service = createDrafts(context, () => new Date("2026-09-01T10:01:00.000Z"));
+    const results = await Promise.allSettled([
+      service.saveContentDraft({
+        workspaceId: context.workspace.id,
+        contentId: generated.contentId,
+        baseRevision: 1,
+        document: { schemaVersion: 1, script: { text: "first winner candidate" } },
+      }),
+      service.saveContentDraft({
+        workspaceId: context.workspace.id,
+        contentId: generated.contentId,
+        baseRevision: 1,
+        document: { schemaVersion: 1, script: { text: "second winner candidate" } },
+      }),
+    ]);
+
+    const winners = results.filter(
+      (
+        result,
+      ): result is PromiseFulfilledResult<Awaited<ReturnType<typeof service.saveContentDraft>>> =>
+        result.status === "fulfilled",
+    );
+    const losers = results.filter(
+      (result): result is PromiseRejectedResult => result.status === "rejected",
+    );
+
+    expect(winners).toHaveLength(1);
+    expect(losers).toHaveLength(1);
+    expect(winners[0]?.value.revision).toBe(2);
+    expect(losers[0]?.reason).toMatchObject({ code: "CONFLICT" });
+
+    const detail = await createReads(context).getContentDetail({
+      workspaceId: context.workspace.id,
+      contentId: generated.contentId,
+    });
+    expect(detail.draft.revision).toBe(2);
+    expect(["first winner candidate", "second winner candidate"]).toContain(
+      detail.draft.document.script.text,
+    );
+  });
+
+  it("allows an authorized owner to read and save but rejects an unrelated user", async () => {
+    const context = await createContext();
+    const generated = await createGeneration(
+      context,
+      new FakeGenerateContentScriptProvider(),
+      () => new Date("2026-09-01T10:00:00.000Z"),
+    ).generateContentScript(request(context));
+
+    if (!generated.contentId) throw new Error("Test Content was not created.");
+
+    const unrelatedUser = await createUser();
+    const ownerRead = createReads(context);
+    const ownerDraft = createDrafts(context, () => new Date("2026-09-01T10:01:00.000Z"));
+    const unrelatedRead = createReads(context, undefined, unrelatedUser.id);
+    const unrelatedDraft = createDrafts(
+      context,
+      () => new Date("2026-09-01T10:02:00.000Z"),
+      unrelatedUser.id,
+    );
+
+    await expect(
+      ownerRead.getContentDetail({
+        workspaceId: context.workspace.id,
+        contentId: generated.contentId,
+      }),
+    ).resolves.toMatchObject({ id: generated.contentId });
+    await expect(
+      ownerDraft.saveContentDraft({
+        workspaceId: context.workspace.id,
+        contentId: generated.contentId,
+        baseRevision: 1,
+        document: { schemaVersion: 1, script: { text: "owner edit" } },
+      }),
+    ).resolves.toMatchObject({ revision: 2 });
+
+    await expect(
+      unrelatedRead.getContentDetail({
+        workspaceId: context.workspace.id,
+        contentId: generated.contentId,
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(
+      unrelatedDraft.saveContentDraft({
+        workspaceId: context.workspace.id,
+        contentId: generated.contentId,
+        baseRevision: 2,
+        document: { schemaVersion: 1, script: { text: "must not persist" } },
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
+
+  it("keeps foreign Content and forged workspace/content combinations nondisclosing", async () => {
+    const local = await createContext();
+    const foreign = await createContext();
+    const localContent = await createGeneration(
+      local,
+      new FakeGenerateContentScriptProvider(),
+      () => new Date("2026-09-01T10:00:00.000Z"),
+    ).generateContentScript(request(local));
+    const foreignContent = await createGeneration(
+      foreign,
+      new FakeGenerateContentScriptProvider(),
+      () => new Date("2026-09-01T10:00:00.000Z"),
+    ).generateContentScript(request(foreign));
+
+    if (!localContent.contentId || !foreignContent.contentId) {
+      throw new Error("Test Content was not created.");
+    }
+
+    const localDraft = createDrafts(local, () => new Date("2026-09-01T10:01:00.000Z"));
+    await expect(
+      localDraft.saveContentDraft({
+        workspaceId: local.workspace.id,
+        contentId: foreignContent.contentId,
+        baseRevision: 1,
+        document: { schemaVersion: 1, script: { text: "foreign overwrite" } },
+      }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(
+      localDraft.saveContentDraft({
+        workspaceId: foreign.workspace.id,
+        contentId: localContent.contentId,
+        baseRevision: 1,
+        document: { schemaVersion: 1, script: { text: "forged workspace" } },
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+
+    await expect(
+      createReads(foreign).getContentDetail({
+        workspaceId: foreign.workspace.id,
+        contentId: localContent.contentId,
+      }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(
+      createReads(local).getContentDetail({
+        workspaceId: local.workspace.id,
+        contentId: foreignContent.contentId,
+      }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it("mutates only the Draft and preserves immutable lineage and generated artifacts", async () => {
+    const context = await createContext();
+    const generated = await createGeneration(
+      context,
+      new FakeGenerateContentScriptProvider(),
+      () => new Date("2026-09-01T10:00:00.000Z"),
+    ).generateContentScript(request(context));
+
+    if (!generated.contentId) throw new Error("Test Content was not created.");
+
+    const [contentBefore] = await database
+      .select()
+      .from(schema.contents)
+      .where(eq(schema.contents.id, generated.contentId));
+    const [attemptBefore] = await database
+      .select()
+      .from(schema.contentGenerationAttempts)
+      .where(eq(schema.contentGenerationAttempts.id, generated.attempt.id));
+    const [runBefore] = await database
+      .select()
+      .from(schema.aiRuns)
+      .where(eq(schema.aiRuns.id, generated.attempt.aiRunId));
+    const [versionBefore] = await database
+      .select()
+      .from(schema.contentVersions)
+      .where(
+        and(
+          eq(schema.contentVersions.contentId, generated.contentId),
+          eq(schema.contentVersions.versionNumber, 1),
+        ),
+      );
+    const [ideaBefore] = await database
+      .select()
+      .from(schema.ideas)
+      .where(eq(schema.ideas.id, context.idea.id));
+    const [dnaVersionBefore] = await database
+      .select()
+      .from(schema.contentDnaVersions)
+      .where(eq(schema.contentDnaVersions.id, context.dna.versionId));
+    const versionCountBefore = await countRows(schema.contentVersions);
+
+    let updatedAt = new Date("2026-09-01T10:01:00.000Z");
+    const service = createDrafts(context, () => updatedAt);
+    await service.saveContentDraft({
+      workspaceId: context.workspace.id,
+      contentId: generated.contentId,
+      baseRevision: 1,
+      document: { schemaVersion: 1, script: { text: "Human edit one" } },
+    });
+    updatedAt = new Date("2026-09-01T10:02:00.000Z");
+    await service.saveContentDraft({
+      workspaceId: context.workspace.id,
+      contentId: generated.contentId,
+      baseRevision: 2,
+      document: { schemaVersion: 1, script: { text: "Human edit two" } },
+    });
+
+    const [contentAfter] = await database
+      .select()
+      .from(schema.contents)
+      .where(eq(schema.contents.id, generated.contentId));
+    const [attemptAfter] = await database
+      .select()
+      .from(schema.contentGenerationAttempts)
+      .where(eq(schema.contentGenerationAttempts.id, generated.attempt.id));
+    const [runAfter] = await database
+      .select()
+      .from(schema.aiRuns)
+      .where(eq(schema.aiRuns.id, generated.attempt.aiRunId));
+    const [versionAfter] = await database
+      .select()
+      .from(schema.contentVersions)
+      .where(
+        and(
+          eq(schema.contentVersions.contentId, generated.contentId),
+          eq(schema.contentVersions.versionNumber, 1),
+        ),
+      );
+    const [ideaAfter] = await database
+      .select()
+      .from(schema.ideas)
+      .where(eq(schema.ideas.id, context.idea.id));
+    const [dnaVersionAfter] = await database
+      .select()
+      .from(schema.contentDnaVersions)
+      .where(eq(schema.contentDnaVersions.id, context.dna.versionId));
+    const [draftAfter] = await database
+      .select()
+      .from(schema.contentDrafts)
+      .where(eq(schema.contentDrafts.contentId, generated.contentId));
+
+    expect(contentAfter).toEqual(contentBefore);
+    expect(attemptAfter).toEqual(attemptBefore);
+    expect(runAfter).toEqual(runBefore);
+    expect(versionAfter).toEqual(versionBefore);
+    expect(ideaAfter).toEqual(ideaBefore);
+    expect(dnaVersionAfter).toEqual(dnaVersionBefore);
+    expect(await countRows(schema.contentVersions)).toBe(versionCountBefore);
+    expect(draftAfter).toMatchObject({
+      contentId: generated.contentId,
+      document: { schemaVersion: 1, script: { text: "Human edit two" } },
+      revision: 3,
+      updatedAt: updatedAt,
+    });
+  });
+
+  it("uses Draft.updatedAt for Content-list ordering without touching Content", async () => {
+    const context = await createContext();
+    let generationTime = new Date("2026-09-01T10:00:00.000Z");
+    const first = await createGeneration(
+      context,
+      new FakeGenerateContentScriptProvider(),
+      () => generationTime,
+    ).generateContentScript(request(context));
+    generationTime = new Date("2026-09-01T10:01:00.000Z");
+    const second = await createGeneration(
+      context,
+      new FakeGenerateContentScriptProvider(),
+      () => generationTime,
+    ).generateContentScript(request(context, { requestedLanguage: "fa", format: "LONG_VIDEO" }));
+
+    if (!first.contentId || !second.contentId) throw new Error("Test Content was not created.");
+
+    const [contentBefore] = await database
+      .select()
+      .from(schema.contents)
+      .where(eq(schema.contents.id, first.contentId));
+    const reads = createReads(context);
+    await expect(reads.listContent({ workspaceId: context.workspace.id })).resolves.toMatchObject([
+      { id: second.contentId },
+      { id: first.contentId },
+    ]);
+
+    const saved = await createDrafts(
+      context,
+      () => new Date("2026-09-01T10:02:00.000Z"),
+    ).saveContentDraft({
+      workspaceId: context.workspace.id,
+      contentId: first.contentId,
+      baseRevision: 1,
+      document: { schemaVersion: 1, script: { text: "Moved to the top" } },
+    });
+
+    const ordered = await reads.listContent({ workspaceId: context.workspace.id });
+    expect(ordered.map((item) => item.id)).toEqual([first.contentId, second.contentId]);
+    expect(ordered[0]?.lastEditedAt).toEqual(saved.updatedAt);
+
+    const [contentAfter] = await database
+      .select()
+      .from(schema.contents)
+      .where(eq(schema.contents.id, first.contentId));
+    expect(contentAfter).toEqual(contentBefore);
+  });
+
   it("lists only approved metadata in Draft.updatedAt descending order and isolates workspaces", async () => {
     const context = await createContext();
     const foreign = await createContext();

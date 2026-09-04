@@ -8,12 +8,14 @@ import {
 
 import {
   getContentDetail,
+  getContentDraft,
   getContentGenerationAttemptDetail,
   getContentGenerationAttemptResult,
   getIdeaContentGenerationHistory,
   getIdeaContentUsage,
   listContent,
   retryContentGenerationAttempt,
+  saveContentDraft,
 } from "./content-application";
 import type {
   ContentGenerationAttemptDto,
@@ -21,6 +23,7 @@ import type {
 } from "./content-generation-service";
 import type {
   ContentDetailDto,
+  ContentDraftDto,
   ContentGenerationAttemptDetailDto,
   ContentListItemDto,
   IdeaContentGenerationHistoryDto,
@@ -37,6 +40,9 @@ export type ListContentActionResult =
   Readonly<{ ok: true; content: readonly ContentListItemDto[] }> | ContentActionFailure;
 export type GetContentDetailActionResult =
   Readonly<{ ok: true; content: ContentDetailDto }> | ContentActionFailure;
+export type GetContentDraftActionResult = GetContentDetailActionResult;
+export type SaveContentDraftActionResult =
+  Readonly<{ ok: true; draft: ContentDraftDto }> | ContentActionFailure;
 export type GetIdeaContentGenerationHistoryActionResult =
   Readonly<{ ok: true; history: IdeaContentGenerationHistoryDto }> | ContentActionFailure;
 export type GetContentGenerationAttemptDetailActionResult =
@@ -105,6 +111,29 @@ export async function getContentDetailAction(
 ): Promise<GetContentDetailActionResult> {
   try {
     return { ok: true, content: await getContentDetail(input) };
+  } catch (error) {
+    return failureFrom(error);
+  }
+}
+
+/**
+ * Editor read alias for the Ticket 07 Content-detail DTO. It intentionally
+ * shares the same authorized service and result shape rather than creating a
+ * second Content-detail abstraction.
+ */
+export async function getContentDraftAction(input: unknown): Promise<GetContentDraftActionResult> {
+  try {
+    return { ok: true, content: await getContentDraft(input) };
+  } catch (error) {
+    return failureFrom(error);
+  }
+}
+
+export async function saveContentDraftAction(
+  input: unknown,
+): Promise<SaveContentDraftActionResult> {
+  try {
+    return { ok: true, draft: await saveContentDraft(input) };
   } catch (error) {
     return failureFrom(error);
   }

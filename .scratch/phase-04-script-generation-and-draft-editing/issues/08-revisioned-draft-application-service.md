@@ -4,7 +4,7 @@
 
 **Blocked by:** 02 — Establish Content-generation persistence and database invariants.
 
-**Status:** ready-for-agent
+**Status:** claimed
 
 ## Goal
 
@@ -96,3 +96,31 @@ npm run test
 npm run build
 git diff --check
 ```
+
+## Comments
+
+Implemented the feasible Ticket 08 scope in the Content application module.
+
+- Added the owner-authorized Draft save service and conditional repository
+  update. Saves accept only `workspaceId`, `contentId`, `baseRevision`, and a
+  schema-v1 document; the database row returned by the exact-revision update
+  proves the winner, and only `document`, `revision`, and `updatedAt` change.
+- Reused Ticket 07's authorized `ContentDetailDto` as the Draft/editor read
+  boundary and added minimal action result mappings for read and save.
+- Reused Ticket 01 human canonicalization exactly: strict keys, LF
+  normalization, preserved intentional whitespace, empty text allowed, and a
+  50,000-character maximum.
+- Added deterministic unit and PostgreSQL integration coverage for revision
+  advancement, stale/repeated stale saves, simultaneous winners, validation,
+  authorization/isolation, immutable generated artifacts, and Content-list
+  ordering through `Draft.updatedAt`.
+- No database migration was needed, and no UI, autosave, generation, retry,
+  acceptance, Version creation, or Phase 5 behavior was added.
+
+The ticket remains `claimed` rather than `resolved`: its requested
+non-owner-member save-denial integration case cannot be represented under the
+current V1 source of truth. `workspace_members.role` has the existing
+`workspace_members_owner_role_check` constraint requiring every role to be
+`owner` (`src/db/schema/workspace.ts`), consistent with the accepted V1
+owner-only policy. Adding a non-owner role or migration would be an
+unapproved architecture change outside Ticket 08.
