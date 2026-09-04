@@ -49,17 +49,18 @@ import {
   retryContentGenerationAttemptAction,
 } from "@/modules/content/application/content-actions";
 import type {
-  IdeaGenerationBatchDetailDto,
   IdeaGenerationBatchHistoryDto,
   IdeaGenerationBatchHistoryResult,
+  IdeaLibraryDto,
+  IdeaLibraryItemDto,
 } from "@/modules/ideas/application";
-import type { IdeaDto } from "@/modules/ideas/application";
 
 import {
   generateIdeasAction,
   retryIdeaGenerationAction,
   updateIdeaDecisionAction,
 } from "../application/ideas-actions";
+import { ideaLibraryHref, type IdeaLibraryView } from "./idea-library-url-state";
 import {
   ContentAttemptHistory,
   ContentGenerationActionNotice,
@@ -74,7 +75,7 @@ type IdeasWorkspaceProps = Readonly<{
   dna: IdeasDnaSummary;
   contentGenerationHistory?: IdeasContentGenerationHistory;
   initialHistory: IdeaGenerationBatchHistoryResult;
-  initialDetail: IdeaGenerationBatchDetailDto | null;
+  initialLibrary: IdeaLibraryDto;
 }>;
 
 type ActiveOperation = "generate" | "retry" | null;
@@ -128,7 +129,7 @@ function contentPresentation(language: IdeasLanguage): Readonly<{
     : { dir: "ltr", fontClassName: "font-content-english" };
 }
 
-function DecisionStatus({ status }: Readonly<{ status: IdeaDto["status"] }>) {
+function DecisionStatus({ status }: Readonly<{ status: IdeaLibraryItemDto["status"] }>) {
   const t = useTranslations("Ideas");
 
   const label =
@@ -177,8 +178,8 @@ function LifecycleBadge({ status }: Readonly<{ status: IdeaGenerationBatchHistor
 
 function failureDescription(
   t: ReturnType<typeof useTranslations>,
-  errorCategory: IdeaGenerationBatchDetailDto["errorCategory"],
-  rateLimitSource: IdeaGenerationBatchDetailDto["rateLimitSource"],
+  errorCategory: IdeaGenerationBatchHistoryDto["errorCategory"],
+  rateLimitSource: IdeaGenerationBatchHistoryDto["rateLimitSource"],
 ): string {
   switch (errorCategory) {
     case "RATE_LIMITED":
@@ -403,72 +404,172 @@ function GenerationPanel({
   );
 }
 
-function HistoryList({
+function LibraryFilters({
   batches,
   selectedBatchId,
+  statusFilter,
+  isBusy,
+  activeOperation,
+  onRetry,
 }: Readonly<{
   batches: readonly IdeaGenerationBatchHistoryDto[];
   selectedBatchId: string | null;
+  statusFilter: IdeaLibraryDto["statusFilter"];
+  isBusy: boolean;
+  activeOperation: ActiveOperation;
+  onRetry: (batchId: string) => void;
 }>) {
   const t = useTranslations("Ideas");
   const locale = useLocale();
+  const selectedBatch = batches.find((batch) => batch.id === selectedBatchId) ?? null;
+  const views: readonly Readonly<{
+    value: IdeaLibraryView;
+    statusFilter: IdeaLibraryDto["statusFilter"];
+    label: string;
+  }>[] = [
+    { value: "all", statusFilter: "ALL", label: t("libraryViewAll") },
+    { value: "new", statusFilter: "NEW", label: t("libraryViewNew") },
+    { value: "saved", statusFilter: "SAVED", label: t("libraryViewSaved") },
+    { value: "accepted", statusFilter: "ACCEPTED", label: t("libraryViewAccepted") },
+    { value: "rejected", statusFilter: "REJECTED", label: t("libraryViewRejected") },
+  ];
 
   return (
-    <aside className="min-w-0 lg:w-72 lg:shrink-0" aria-labelledby="ideas-history-title">
-      <div className="flex items-end justify-between gap-3 border-b border-border pb-4">
-        <div>
-          <p className="text-xs font-medium tracking-[0.16em] text-muted-foreground uppercase">
-            {t("historyEyebrow")}
-          </p>
-          <h2 className="mt-2 text-xl font-semibold tracking-tight" id="ideas-history-title">
-            {t("historyTitle")}
-          </h2>
-        </div>
-      </div>
+    <aside
+      className="min-w-0 rounded-xl border bg-card p-4 shadow-sm lg:order-1 lg:w-72 lg:shrink-0"
+      aria-label={t("libraryFiltersLabel")}
+    >
+      <nav aria-labelledby="ideas-status-filter-title">
+        <p className="text-xs font-medium tracking-[0.16em] text-muted-foreground uppercase">
+          {t("libraryStatusEyebrow")}
+        </p>
+        <h2 className="mt-2 text-lg font-semibold tracking-tight" id="ideas-status-filter-title">
+          {t("libraryStatusTitle")}
+        </h2>
+        <ul className="mt-3 grid gap-1">
+          {views.map((view) => (
+            <li key={view.value}>
+              <Link
+                aria-current={statusFilter === view.statusFilter ? "page" : undefined}
+                className={`flex min-h-10 items-center rounded-md px-3 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${statusFilter === view.statusFilter ? "bg-muted text-foreground" : "text-muted-foreground"}`}
+                href={ideaLibraryHref({
+                  statusFilter: view.statusFilter,
+                  batchId: selectedBatchId,
+                })}
+              >
+                {view.label}
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </nav>
 
-      {batches.length === 0 ? (
-        <div className="pt-5">
-          <p className="text-sm font-medium text-foreground">{t("historyEmptyTitle")}</p>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">
+      <div className="mt-6 border-t pt-6">
+        <p className="text-xs font-medium tracking-[0.16em] text-muted-foreground uppercase">
+          {t("historyEyebrow")}
+        </p>
+        <h2 className="mt-2 text-lg font-semibold tracking-tight" id="ideas-history-title">
+          {t("libraryRunsTitle")}
+        </h2>
+        <Link
+          aria-current={selectedBatchId === null ? "page" : undefined}
+          className={`mt-3 flex min-h-10 items-center rounded-md px-3 text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${selectedBatchId === null ? "bg-muted text-foreground" : "text-muted-foreground"}`}
+          href={ideaLibraryHref({ statusFilter, batchId: null })}
+        >
+          {t("libraryAllRuns")}
+        </Link>
+
+        {batches.length === 0 ? (
+          <p className="mt-4 text-sm leading-6 text-muted-foreground">
             {t("historyEmptyDescription")}
           </p>
-        </div>
-      ) : (
-        <ol className="mt-4 grid gap-2">
-          {batches.map((batch) => {
-            const isSelected = batch.id === selectedBatchId;
+        ) : (
+          <ol className="mt-2 grid gap-1">
+            {batches.map((batch) => {
+              const isSelected = batch.id === selectedBatchId;
 
-            return (
-              <li key={batch.id}>
-                <Link
-                  aria-current={isSelected ? "page" : undefined}
-                  className={`group block rounded-lg border px-4 py-3 transition-[background-color,border-color,box-shadow] hover:border-foreground/30 hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${isSelected ? "border-foreground/30 bg-muted/60 shadow-sm" : "bg-card"}`}
-                  href={`/ideas?batchId=${batch.id}`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <span className="min-w-0 truncate text-sm font-medium">
-                      {t("batchLabel", { number: batch.contentDnaVersionNumber })}
-                    </span>
-                    <LifecycleBadge status={batch.status} />
-                  </div>
-                  <div className="mt-3 grid gap-1 text-xs text-muted-foreground">
-                    <time dateTime={batch.createdAt.toISOString()} suppressHydrationWarning>
-                      {formatBatchDate(batch.createdAt, locale)}
-                    </time>
-                    <span className="flex flex-wrap gap-x-2 gap-y-1">
-                      <span>{languageLabel(t, batch.requestedLanguage)}</span>
-                      <span aria-hidden="true">·</span>
-                      <span className="tabular-nums">
-                        {t("ideaCount", { count: batch.ideaCount })}
+              return (
+                <li key={batch.id}>
+                  <Link
+                    aria-current={isSelected ? "page" : undefined}
+                    className={`group block rounded-md px-3 py-2.5 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50 ${isSelected ? "bg-muted text-foreground" : "text-muted-foreground"}`}
+                    href={ideaLibraryHref({ statusFilter, batchId: batch.id })}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <span className="min-w-0 truncate text-sm font-medium">
+                        {t("batchLabel", { number: batch.contentDnaVersionNumber })}
                       </span>
-                    </span>
-                  </div>
-                </Link>
-              </li>
-            );
-          })}
-        </ol>
-      )}
+                      <LifecycleBadge status={batch.status} />
+                    </div>
+                    <div className="mt-2 grid gap-1 text-xs text-muted-foreground">
+                      <time dateTime={batch.createdAt.toISOString()} suppressHydrationWarning>
+                        {formatBatchDate(batch.createdAt, locale)}
+                      </time>
+                      <span className="flex flex-wrap gap-x-2 gap-y-1">
+                        <span>{languageLabel(t, batch.requestedLanguage)}</span>
+                        <span aria-hidden="true">·</span>
+                        <span className="tabular-nums">
+                          {t("ideaCount", { count: batch.ideaCount })}
+                        </span>
+                      </span>
+                    </div>
+                  </Link>
+                </li>
+              );
+            })}
+          </ol>
+        )}
+      </div>
+
+      {selectedBatch ? (
+        <div className="mt-6 border-t pt-5" aria-labelledby="ideas-selected-run-title">
+          <p className="text-xs font-medium tracking-[0.16em] text-muted-foreground uppercase">
+            {t("librarySelectedRunEyebrow")}
+          </p>
+          <h2 className="mt-2 text-sm font-semibold" id="ideas-selected-run-title">
+            {t("batchLabel", { number: selectedBatch.contentDnaVersionNumber })}
+          </h2>
+          <div className="mt-3 grid gap-2 text-xs text-muted-foreground">
+            <LifecycleBadge status={selectedBatch.status} />
+            <time dateTime={selectedBatch.createdAt.toISOString()} suppressHydrationWarning>
+              {formatBatchDate(selectedBatch.createdAt, locale)}
+            </time>
+            <span>
+              {t("batchMeta", {
+                version: selectedBatch.contentDnaVersionNumber,
+                language: languageLabel(t, selectedBatch.requestedLanguage),
+              })}
+            </span>
+            <span className="tabular-nums">
+              {t("ideaCount", { count: selectedBatch.ideaCount })}
+            </span>
+          </div>
+          {selectedBatch.status === "FAILED" ? (
+            <Alert className="mt-4" variant="destructive">
+              <AlertCircleIcon />
+              <AlertDescription>
+                <p>
+                  {failureDescription(
+                    t,
+                    selectedBatch.errorCategory,
+                    selectedBatch.rateLimitSource,
+                  )}
+                </p>
+                <Button
+                  className="mt-3 min-h-11"
+                  disabled={isBusy}
+                  onClick={() => onRetry(selectedBatch.id)}
+                  size="sm"
+                  type="button"
+                >
+                  <RefreshCwIcon data-icon="inline-start" />
+                  {activeOperation === "retry" ? t("retrying") : t("retry")}
+                </Button>
+              </AlertDescription>
+            </Alert>
+          ) : null}
+        </div>
+      ) : null}
     </aside>
   );
 }
@@ -484,12 +585,12 @@ function IdeaCard({
   onRetryContentGeneration,
 }: Readonly<{
   activeRetryAttemptId: string | null;
-  idea: IdeaDto;
+  idea: IdeaLibraryItemDto;
   isBusy: boolean;
   contentGenerationHistory: IdeasContentGenerationHistory;
-  onDecision: (idea: IdeaDto, nextState: "ACCEPTED" | "SAVED") => void;
-  onGenerateScript: (idea: IdeaDto, trigger: HTMLButtonElement) => void;
-  onReject: (idea: IdeaDto, trigger: HTMLButtonElement) => void;
+  onDecision: (idea: IdeaLibraryItemDto, nextState: "ACCEPTED" | "SAVED") => void;
+  onGenerateScript: (idea: IdeaLibraryItemDto, trigger: HTMLButtonElement) => void;
+  onReject: (idea: IdeaLibraryItemDto, trigger: HTMLButtonElement) => void;
   onRetryContentGeneration: (ideaId: string, attemptId: string) => void;
 }>) {
   const t = useTranslations("Ideas");
@@ -542,6 +643,22 @@ function IdeaCard({
         ) : null}
         <div className="mt-5 border-t border-border pt-4">
           <div className="grid gap-4">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <span>
+                {t("libraryIdeaProvenance", { version: idea.batch.contentDnaVersionNumber })}
+              </span>
+              <span aria-hidden="true">·</span>
+              <time dateTime={idea.createdAt.toISOString()} suppressHydrationWarning>
+                {formatBatchDate(idea.createdAt, locale)}
+              </time>
+              {isAccepted ? (
+                <Badge variant="outline">
+                  {idea.contentCount === 0
+                    ? t("libraryNoContent")
+                    : t("libraryContentCount", { count: idea.contentCount })}
+                </Badge>
+              ) : null}
+            </div>
             <fieldset className="flex flex-wrap gap-2">
               <legend className="sr-only">{t("decisionActionsLabel")}</legend>
               <Button
@@ -612,7 +729,7 @@ function RejectReasonDialog({
   onClose,
   onSubmit,
 }: Readonly<{
-  idea: IdeaDto | null;
+  idea: IdeaLibraryItemDto | null;
   isSubmitting: boolean;
   onClose: () => void;
   onSubmit: (reason: string) => void;
@@ -748,135 +865,75 @@ function RejectReasonDialog({
   );
 }
 
-function DetailPanel({
+function LibraryResults({
   activeContentOperation,
   contentGenerationHistory,
-  detail,
+  ideas,
+  statusFilter,
   isBusy,
-  activeOperation,
   onGenerateScript,
-  onRetry,
   onRetryContentGeneration,
   onDecision,
   onReject,
 }: Readonly<{
   activeContentOperation: ActiveContentOperation;
   contentGenerationHistory: IdeasContentGenerationHistory;
-  detail: IdeaGenerationBatchDetailDto | null;
+  ideas: readonly IdeaLibraryItemDto[];
+  statusFilter: IdeaLibraryDto["statusFilter"];
   isBusy: boolean;
-  activeOperation: ActiveOperation;
-  onGenerateScript: (idea: IdeaDto, trigger: HTMLButtonElement) => void;
-  onRetry: (batchId: string) => void;
+  onGenerateScript: (idea: IdeaLibraryItemDto, trigger: HTMLButtonElement) => void;
   onRetryContentGeneration: (ideaId: string, attemptId: string) => void;
-  onDecision: (idea: IdeaDto, nextState: "ACCEPTED" | "SAVED") => void;
-  onReject: (idea: IdeaDto, trigger: HTMLButtonElement) => void;
+  onDecision: (idea: IdeaLibraryItemDto, nextState: "ACCEPTED" | "SAVED") => void;
+  onReject: (idea: IdeaLibraryItemDto, trigger: HTMLButtonElement) => void;
 }>) {
   const t = useTranslations("Ideas");
-
-  if (!detail) {
-    return (
-      <Card className="border-dashed shadow-none">
-        <CardHeader>
-          <h3 className="font-semibold leading-none tracking-tight">{t("detailEmptyTitle")}</h3>
-          <CardDescription className="leading-6">{t("detailEmptyDescription")}</CardDescription>
-        </CardHeader>
-      </Card>
-    );
-  }
-
-  const isActive = detail.status === "PENDING" || detail.status === "RUNNING";
 
   return (
     <section aria-labelledby="ideas-detail-title" className="min-w-0">
       <div className="flex flex-col gap-4 border-b border-border pb-5 sm:flex-row sm:items-end sm:justify-between">
         <div className="min-w-0">
           <p className="text-xs font-medium tracking-[0.16em] text-muted-foreground uppercase">
-            {t("detailEyebrow")}
+            {t("libraryResultsEyebrow")}
           </p>
           <h2
             className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl"
             id="ideas-detail-title"
           >
-            {detail.status === "COMPLETED"
-              ? t("detailTitle", { count: detail.ideas.length })
-              : detail.status === "FAILED"
-                ? t("failedTitle")
-                : t("activeTitle")}
+            {t("libraryResultsTitle")}
           </h2>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {t("batchMeta", {
-              version: detail.contentDnaVersionNumber,
-              language: languageLabel(t, detail.requestedLanguage),
-            })}
-          </p>
+          <p className="mt-2 text-sm text-muted-foreground">{t("libraryResultsDescription")}</p>
         </div>
-        <LifecycleBadge status={detail.status} />
+        <Badge variant="outline">{t(`libraryStatus${statusFilter}`)}</Badge>
       </div>
 
-      {isActive ? (
-        <Card
-          className="mt-6 border-dashed bg-muted/30 shadow-none"
-          role="status"
-          aria-live="polite"
-        >
-          <CardContent className="flex items-start gap-4 p-6">
-            <LoaderCircleIcon
-              aria-hidden="true"
-              className="mt-0.5 size-5 shrink-0 motion-safe:animate-spin"
-            />
-            <div>
-              <h3 className="font-semibold">{t("activeTitle")}</h3>
-              <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                {detail.status === "PENDING" ? t("pendingDescription") : t("runningDescription")}
-              </p>
-            </div>
-          </CardContent>
+      {ideas.length === 0 ? (
+        <Card className="mt-6 border-dashed shadow-none">
+          <CardHeader>
+            <h3 className="font-semibold leading-none tracking-tight">{t("libraryEmptyTitle")}</h3>
+            <CardDescription className="leading-6">{t("libraryEmptyDescription")}</CardDescription>
+          </CardHeader>
         </Card>
-      ) : detail.status === "FAILED" ? (
-        <Alert className="mt-6" variant="destructive">
-          <AlertCircleIcon />
-          <AlertTitle>{t("failedTitle")}</AlertTitle>
-          <AlertDescription>
-            <p>{failureDescription(t, detail.errorCategory, detail.rateLimitSource)}</p>
-            {detail.canRetry ? (
-              <Button
-                className="mt-4 min-h-11"
-                disabled={isBusy}
-                onClick={() => onRetry(detail.id)}
-                type="button"
-              >
-                <RefreshCwIcon data-icon="inline-start" />
-                {activeOperation === "retry" ? t("retrying") : t("retry")}
-              </Button>
-            ) : null}
-          </AlertDescription>
-        </Alert>
       ) : (
-        <>
-          <p className="mt-6 text-sm leading-6 text-muted-foreground">
-            {t("completedDescription")}
-          </p>
-          <ol className="mt-6 grid gap-4 sm:grid-cols-2" aria-label={t("ideasListLabel")}>
-            {detail.ideas.map((idea) => (
-              <IdeaCard
-                contentGenerationHistory={contentGenerationHistory}
-                activeRetryAttemptId={
-                  activeContentOperation?.kind === "retry" &&
-                  activeContentOperation.ideaId === idea.id
-                    ? activeContentOperation.attemptId
-                    : null
-                }
-                isBusy={isBusy}
-                idea={idea}
-                key={idea.id}
-                onDecision={onDecision}
-                onGenerateScript={onGenerateScript}
-                onReject={onReject}
-                onRetryContentGeneration={onRetryContentGeneration}
-              />
-            ))}
-          </ol>
-        </>
+        <ol className="mt-6 grid gap-4 sm:grid-cols-2" aria-label={t("ideasListLabel")}>
+          {ideas.map((idea) => (
+            <IdeaCard
+              contentGenerationHistory={contentGenerationHistory}
+              activeRetryAttemptId={
+                activeContentOperation?.kind === "retry" &&
+                activeContentOperation.ideaId === idea.id
+                  ? activeContentOperation.attemptId
+                  : null
+              }
+              isBusy={isBusy}
+              idea={idea}
+              key={idea.id}
+              onDecision={onDecision}
+              onGenerateScript={onGenerateScript}
+              onReject={onReject}
+              onRetryContentGeneration={onRetryContentGeneration}
+            />
+          ))}
+        </ol>
       )}
     </section>
   );
@@ -887,18 +944,11 @@ export function IdeasWorkspace({
   dna,
   contentGenerationHistory = {},
   initialHistory,
-  initialDetail,
+  initialLibrary,
 }: IdeasWorkspaceProps) {
   const t = useTranslations("Ideas");
   const router = useRouter();
   const locale = useLocale();
-  const [history, setHistory] = useState<readonly IdeaGenerationBatchHistoryDto[]>(
-    initialHistory.batches,
-  );
-  const [selectedBatchId, setSelectedBatchId] = useState<string | null>(
-    initialHistory.selectedBatchId,
-  );
-  const [detail, setDetail] = useState<IdeaGenerationBatchDetailDto | null>(initialDetail);
   const [requestedLanguage, setRequestedLanguage] = useState<IdeasLanguage>(() => {
     const currentVersion = dna.currentVersion;
     return currentVersion?.defaultContentLanguage ?? currentVersion?.contentLanguages[0] ?? "en";
@@ -909,33 +959,23 @@ export function IdeasWorkspace({
   const [pendingDecisionId, setPendingDecisionId] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [contentNotice, setContentNotice] = useState<ContentGenerationNotice | null>(null);
-  const [generatingIdea, setGeneratingIdea] = useState<IdeaDto | null>(null);
-  const [rejectingIdea, setRejectingIdea] = useState<IdeaDto | null>(null);
+  const [generatingIdea, setGeneratingIdea] = useState<IdeaLibraryItemDto | null>(null);
+  const [rejectingIdea, setRejectingIdea] = useState<IdeaLibraryItemDto | null>(null);
   const generationButtonRef = useRef<HTMLButtonElement | null>(null);
   const restoreGenerationFocus = useRef(false);
   const generateScriptTriggerRef = useRef<HTMLButtonElement | null>(null);
   const rejectTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [isPending, startTransition] = useTransition();
-  const serverDataSignature = `${initialHistory.selectedBatchId}|${initialHistory.batches.map((batch) => `${batch.id}:${batch.status}:${batch.ideaCount}`).join(",")}|${initialDetail?.id ?? "none"}:${initialDetail?.status ?? "none"}:${initialDetail?.ideas.length ?? 0}`;
-  const lastServerDataSignature = useRef(serverDataSignature);
-
   useEffect(() => {
-    if (serverDataSignature === lastServerDataSignature.current) {
+    if (!restoreGenerationFocus.current) {
       return;
     }
 
-    lastServerDataSignature.current = serverDataSignature;
-    setHistory(initialHistory.batches);
-    setSelectedBatchId(initialHistory.selectedBatchId);
-    setDetail(initialDetail);
+    restoreGenerationFocus.current = false;
+    const focusTimer = window.setTimeout(() => generationButtonRef.current?.focus(), 0);
 
-    if (restoreGenerationFocus.current) {
-      restoreGenerationFocus.current = false;
-      const focusTimer = window.setTimeout(() => generationButtonRef.current?.focus(), 0);
-
-      return () => window.clearTimeout(focusTimer);
-    }
-  }, [initialDetail, initialHistory.batches, initialHistory.selectedBatchId, serverDataSignature]);
+    return () => window.clearTimeout(focusTimer);
+  }, [initialLibrary]);
 
   const isBusy = isPending || pendingDecisionId !== null || activeContentOperation !== null;
   const currentVersion = dna.currentVersion;
@@ -1020,7 +1060,7 @@ export function IdeasWorkspace({
     });
   }
 
-  function openContentGenerationDialog(idea: IdeaDto, trigger: HTMLButtonElement) {
+  function openContentGenerationDialog(idea: IdeaLibraryItemDto, trigger: HTMLButtonElement) {
     if (idea.status !== "ACCEPTED" || dna.status !== "AI_READY" || !currentVersion) {
       return;
     }
@@ -1130,7 +1170,7 @@ export function IdeasWorkspace({
     });
   }
 
-  function handleDecision(idea: IdeaDto, nextState: "ACCEPTED" | "SAVED") {
+  function handleDecision(idea: IdeaLibraryItemDto, nextState: "ACCEPTED" | "SAVED") {
     setNotice(null);
     setPendingDecisionId(idea.id);
     startTransition(async () => {
@@ -1146,17 +1186,8 @@ export function IdeasWorkspace({
           return;
         }
 
-        setDetail((currentDetail) =>
-          currentDetail
-            ? {
-                ...currentDetail,
-                ideas: currentDetail.ideas.map((currentIdea) =>
-                  currentIdea.id === result.idea.id ? result.idea : currentIdea,
-                ),
-              }
-            : currentDetail,
-        );
         setNotice({ kind: "success", message: "decisionSuccess" });
+        router.refresh();
       } catch {
         setNotice({ kind: "error", code: "INTERNAL_ERROR" });
       } finally {
@@ -1165,7 +1196,7 @@ export function IdeasWorkspace({
     });
   }
 
-  function openRejectDialog(idea: IdeaDto, trigger: HTMLButtonElement) {
+  function openRejectDialog(idea: IdeaLibraryItemDto, trigger: HTMLButtonElement) {
     rejectTriggerRef.current = trigger;
     setRejectingIdea(idea);
   }
@@ -1241,18 +1272,9 @@ export function IdeasWorkspace({
           return;
         }
 
-        setDetail((currentDetail) =>
-          currentDetail
-            ? {
-                ...currentDetail,
-                ideas: currentDetail.ideas.map((currentIdea) =>
-                  currentIdea.id === result.idea.id ? result.idea : currentIdea,
-                ),
-              }
-            : currentDetail,
-        );
         setNotice({ kind: "success", message: "decisionSuccess" });
         closeRejectDialog();
+        router.refresh();
       } catch {
         setNotice({ kind: "error", code: "INTERNAL_ERROR" });
       } finally {
@@ -1300,22 +1322,28 @@ export function IdeasWorkspace({
         </p>
       ) : null}
 
-      <div className="flex flex-col gap-10 lg:flex-row lg:items-start lg:gap-12">
-        <HistoryList batches={history} selectedBatchId={selectedBatchId} />
-        <div className="min-w-0 flex-1">
-          <DetailPanel
+      <div className="grid gap-8 lg:grid-cols-[18rem_minmax(0,1fr)] lg:items-start lg:gap-12">
+        <div className="order-1 min-w-0 lg:order-2">
+          <LibraryResults
             activeContentOperation={activeContentOperation}
-            activeOperation={activeOperation}
             contentGenerationHistory={contentGenerationHistory}
-            detail={detail}
+            ideas={initialLibrary.ideas}
             isBusy={isBusy}
             onDecision={handleDecision}
             onGenerateScript={openContentGenerationDialog}
             onReject={openRejectDialog}
-            onRetry={handleRetry}
             onRetryContentGeneration={handleContentGenerationRetry}
+            statusFilter={initialLibrary.statusFilter}
           />
         </div>
+        <LibraryFilters
+          activeOperation={activeOperation}
+          batches={initialHistory.batches}
+          isBusy={isBusy}
+          onRetry={handleRetry}
+          selectedBatchId={initialLibrary.generationBatchId}
+          statusFilter={initialLibrary.statusFilter}
+        />
       </div>
 
       <RejectReasonDialog

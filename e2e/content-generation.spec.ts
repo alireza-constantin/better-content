@@ -41,7 +41,7 @@ async function createReadyContentDna(
 async function generateAndAcceptFirstIdea(page: Page): Promise<void> {
   await page.goto("/en/ideas");
   await page.getByRole("button", { name: "Generate 20 Ideas" }).click();
-  await expect(page.getByRole("heading", { name: "20 ideas to work through" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Ideas", exact: true })).toBeVisible();
   const card = page.locator("article").first();
   await card.getByRole("button", { name: "Accept" }).click();
   await expect(card.getByText("Accepted", { exact: true })).toBeVisible();
@@ -253,7 +253,7 @@ test("only accepted Ideas expose Script generation", async ({ page }) => {
   await createReadyContentDna(page);
   await page.goto("/en/ideas");
   await page.getByRole("button", { name: "Generate 20 Ideas" }).click();
-  await expect(page.getByRole("heading", { name: "20 ideas to work through" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Ideas", exact: true })).toBeVisible();
 
   const card = page.locator("article").first();
   await expect(card.getByRole("button", { name: "Generate Script" })).toHaveCount(0);

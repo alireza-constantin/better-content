@@ -18,11 +18,14 @@ A plain mutable text record would destroy the distinction between provider outpu
 
 ## 3. Solution
 
-Phase 4 adds an explicit, durable, Script-only generation workflow:
+Phase 4 adds an explicit, durable, Script-only generation workflow and a
+compact Idea → Queue → Content workflow:
 
 ~~~text
-ACCEPTED Idea
-  ↓ explicit creator action
+Idea Library
+  ↓ Accept
+Content Production Queue
+  ↓ prioritize + explicit creator action
 Content Generation Attempt
   ↓ exactly one
 AI Run
@@ -32,25 +35,44 @@ Content
   └── immutable AI-generated Content Version #1
 ~~~
 
-The Attempt preserves immutable business inputs. The AI Run preserves safe operational configuration and canonical validated output. A successful terminal transaction creates Content, Draft, and Version #1 atomically. Human edits affect only the Draft and autosave through optimistic revision control.
+The Attempt preserves immutable business inputs. The AI Run preserves safe operational configuration and canonical validated output. A successful terminal transaction creates Content, Draft, and Version #1 atomically. Human edits affect only the Draft and autosave through optimistic revision control. The primary first-generation form is presented by the Content Production Queue, not expanded into every Idea Library card. The Content surface also contains the Generated Content Library and a narrow source-Idea filter.
 
-Performance Direction, Edit Direction, structured blocks, anchors, acceptance, publishing, and AI editing remain outside Phase 4.
+All future Production Queue position mutations use one common workspace-scoped
+serialization rule. The short mutation transaction locks the authorized
+workspace row first, then locks the operation's existing Idea, Generation
+Batch, AI Run, Content, Draft, Version, or quota rows in their established
+deterministic order. This applies to queue append, reorder, queued decision
+changes, first successful Content completion, and any other transition that
+changes derived queue membership. `productionQueuePosition` remains ordering
+metadata only; membership remains `ACCEPTED && linked Content count = 0`.
+
+Ticket 06's successful Content/Draft/Version #1/AI Run transaction must acquire
+the same workspace serialization point before its generation-pair locks and
+clear the source Idea's queue position within that same atomic success
+transaction. This preserves Ticket 06's all-or-nothing success invariant.
+Provider work remains outside the transaction.
+
+Performance Direction, Edit Direction, structured blocks, anchors, Content acceptance, publishing, and AI editing remain outside Phase 4.
 
 ## 4. Source-of-truth dependencies
 
 The authoritative repository documents form a source-of-truth set: `docs/PRD.md`, `docs/ARCHITECTURE.md`, accepted ADRs, approved phase specifications, `AGENTS.md`, and `docs/agents/frontend-standards.md`. They must be read together. Where an accepted ADR explicitly supersedes an earlier decision for a defined scope, that supersession governs the specific conflict without discarding unaffected decisions in the earlier document.
 
-ADR-003, ADR-004, ADR-005, ADR-010, ADR-011, ADR-012, ADR-014, ADR-015, and accepted ADR-016 are especially relevant. Section 34 records the Product Architect-approved reconciliation applied to this source-of-truth set.
+ADR-003, ADR-004, ADR-005, ADR-010, ADR-011, ADR-012, ADR-014, ADR-015,
+ADR-016, and accepted ADR-017 are especially relevant. Section 34 records the
+Product Architect-approved reconciliation applied to this source-of-truth set.
 
 The corrected Phase 3 Ideas specification is also a dependency: `/ideas` is
-one workspace-wide Idea Library with combined status and Past Runs filters.
-Generation batches remain separate provenance/history entities exposed within
-that Library. Phase 4 consumes that Ideas surface and does not redefine its
-four persisted decision states, derived `USED` rule, or ownership model.
+one compact workspace-wide Idea Library with combined status and Past Runs
+filters. Generation batches remain separate provenance/history entities exposed
+within that Library. Phase 4 consumes that Ideas surface and does not redefine
+its four persisted decision states, derived `USED` rule, or ownership model.
+Ticket 13 adds the Content Production Queue and source-Idea Content workflow;
+it is not created by this documentation correction.
 
 ## 5. User Stories
 
-1. As a creator, I want to generate a Script only from an Idea I have accepted, so that generation reflects an intentional production choice.
+1. As a creator, I want an accepted Idea to become planned production work in a prioritized queue, so that generation reflects an intentional production choice.
 2. As a creator, I want accepting an Idea to remain separate from generating Content, so that selection does not trigger cost or create unwanted work.
 3. As a creator, I want one accepted Idea to support multiple Content items, so that I can explore different languages, formats, or approaches.
 4. As a creator, I want to choose English or Persian independently of the Idea language and UI locale, so that the output fits my intended audience.
@@ -61,7 +83,7 @@ four persisted decision states, derived `USED` rule, or ownership model.
 9. As a creator, I want an accepted generation operation to remain bound to its exact DNA version, so that later DNA edits cannot change its history.
 10. As a creator, I want to see generation continue through durable states, so that a slow provider call is not mistaken for a missing result.
 11. As a creator, I want safe failure information and an explicit retry path, so that I can recover without losing historical evidence.
-12. As a creator, I want successful generation to open the new Draft, so that I can immediately work on the Script.
+12. As a creator, I want successful queue generation to open the new Draft, so that I can immediately work on the Script.
 13. As a creator, I want to edit plain Script text freely, including clearing it completely, so that the Draft remains a true workspace.
 14. As a creator, I want Draft changes saved automatically with visible status, so that I understand whether my work is durable.
 15. As a creator, I want failed saves to preserve my local text, so that temporary failures do not erase work.
@@ -92,6 +114,9 @@ Phase 4 includes:
 - minimal human Script editing;
 - debounced serialized autosave and optimistic revision conflicts;
 - minimal Content list/editor and source-Idea Attempt history;
+- Content Production Queue with derived membership and persisted ordering;
+- Generated Content Library with a narrow source-Idea filter and Generate
+  Another context;
 - full EN/FA, LTR/RTL, accessibility, and responsive behavior;
 - deterministic unit/integration/UI/E2E verification;
 - closure hardening verification of the corrected Phase 3 Ideas surface before
@@ -591,11 +616,34 @@ Safe structured logs may contain request ID, workspace/user IDs, Attempt/AI Run/
 
 ## 29. UI/UX, EN/FA, and accessibility
 
+### Idea Library and Production Queue
+
+The Idea Library remains compact and decision-focused. An `ACCEPTED` Idea with
+zero linked Content may show **In content queue**. An Idea with linked Content
+shows a compact derived localized Content count/link. The Library does not
+render full Attempt history inline and does not own the primary first-generation
+Generate Script interaction.
+
+The Content surface contains the Production Queue: `ACCEPTED` Ideas with zero
+linked Content, in persisted creator-prioritized order. Each queue item exposes
+a keyboard-accessible Generate Script action and, where appropriate, Retry,
+using the existing Ticket 09 form/action. A failed generation remains visible
+as a compact safe failure state in the queue and is retryable through Ticket 07.
+The queue provides drag-and-drop plus
+an equivalent keyboard-operable Move up/Move down interaction. Reorder submits
+the authoritative ordered Idea ID list; the server rechecks current membership
+and returns `CONFLICT` for a stale or foreign set.
+
+The Generated Content Library is on the same Content surface. It supports the
+narrow optional source-Idea filter, conceptually `/content?ideaId=<idea-id>`,
+and provides Generate Another for an eligible accepted Idea with existing
+Content by reusing the Ticket 09 and Ticket 05 → 06 workflow.
+
 ### Generate Script
 
-An accepted Idea exposes a keyboard-accessible Generate Script action wherever
-it appears in the primary Idea Library, including a view narrowed to a specific
-Past Run. It opens a focused form containing only:
+The existing Generate Script capability is presented from the Production Queue
+for first generation and from the Idea-filtered Content context for Generate
+Another. It opens a focused form containing only:
 
 - requested language;
 - SHORT_VIDEO or LONG_VIDEO;
@@ -607,13 +655,25 @@ The initiating browser submits the synchronous generation request and immediatel
 
 If a persisted PENDING or RUNNING Attempt is observed through an authorized page load or history read, render that durable state correctly. Do not add polling, split execution endpoints, jobs, `after()`, `waitUntil()`, or other background execution merely to expose active persisted status to the initiating browser.
 
-Failed Attempts remain visible from source Idea generation history/detail and never appear in Content lists. Attempt detail may display canonical inputs, including instructions, under normal authorization.
+Failed Attempts remain visible from the authorized Content/production context
+and never appear in the Generated Content Library. Attempt detail may display
+canonical inputs, including instructions, under normal authorization. Full
+Attempt history is not expanded inside every Idea Library card.
 
 ### Content list
 
-Provide localized /content sorted by `Draft.updatedAt` descending. Each item may show source Idea title, format, Content language, and `Draft.updatedAt` as last-edited time. Provide clear loading, empty, and error states.
+Provide localized `/content` with the Production Queue and Generated Content
+Library. The Generated Content Library is sorted by `Draft.updatedAt` descending;
+each item may show source Idea title, format, Content language, and
+`Draft.updatedAt` as last-edited time. The surface supports the narrow optional
+`ideaId` source-Idea filter, including zero Content where relevant, one Content,
+and multiple Contents. Provide clear loading, empty, conflict, and error
+states for both sections.
 
-Do not add a dedicated Content title, search, filters, folders, bulk actions, queue, archive/delete, or fake metrics.
+Do not add a dedicated Content title, advanced search/filter architecture,
+folders, bulk actions, archive/delete, or fake metrics. The only Content filter
+is the narrow source-Idea filter; the Production Queue is the approved queue on
+this surface and is distinct from the future publishing queue.
 
 ### Script editor
 
@@ -644,6 +704,7 @@ After this specification becomes Ready, reviewed Drizzle migrations may add only
 - content_drafts;
 - content_versions;
 - content_generation_attempts;
+- the nullable positive-integer `production_queue_position` field on Ideas;
 - Content-generation quota reservations;
 - required foreign/candidate/unique/check/index constraints; and
 - compatible expansion of existing ai_runs fields/checks for CONTENT_SCRIPT_GENERATION and safe provider request correlation.
@@ -656,13 +717,25 @@ Do not add document-schema-version columns, Content lifecycle/acceptance/publica
 
 Index only demonstrated Phase 4 access paths: workspace Content list by Draft update, source Idea to Content/Attempts, Attempt history, workspace idempotency, quota windows, and necessary foreign keys.
 
+The existing Idea schema was inspected before backfilling: `status_changed_at`
+records the current decision-state change and does not preserve a semantically
+meaningful historical timestamp for when an Idea became `ACCEPTED`. It must not
+be used as an acceptance-time backfill. Seed existing `ACCEPTED` Ideas with
+zero linked Content deterministically from existing provenance such as
+generation-batch creation order, Idea position, and a stable Idea-ID
+tie-breaker. This establishes only the initial queue seed. After migration,
+creator-controlled positions are authoritative. The migration must not add a
+queue status or separate queue table, and must use a reviewed Drizzle migration.
+
 ## 31. Testing decisions and seams
 
 Tests should assert externally observable domain behavior at the highest stable seam and avoid implementation-detail coupling.
 
 Primary seams:
 
-1. **Content application service:** authoritative generation orchestration, authorization, acceptance, idempotency, retry, completion, list/read, and Draft saves.
+1. **Content application service:** authoritative generation orchestration,
+   authorization, acceptance, idempotency, retry, completion, Production Queue
+   reads/reorder, source-Idea filtering, Content reads, and Draft saves.
 2. **GenerateContentScriptProvider contract:** one provider-neutral fake for deterministic application tests and one AvalAI adapter contract/request test.
 3. **PostgreSQL repositories/schema:** constraints, transactions, quota, races, and isolation.
 4. **UI behavior:** focused component tests and Playwright workflows.
@@ -706,7 +779,17 @@ Cover:
 - invoked versus uninvoked quota handling;
 - rendering of persisted PENDING/RUNNING records plus stale recovery and completion race;
 - retry current-state reevaluation; and
-- Draft revision success and stale-write rejection.
+- Draft revision success and stale-write rejection;
+- derived queue membership for accepted zero-Content Ideas, including failed
+  generation retention and first-Content removal;
+- queue-position persistence, append-at-end behavior, cleared/inactive
+  positions after leaving the queue, deterministic transactional reorder, and
+  stale/foreign ordered-ID `CONFLICT` behavior.
+- workspace-serialized concurrent Accept + Accept, Accept + reorder, Save +
+  reorder, Reject + reorder, and first-Content completion + reorder;
+- duplicate-position prevention, `NULL` positions for non-queued Ideas,
+  unique valid positions after every successful queue mutation, and no partial
+  reorder.
 
 ### End-to-end tests
 
@@ -719,6 +802,8 @@ Cover at minimum:
 - correct rendering when a persisted PENDING/RUNNING Attempt is observed;
 - safe provider failure and Retry;
 - failed Attempt history absent from Content list;
+- Production Queue membership/order, accessible reorder controls, queue
+  generation, failed queue generation retention, and Content-by-Idea filtering;
 - multiple Content items from one accepted Idea;
 - the corrected workspace-wide Idea Library with all five status views, `All
   runs`, owned Past Runs filters, and combined status/run behavior before
@@ -765,24 +850,53 @@ Do not deliberately force a 16,000-token output or a real 90-second timeout. Thi
 - [ ] After acceptance, no current-pointer recheck occurs and the immutable accepted DNA version remains authoritative despite later DNA changes.
 - [ ] The Idea batch’s historical DNA version is not substituted for current Content-generation DNA.
 
-### Ideas-surface prerequisite for Phase 4 closure
+### Ideas and Production Queue prerequisites for Phase 4 closure
 
-- [ ] Before Ticket 11 cross-cutting hardening can close Phase 4, `/ideas` is
-      implemented as the workspace-wide Idea Library defined by Phase 3, with
-      `All`, `New`, `Saved`, `Accepted`, and `Rejected` views across all
-      generation batches, an integrated `All runs` or owned Past Runs filter,
-      and `New + All runs` as the default.
-- [ ] Ticket 11 verifies that Saved, Accepted, Rejected, and New Ideas are
-      discoverable without opening individual batches; that status and run
-      filters preserve one another; and that batch provenance remains inside
-      the unified Library rather than a secondary product surface.
-- [ ] Ticket 11 verifies derived Content existence/count for Accepted Ideas,
-      multiple Content records per Idea, continued decision actions and
-      Generate Script behavior, membership authorization/nondisclosure, and
-      EN/FA LTR/RTL behavior.
-- [ ] The Ideas correction introduces no persisted `USED` status, new Idea
-      persistence, persisted Content counts, or out-of-scope search/advanced
-      organization behavior.
+- [ ] Ticket 12 delivers the compact workspace-wide Idea Library defined by
+      Phase 3: `All`, `New`, `Saved`, `Accepted`, and `Rejected` views across
+      all generation batches, an integrated `All runs` or owned Past Runs
+      filter, and `New + All runs` as the default.
+- [ ] The Idea Library keeps decision actions, derived Content count/state, and
+      EN/FA LTR/RTL behavior, but does not render full Attempt history or the
+      primary first-generation Generate Script action inline on every card.
+- [ ] Future Ticket 13 delivers the Content Production Queue and compact Idea →
+      Content workflow before Ticket 11 begins. It must prove derived queue
+      membership, persisted order, queue generation/retry, Content-by-Idea
+      filtering, authorization, and accessible reorder behavior.
+- [ ] The correction introduces no persisted `USED` status, queue status,
+      persisted Content counts, separate queue aggregate, or out-of-scope
+      search/advanced organization behavior.
+
+### Production Queue and compact Idea → Content workflow
+
+- [ ] `isQueued` is derived exactly as `status = ACCEPTED` and linked Content
+      count equals zero.
+- [ ] Accepting a zero-Content Idea appends it to the queue; changing it to
+      `SAVED`/`REJECTED` or successfully creating first Content removes queue
+      relevance; failed generation leaves it queued and retryable.
+- [ ] One accepted Idea may create multiple Content records and remains
+      `ACCEPTED`; Generate Another reuses the established Ticket 09 and
+      Ticket 05 → 06 workflow.
+- [ ] Queue order is persisted on the existing Idea aggregate as a nullable
+      positive integer, survives sessions, and is cleared or irrelevant after
+      queue exit. Existing accepted zero-Content Ideas receive only the
+      reviewed deterministic migration seed.
+- [ ] Reorder authorizes the workspace, verifies the submitted ordered ID set
+  against current queue membership, and transactionally assigns positions
+  `1..N`; stale membership, duplicate/missing IDs, and foreign IDs return
+  stable `CONFLICT` without a partial order.
+- [ ] Every queue-position assignment, clear, or rewrite is serialized by the
+  authorized workspace row; concurrent Accept, decision change, first Content
+  completion, reorder, and queue generation paths cannot commit duplicate
+  positions.
+- [ ] Queue reads derive membership from status plus linked Content count and
+  use `productionQueuePosition` only for ordering; valid non-queued Ideas have
+  `NULL` position.
+- [ ] Queue generation uses the existing form/action and atomic application
+      workflow; successful first generation removes the Idea through derived
+      membership and opens the real Ticket 10 editor.
+- [ ] Drag-and-drop has a keyboard-operable equivalent and works in EN/LTR and
+      FA/RTL; queue and source-Idea filter copy is localized.
 
 ### Attempt, AI Run, and atomic artifacts
 
@@ -843,8 +957,11 @@ Do not deliberately force a 16,000-token output or a real 90-second timeout. Thi
 - [ ] Persisted PENDING/RUNNING Attempts render correctly when observed without adding polling, split execution, jobs, after(), waitUntil(), or background execution.
 - [ ] Successful generation redirects to localized Content editor only after resulting Content exists.
 - [ ] Minimal Content list sorts and labels last edited by Draft.updatedAt and shows only approved metadata.
-- [ ] Failed Attempts appear in authorized source-Idea history and never Content list.
-- [ ] No Content title/search/filter/folder/bulk/archive/delete/history/diff/restore UI is present.
+- [ ] Failed Attempts remain available through authorized production context,
+      may appear as compact queue failures, and never appear as Generated
+      Content Library items.
+- [ ] No Content title/search/folder/bulk/archive/delete/history/diff/restore UI
+      is present beyond the approved narrow source-Idea filter.
 
 ### Authorization, provider, i18n, and verification
 
@@ -907,7 +1024,8 @@ The Product Architect approved the following surgical corrections. They have bee
 | Architecture | Section 106 | Added accepted ADR-016. |
 | Architecture | Section 108 | Replaced Phase 4/5 bullets with the approved boundary described above. |
 | Architecture / ADR-016 | RATE_LIMITED contract | Added application source WORKSPACE versus PROVIDER while retaining durable provider category RATE_LIMITED. |
-| Phase 3 / Phase 4 closure | Idea Library correction | Phase 4 hardening must verify the actual V1 Ideas surface before closure. | Added an explicit Ticket 11 prerequisite without changing Idea persistence, statuses, lineage, or Phase 5 scope. |
+| Phase 3 / Phase 4 closure | Idea Library correction | Phase 4 hardening must verify the actual V1 Ideas surface before closure. | Added an explicit Ticket 11 prerequisite without changing Idea statuses, lineage, or Phase 5 scope. |
+| PRD / Architecture / Phase 4 | Production Queue placement and ordering | Idea cards were carrying primary generation and unbounded Attempt history, while persisted priority was needed for a durable queue. | Added the Content Production Queue and Generated Content Library model: membership is derived, order is persisted on Idea, and first generation moves to the future Ticket 13 slice. |
 
 ### ADR review
 
@@ -918,24 +1036,28 @@ The Product Architect approved the following surgical corrections. They have bee
 | ADR-015 | Clarified the applicable ADR-014 provider/endpoint/model supersession and cross-referenced ADR-016; its Phase 3 decision is unchanged. |
 | ADR-004 | No contradiction and no decision change. Its block example is expressly conceptual; Phase 4’s Script-only schema does not settle Phase 5 structure. A cross-reference may clarify sequencing but is not required. |
 | ADR-003, ADR-005, ADR-010, ADR-012, ADR-014 | No Phase 4 decision change required. |
+| ADR-017 | Created and accepted for the durable Production Queue membership/order decision; it does not alter ADR-005 or ADR-016. |
 
-The Idea Library correction is an information-architecture/product UX change
-over existing Idea, batch, and Content relationships. It does not change
-ADR-005's derived `USED` decision, workspace ownership, lineage, or any other
-accepted architectural decision; no new ADR is required.
+The Production Queue correction is both an information-architecture/product UX
+change and a durable persistence decision. ADR-017 records that queue
+membership is derived, queue order is persisted on the existing Idea aggregate,
+no queue aggregate is introduced, and V1 uses simple transactional integer
+positions. It does not change ADR-005's derived `USED` decision, workspace
+ownership, lineage, or ADR-016's generation behavior.
 
 ## 35. Readiness and unresolved issues
 
-Requirements grilling Q1–Q49 and the approved Idea Library correction leave no
-unresolved product decision. The default Idea Library state is resolved as
-`New + All runs`.
+The approved product decisions resolve the default Idea Library state as
+`New + All runs` and the Production Queue rule/order model through ADR-017.
+There is no remaining product decision in this correction.
 
-The Product Architect review corrections are applied, PRD and Architecture are reconciled, ADR-016 is accepted, and the acceptance criteria are complete. No unresolved product or architecture contradiction remains for Phase 4.
+The Product Architect review corrections are applied, PRD and Architecture are
+reconciled, ADR-016 and ADR-017 are accepted, and the source-of-truth
+acceptance criteria are updated. No unresolved product or architecture
+contradiction remains for the queue decision.
 
-Phase 4 core implementation is **Ready for implementation**. Ticket 11
-cross-cutting hardening and Phase 4 closure remain paused until the corrected
-workspace-wide Idea Library is implemented and its actual EN/FA, LTR/RTL,
-authorization, status-and-run filter, derived-Content, and integrated batch
-provenance behavior is verified. This documentation correction does not create
-tickets or authorize opportunistic Phase 5 work. Implementation must still
-follow the repository's ticket-decomposition and approval workflow.
+Phase 4 remains **Ready for implementation** at the corrected source-of-truth
+level. Ticket 11 cross-cutting hardening remains blocked until both Ticket 12
+and the future Ticket 13 Production Queue slice are resolved. Ticket 13 is not
+created by this documentation correction, and no Ticket 11 or Phase 5 work is
+authorized here. Final Product Architect review remains after Ticket 11.

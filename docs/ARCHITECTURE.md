@@ -219,7 +219,9 @@ Owns:
 * immutable content versions,
 * accepted versions,
 * structured content documents,
-* production signals.
+* production signals, and
+* the Content production workspace: derived Production Queue reads/reordering
+  and Generated Content Library/source-Idea filtering.
 
 ## Publishing
 
@@ -850,6 +852,7 @@ language
 category
 status
 rejection_reason
+production_queue_position (nullable positive integer)
 created_at
 updated_at
 ```
@@ -942,10 +945,12 @@ decision states, not new states; `USED` remains derived from linked Content and
 is not a fifth Library status.
 
 A Library item may expose existing Idea facts, Idea language, generation date,
-lightweight batch provenance, and derived Content existence/count. For an
-`ACCEPTED` Idea, the read model should make accepted-but-unused versus accepted
-with one or more linked Content records clear and should preserve the existing
-Generate Script action. One Idea may have multiple Content aggregates.
+lightweight batch provenance, and derived Content existence/count. Idea cards
+remain compact: an `ACCEPTED` Idea with zero linked Content may show **In
+content queue**, while an Idea with linked Content may show a localized derived
+Content count/link to the Content surface filtered by source Idea. The primary
+first-generation Generate Script action and full Attempt history do not belong
+inline on every Idea card. One Idea may have multiple Content aggregates.
 
 Library reads require current workspace membership. Ownership must continue to
 be proved through `Idea → Idea Generation Batch → Workspace`; do not add
@@ -973,6 +978,96 @@ state represents the combination, using `/ideas?view=saved&batchId=<id>` for a
 Saved view narrowed to an owned batch. Invalid or foreign `batchId` values are
 nondisclosing and select no run. The Library must not flatten or duplicate
 those facts into Idea rows merely for convenience.
+
+---
+
+# 28B. Content Production Queue and Generated Content Library
+
+The Content surface is the creator's production workspace. It contains two
+conceptual sections without creating a new top-level product:
+
+```text
+CONTENT
+├── Production Queue
+│   └── ACCEPTED Ideas with zero linked Content, in persisted order
+└── Generated Content Library
+    └── generated Content, optionally filtered by source Idea
+```
+
+## Queue membership
+
+Production Queue membership is derived from authoritative relational facts:
+
+```text
+isQueued = idea.status == ACCEPTED &&
+           NOT EXISTS(content where content.source_idea_id = idea.id)
+```
+
+The server resolves Idea ownership through `Idea → Idea Generation Batch →
+Workspace` and applies current workspace membership before returning queue
+data. There is no queue status, no production lifecycle enum, and no separate
+queue aggregate/table solely to represent membership. `USED` remains the
+separate derived fact defined by ADR-005.
+
+Accepting an Idea with zero Content makes it appear at the end of the current
+queue. Moving it to `SAVED` or `REJECTED`, or successfully creating its first
+Content, makes it leave the queue by derived membership. Failed generation
+leaves the Idea `ACCEPTED` with zero Content and therefore leaves it queued;
+the failed Attempt remains durable and retryable. No explicit complete or
+remove-from-queue action exists.
+
+An Idea that already has Content remains `ACCEPTED` unless the creator changes
+its decision state. It is outside the initial queue but may explicitly generate
+another Content from the source-Idea Content context. Leaving the queue does
+not reject, archive, complete, or freeze the Idea.
+
+## Queue ordering
+
+Persist only the ordering needed for V1 on the existing Idea aggregate:
+
+```text
+production_queue_position: nullable positive integer
+```
+
+The position is meaningful only for currently queued Ideas. A newly queued Idea
+is assigned the next position at the end. When an Idea leaves the queue, its
+position is cleared or made irrelevant by the invariant; re-acceptance with
+zero Content appends it again. A re-accepted Idea that already has Content does
+not enter the initial queue.
+
+Do not introduce LexoRank, fractional indexing, CRDTs, collaborative ordering,
+or a queue table. A modest V1 queue is reordered with simple integer positions
+inside a transaction. The server loads the current authorized queue, verifies
+that the submitted ordered Idea ID set exactly matches current membership, and
+then writes deterministic positions `1..N`. A membership/set mismatch is a
+stable `CONFLICT`; no automatic merge is attempted. Foreign Idea IDs cannot be
+inserted into the order.
+
+The UI must provide drag-and-drop plus an equivalent keyboard-operable control,
+such as Move up and Move down. Dragging is never the sole interaction, and
+logical direction behavior must work in both LTR and RTL.
+
+## Generated Content and source-Idea filtering
+
+The Generated Content Library uses existing authorized Content reads and keeps
+the narrow source-Idea query state, conceptually `/content?ideaId=<idea-id>`.
+It supports zero, one, or multiple Content linked to an Idea. For an eligible
+`ACCEPTED` Idea with existing Content, it provides Generate Another by reusing
+the existing Ticket 09 action/form and Ticket 05 → 06 application workflow;
+it does not create a second generation path. The same surface may expose
+compact authorized Generation activity, while full Attempt history remains
+available from the Content/production context rather than every Idea card.
+
+Queue generation uses the existing Ticket 09 capability. Successful first
+generation creates Content through the established atomic workflow, so derived
+queue membership becomes false and the Idea disappears from the authoritative
+queue. The initiating user lands in, or can open, the real Ticket 10 editor.
+
+All visible queue/filter copy uses `next-intl`. Reads require membership;
+reorder and generation use the established V1 owner policy. Content-by-Idea
+reads verify both the Idea and Content workspace boundary and remain
+nondisclosing for foreign IDs. Idea language, Content language, and UI locale
+remain independent; creator text is never transformed.
 
 ---
 
@@ -2427,6 +2522,46 @@ create ideas
 
 where appropriate based on external call boundaries.
 
+### Reorder the Content Production Queue
+
+```text
+BEGIN
+  authorize workspace
+  SELECT workspace FOR UPDATE
+  load current derived queue
+  verify submitted Idea ID set
+  assign positions 1..N transactionally
+COMMIT
+```
+
+A stale membership or ordered-ID set returns `CONFLICT` and writes no partial
+order. A modest queue does not require collaborative ordering or a distributed
+ordering service.
+
+The workspace row is the common serialization point for every mutation that
+can assign, clear, or rewrite `productionQueuePosition`: an Idea becoming newly
+queue-eligible, reorder, queued `ACCEPTED` → `SAVED`/`REJECTED`, first
+successful Content creation, and any other allowed transition that changes
+derived queue membership. The lock is acquired before any Idea, Generation
+Batch, AI Run, Content, Draft, Version, or quota row needed by the operation.
+The shared order is therefore workspace row first, followed by the operation's
+existing deterministic domain-row order, and the lock is held only for the
+short mutation transaction.
+
+Queue reads continue to derive membership exclusively from
+`ACCEPTED && linked Content count = 0`; the position is used only to order
+derived members. A queued Idea has a distinct positive position and a
+non-queued Idea has `NULL` in valid application-created state. Append logic
+must derive the current queue while holding the workspace lock so concurrent
+accepts receive distinct positions. Queue-leave logic clears the departing
+position and preserves valid positions for remaining members.
+
+Ticket 06's successful Content/Draft/Version #1/AI Run transaction must use
+the same workspace-first serialization order and clear the source Idea's queue
+position in that same atomic success transaction. This is a future queue-aware
+extension of the existing Ticket 06 success invariant, not a split success
+operation. Provider calls remain outside the transaction.
+
 External API calls should generally happen outside long-held database transactions.
 
 ---
@@ -2478,6 +2613,17 @@ contract
 ```
 
 is preferred over risky one-step destructive changes.
+
+The Phase 4 Production Queue adds a nullable positive integer position to the
+existing Idea aggregate through a reviewed migration. The existing schema was
+inspected: `status_changed_at` records the current decision-state change and
+does not preserve a semantically meaningful historical timestamp for when an
+Idea became `ACCEPTED`, so it must not be used as an acceptance-time backfill.
+Seed existing `ACCEPTED` Ideas with zero linked Content by deterministic
+existing provenance order (generation-batch creation order, Idea position, and
+a stable Idea-ID tie-breaker). The backfill applies only to the initial queue
+seed. Thereafter creator-controlled positions are authoritative. No queue
+status or separate queue table is introduced.
 
 ---
 
@@ -2783,7 +2929,10 @@ For:
 * authorization,
 * versioning,
 * analytics persistence,
-* job claiming.
+* job claiming, and
+* Production Queue derived membership, persisted ordering, append/exit
+  transitions, transactional reorder, stale `CONFLICT`, foreign-ID rejection,
+  deterministic positions, and multiple Content/derived `USED` behavior.
 
 ## End-to-end tests
 
@@ -2803,12 +2952,12 @@ Create/configure DNA
 Generate ideas
  ↓
 Review Ideas in the workspace-wide Library
- ↓
+      ↓
 Accept idea
- ↓
-Generate content
- ↓
-Edit content
+      ↓
+Content Production Queue: prioritize and Generate
+      ↓
+Generated Content Library / Edit content
  ↓
 Accept content
  ↓
@@ -3079,7 +3228,9 @@ Architecture v0.1 explicitly rejects premature implementation of:
 * complicated team permissions,
 * real-time collaborative editing,
 * full DAM systems,
-* A/B experimentation infrastructure.
+* A/B experimentation infrastructure, and
+* a separate Content Production Queue aggregate/entity for derived queue
+  membership.
 
 These require future product evidence.
 
@@ -3153,6 +3304,12 @@ provider and endpoint selection.
 Phase 4 uses the provider-neutral Content Script contract with AvalAI,
 `gpt-5.6-luna`, strict `content_script_v1`, fixed generation/privacy settings,
 and workflow-specific timeout, quota, and verification policy.
+
+## ADR-017 — Production Queue Membership and Ordering
+
+Queue membership is derived from `ACCEPTED` plus zero linked Content; queue
+order is a persisted nullable positive integer on Idea, updated transactionally
+with stale-set `CONFLICT` handling. No separate queue aggregate is introduced.
 
 ---
 
@@ -3263,6 +3420,7 @@ Implement:
 * accept/save/reject
 * rejection reason
 * workspace-wide Idea Library with integrated status and Past Runs filters
+* compact Idea cards whose primary first-generation action is not inline
 
 ---
 
@@ -3279,10 +3437,13 @@ Implement:
 * idempotency, Content-generation quota, lifecycle, and stale recovery
 * serialized autosave and optimistic Draft conflict handling
 * minimal Content list and editor in EN/FA and LTR/RTL
+* Content Production Queue with derived membership, persisted ordering, and
+  compact Idea → Content workflow
 
 No Performance Direction, Edit Direction, production block, taxonomy, anchor,
-asset, acceptance, publishing, analytics, AI rewriting, or background-job work
-is introduced in Phase 4.
+asset, Content acceptance, publishing, analytics, AI rewriting, or background-
+job work is introduced in Phase 4. The Production Queue is distinct from the
+future publishing queue and is not a separate aggregate.
 
 ---
 
@@ -3454,6 +3615,10 @@ Architecture v0.1 is ready to guide implementation when we agree that:
 * The primary Ideas surface is one workspace-wide Idea Library; generation
   batches remain separate provenance entities exposed through its Past Runs
   filter.
+* Idea cards are compact; primary first-generation work is in the Content
+  Production Queue.
+* Production Queue membership is derived from `ACCEPTED` plus zero linked
+  Content, while queue order is persisted on Idea and reordered transactionally.
 * Idea `USED` state is derived.
 * Editable content and immutable content versions are separated.
 * Structured content uses a versioned document schema.

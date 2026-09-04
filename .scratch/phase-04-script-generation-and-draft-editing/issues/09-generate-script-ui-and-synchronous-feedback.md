@@ -1,6 +1,12 @@
 # 09 — Deliver Generate Script UI and synchronous operation feedback
 
-**What to build:** Add the localized Generate Script action and form to accepted Ideas, wire it through server actions to the production/fake provider composition, show immediate local feedback during the synchronous request, redirect only after Content exists, and render safe failure, Retry, and observed durable Attempt states.
+**What to build:** Deliver the reusable localized Generate Script action and
+form for accepted-Idea generation, wire it through server actions to the
+production/fake provider composition, show immediate local feedback during the
+synchronous request, redirect only after Content exists, and render safe
+failure, Retry, and observed durable Attempt states. The primary first-
+generation presentation is the Phase 4 Content Production Queue; this ticket's
+capability is reused there rather than expanded inline on every Idea card.
 
 **Blocked by:** 04 — Implement the ADR-016 AvalAI Content Script adapter; 06 — Execute generation and create Content artifacts atomically; 07 — Deliver authorized Content reads, Attempt history, and retry; 10 — Deliver the Content list and Script editor with serialized autosave.
 
@@ -12,7 +18,9 @@ Let an authorized creator deliberately turn an accepted Idea into a Script while
 
 ## Scope
 
-- Expose Generate Script only on accepted Ideas, including Ideas that already have Content.
+- Expose the reusable Generate Script capability only for accepted Ideas,
+  including Ideas that already have Content. Ticket 13 owns its primary queue
+  presentation.
 - Add a focused React Hook Form + Zod form with language, SHORT/LONG format, and optional instructions only.
 - Default language from current DNA’s default language and restrict choices to its supported `en | fa` languages.
 - Submit a fresh idempotency key through a minimal server action to the Content application service.
@@ -74,7 +82,9 @@ Let an authorized creator deliberately turn an accepted Idea into a Script while
 
 ## Acceptance criteria
 
-- [x] Accepted Idea → form → deterministic successful Attempt redirects to localized editor after Content exists.
+- [x] Accepted-Idea generation capability → form → deterministic successful
+      Attempt redirects to localized editor after Content exists; the primary
+      first-generation entry point is the future Production Queue.
 - [x] The redirect target is Ticket 10’s real authorized Script editor; no placeholder or temporary editor route exists.
 - [x] NEW/SAVED/REJECTED Ideas cannot generate, while an accepted Idea with existing Content can generate again.
 - [x] Form contains exactly language, format, and optional instructions and sends no provider/model/prompt controls.
@@ -84,6 +94,14 @@ Let an authorized creator deliberately turn an accepted Idea into a Script while
 - [x] Retry delegates to Ticket 07 behavior and a successful retry redirects only after its new Content exists.
 - [x] Navigation creates no cancellation transition and no CANCELLED UI/state exists.
 - [x] Components have correct labels, focus, disabled states, announcements, touch targets, mobile behavior, EN/FA, and RTL/LTR.
+
+## Presentation correction
+
+Ticket 09's generation logic, form, action, synchronous feedback, retry, and
+authorized Attempt behavior remain reusable. The primary first-generation
+presentation is moved to future Ticket 13's Content Production Queue; the Idea
+Library must not expand full Attempt history or place this action on every Idea
+card. This documentation correction does not discard or reimplement Ticket 09.
 
 ## Required tests
 

@@ -3,12 +3,12 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  getServerSession: vi.fn(),
-  getOrCreateDefaultWorkspace: vi.fn(),
   getCurrentContentDna: vi.fn(),
   getIdeaContentGenerationHistory: vi.fn(),
   getIdeaGenerationBatchHistory: vi.fn(),
-  getIdeaGenerationBatch: vi.fn(),
+  getIdeaLibrary: vi.fn(),
+  getOrCreateDefaultWorkspace: vi.fn(),
+  getServerSession: vi.fn(),
 }));
 
 vi.mock("next-intl/server", () => ({
@@ -26,19 +26,17 @@ vi.mock("@/modules/content/application", () => ({
 }));
 vi.mock("@/modules/ideas/application", () => ({
   getIdeaGenerationBatchHistory: mocks.getIdeaGenerationBatchHistory,
-  getIdeaGenerationBatch: mocks.getIdeaGenerationBatch,
+  getIdeaLibrary: mocks.getIdeaLibrary,
 }));
 vi.mock("@/modules/ideas/presentation/ideas-workspace", () => ({
   IdeasWorkspace: (props: {
-    workspaceId: string;
-    initialDetail: unknown;
-    contentGenerationHistory?: Record<string, unknown>;
+    initialLibrary: { generationBatchId: string | null; statusFilter: string; ideas: unknown[] };
   }) => (
     <div
-      data-content-history={Object.keys(props.contentGenerationHistory ?? {}).length}
-      data-detail={props.initialDetail ? "loaded" : "empty"}
+      data-batch-id={props.initialLibrary.generationBatchId ?? "all"}
+      data-count={props.initialLibrary.ideas.length}
+      data-status={props.initialLibrary.statusFilter}
       data-testid="ideas-workspace"
-      data-workspace={props.workspaceId}
     />
   ),
 }));
@@ -54,22 +52,20 @@ beforeEach(() => {
     currentVersion: {
       id: "version-1",
       versionNumber: 2,
-      readiness: "AI_READY",
-      createdAt: new Date(),
-      isCurrent: true,
       payload: {
         schemaVersion: 1,
         language: { defaultContentLanguage: "fa", contentLanguages: ["en", "fa"] },
       },
     },
   });
-  mocks.getIdeaGenerationBatchHistory.mockResolvedValue({
-    batches: [{ id: "batch-1" }],
-    selectedBatchId: "batch-1",
+  mocks.getIdeaGenerationBatchHistory.mockResolvedValue({ batches: [], selectedBatchId: null });
+  mocks.getIdeaLibrary.mockResolvedValue({
+    statusFilter: "NEW",
+    generationBatchId: null,
+    ideas: [],
   });
-  mocks.getIdeaGenerationBatch.mockResolvedValue({ id: "batch-1" });
   mocks.getIdeaContentGenerationHistory.mockResolvedValue({
-    sourceIdea: { id: "idea-1", title: "Idea" },
+    sourceIdea: { id: "accepted-idea", title: "Accepted idea" },
     isUsed: false,
     attempts: [],
   });
@@ -78,24 +74,66 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("Ideas route", () => {
-  it("loads authorized workspace data and selects a requested batch from safe history", async () => {
+  it("defaults /ideas to New plus All runs", async () => {
+    const result = await IdeasPage({ searchParams: Promise.resolve({}) });
+    render(result);
+
+    expect(mocks.getIdeaLibrary).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      statusFilter: "NEW",
+      generationBatchId: null,
+    });
+    expect(screen.getByTestId("ideas-workspace").getAttribute("data-status")).toBe("NEW");
+    expect(screen.getByTestId("ideas-workspace").getAttribute("data-batch-id")).toBe("all");
+  });
+
+  it("passes direct status and selected-run state to the authorized Library read", async () => {
+    mocks.getIdeaLibrary.mockResolvedValue({
+      statusFilter: "SAVED",
+      generationBatchId: "batch-1",
+      ideas: [],
+    });
+
     const result = await IdeasPage({
-      searchParams: Promise.resolve({ batchId: "batch-1" }),
+      searchParams: Promise.resolve({ view: "saved", batchId: "batch-1" }),
     });
     render(result);
 
-    expect(mocks.getCurrentContentDna).toHaveBeenCalledWith({ workspaceId: "workspace-1" });
-    expect(mocks.getIdeaGenerationBatchHistory).toHaveBeenCalledWith({
+    expect(mocks.getIdeaLibrary).toHaveBeenCalledWith({
       workspaceId: "workspace-1",
+      statusFilter: "SAVED",
+      generationBatchId: "batch-1",
     });
-    expect(mocks.getIdeaGenerationBatch).toHaveBeenCalledWith({
+    expect(screen.getByTestId("ideas-workspace").getAttribute("data-batch-id")).toBe("batch-1");
+  });
+
+  it("normalizes an unsupported view to New while leaving batch authorization to the read boundary", async () => {
+    await IdeasPage({ searchParams: Promise.resolve({ view: "unexpected", batchId: "foreign" }) });
+
+    expect(mocks.getIdeaLibrary).toHaveBeenCalledWith({
       workspaceId: "workspace-1",
-      batchId: "batch-1",
+      statusFilter: "NEW",
+      generationBatchId: "foreign",
     });
-    expect(screen.getByTestId("ideas-workspace").getAttribute("data-detail")).toBe("loaded");
-    expect(screen.getByTestId("ideas-workspace").getAttribute("data-workspace")).toBe(
-      "workspace-1",
-    );
+  });
+
+  it("loads Ticket 09 Attempt history only for accepted Ideas in the selected Library result", async () => {
+    mocks.getIdeaLibrary.mockResolvedValue({
+      statusFilter: "ACCEPTED",
+      generationBatchId: null,
+      ideas: [
+        { id: "accepted-idea", status: "ACCEPTED" },
+        { id: "saved-idea", status: "SAVED" },
+      ],
+    });
+
+    await IdeasPage({ searchParams: Promise.resolve({ view: "accepted" }) });
+
+    expect(mocks.getIdeaContentGenerationHistory).toHaveBeenCalledOnce();
+    expect(mocks.getIdeaContentGenerationHistory).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      sourceIdeaId: "accepted-idea",
+    });
   });
 
   it("does not provision or query private data without a session", async () => {
@@ -104,31 +142,6 @@ describe("Ideas route", () => {
     await expect(IdeasPage({ searchParams: Promise.resolve({}) })).resolves.toBeNull();
 
     expect(mocks.getOrCreateDefaultWorkspace).not.toHaveBeenCalled();
-    expect(mocks.getIdeaGenerationBatchHistory).not.toHaveBeenCalled();
-  });
-
-  it("loads authorized Script Attempt history only for accepted Ideas", async () => {
-    mocks.getIdeaGenerationBatch.mockResolvedValue({
-      id: "batch-1",
-      ideas: [
-        { id: "accepted-idea", status: "ACCEPTED" },
-        { id: "new-idea", status: "NEW" },
-      ],
-    });
-    mocks.getIdeaContentGenerationHistory.mockResolvedValue({
-      sourceIdea: { id: "accepted-idea", title: "Accepted idea" },
-      isUsed: false,
-      attempts: [],
-    });
-
-    const result = await IdeasPage({ searchParams: Promise.resolve({ batchId: "batch-1" }) });
-    render(result);
-
-    expect(mocks.getIdeaContentGenerationHistory).toHaveBeenCalledOnce();
-    expect(mocks.getIdeaContentGenerationHistory).toHaveBeenCalledWith({
-      workspaceId: "workspace-1",
-      sourceIdeaId: "accepted-idea",
-    });
-    expect(screen.getByTestId("ideas-workspace").getAttribute("data-content-history")).toBe("1");
+    expect(mocks.getIdeaLibrary).not.toHaveBeenCalled();
   });
 });

@@ -10,6 +10,7 @@ import { recordE2eProviderInvocation } from "@/modules/ai/testing/e2e-provider-t
 
 import { createIdeaGenerationBatchApplicationService } from "./batch-history-service";
 import { createIdeaDecisionApplicationService } from "./idea-decision-service";
+import { createIdeaLibraryApplicationService } from "./idea-library-service";
 import { createIdeaGenerationApplicationService } from "./generation-service";
 
 export {
@@ -24,6 +25,14 @@ export {
   type IdeaDecisionApplicationServiceDependencies,
   type IdeaDecisionDto,
 } from "./idea-decision-service";
+export {
+  createIdeaLibraryApplicationService,
+  ideaLibraryStatusFilterSchema,
+  type IdeaLibraryApplicationServiceDependencies,
+  type IdeaLibraryDto,
+  type IdeaLibraryItemDto,
+  type IdeaLibraryStatusFilter,
+} from "./idea-library-service";
 export { type IdeaDto } from "./idea-dto";
 export {
   createIdeaGenerationApplicationService,
@@ -63,6 +72,7 @@ const ideaGenerationBatchApplicationService = createIdeaGenerationBatchApplicati
   recoverStaleAttempts: ideaGenerationApplicationService.recoverStaleAttempts,
 });
 const ideaDecisionApplicationService = createIdeaDecisionApplicationService();
+const ideaLibraryApplicationService = createIdeaLibraryApplicationService();
 
 export const generateIdeas = ideaGenerationApplicationService.generateIdeas;
 export const recoverStaleIdeaGenerationAttempts =
@@ -72,3 +82,4 @@ export const getIdeaGenerationBatchHistory = ideaGenerationBatchApplicationServi
 export const getIdeaGenerationBatch = ideaGenerationBatchApplicationService.getBatchDetail;
 export const retryIdeaGeneration = ideaGenerationBatchApplicationService.retryBatch;
 export const updateIdeaDecision = ideaDecisionApplicationService.updateIdeaDecision;
+export const getIdeaLibrary = ideaLibraryApplicationService.getIdeaLibrary;

@@ -161,9 +161,11 @@ Generate 20 Ideas
       ↓
 Accept / Save / Reject Ideas
       ↓
-Select Idea
+Content Production Queue
       ↓
-Generate Content
+Prioritize and Generate
+      ↓
+Generated Content Library
       ↓
 Edit Content
       ↓
@@ -197,15 +199,16 @@ V1 consists of the following main product areas:
 3. Idea generation
 4. Idea management
 5. AI content generation
-6. Structured content editing
-7. Production Direction
-8. Content lifecycle
-9. Publishing queue
-10. External publication registration
-11. Social account connections
-12. Automatic social analytics synchronization
-13. Analytics history
-14. Traceability foundation for future AI learning
+6. Content production workspace (Production Queue and Generated Content Library)
+7. Structured content editing
+8. Production Direction
+9. Content lifecycle
+10. Publishing queue
+11. External publication registration
+12. Social account connections
+13. Automatic social analytics synchronization
+14. Analytics history
+15. Traceability foundation for future AI learning
 
 ---
 
@@ -415,12 +418,15 @@ for later across every generation batch without requiring batch navigation.
 A Library item may show useful existing facts such as its title, description,
 current decision state, Idea language, generation date, lightweight batch
 provenance, and derived Content existence or count. The Library preserves the
-existing Save, Accept, and Reject actions. For an `ACCEPTED` Idea it keeps
-Generate Script available where the existing Content-generation eligibility
-rules allow it, and it makes existing linked Content discoverable where the
-current read model supports that link. Generating another Content remains
-allowed; accepting an Idea alone remains side-effect-free and never generates
-Content automatically.
+existing Save, Accept, and Reject actions. For an `ACCEPTED` Idea with zero
+linked Content, the Library may show a compact planned-production indicator
+such as **In content queue**. It does not render the primary first-generation
+action or full Attempt history inline. For an Idea with linked Content, it
+shows a compact derived Content count such as **1 Content →** or
+**N Contents →**; the link opens the Content surface filtered by that source
+Idea where that filter is available. Generating another Content remains
+allowed from the Content production context. Accepting an Idea alone remains
+side-effect-free and never generates Content automatically.
 
 Past Runs are an integrated part of this one Idea Library experience, not a
 separate Generation History product surface. Selecting a run keeps the creator
@@ -478,7 +484,10 @@ generation.
 
 ## ACCEPTED
 
-Deliberately approved as an Idea that may proceed into Content generation.
+The creator has committed to producing Content from this Idea. If it has zero
+linked Content, it is planned production work and belongs to the derived
+Content Production Queue. Acceptance does not itself create Content, an
+Attempt, or an AI Run.
 
 ## REJECTED
 
@@ -496,9 +505,9 @@ hasContent = exists Content linked to this Idea
 
 The Library may communicate this derived fact as **No content yet**, **Has
 content**, a Content count, or an equivalent presentation. An `ACCEPTED` Idea
-must make it easy to distinguish accepted-but-unused from accepted Ideas with
+must make it easy to distinguish accepted planned work from accepted Ideas with
 one or more linked Content records. One Idea may have multiple Content
-records.
+records, and the count is never persisted.
 
 The UI may use **Reject** as the action label, but rejection is not deletion;
 the Idea record and its current rejection reason remain stored. No separate
@@ -534,12 +543,43 @@ The action should remain fast.
 
 ---
 
-# 17. Generate Content From an Idea
+# 17. Content Production Queue and Generate Content From an Idea
 
 V1 Content generation begins only from an `ACCEPTED` Idea and only after an
-explicit creator action. Accepting an Idea does not automatically create
-Content or invoke AI. `NEW`, `SAVED`, and `REJECTED` Ideas are not eligible;
-a saved Idea must first be accepted.
+explicit creator action in the Content Production Queue or the source-Idea
+Content context. The primary first-generation flow is:
+
+```text
+Idea Library
+      ↓ Accept
+Content Production Queue
+      ↓ prioritize
+Generate Script
+      ↓ success
+Generated Content Library / Script editor
+```
+
+Accepting an Idea does not automatically create Content or invoke AI. `NEW`,
+`SAVED`, and `REJECTED` Ideas are not eligible; a saved Idea must first be
+accepted.
+
+Queue membership is derived and is not an Idea status:
+
+```text
+isQueued = idea.status == ACCEPTED && linked Content count == 0
+```
+
+An accepted Idea with zero Content enters the end of the queue. Changing it to
+`SAVED` or `REJECTED`, or successfully creating its first Content, removes it
+from the derived queue. A failed generation leaves it `ACCEPTED` with zero
+Content, so it remains queued and its failed Attempt remains retryable. No
+explicit complete/remove action exists.
+
+Queue order is persisted as a nullable positive integer on the existing Idea
+aggregate (or equivalent narrowly scoped field); membership itself is not
+persisted. Reordering uses a transactionally verified authoritative ordered ID
+list and returns `CONFLICT` when membership is stale. The queue is not a
+separate top-level product or aggregate.
 
 The relationship must remain explicit:
 
@@ -554,11 +594,24 @@ Content must retain its originating Idea ID.
 Better Content must not simply copy the idea text into a content record and lose the relationship.
 
 One accepted Idea may produce multiple Content aggregates for different
-languages, formats, instructions, or creative approaches. Creating Content
-does not freeze the Idea's decision state. Later Idea state changes do not
-invalidate already accepted generation operations or delete resulting Content.
-`USED` remains derived from the existence of linked Content and is never stored
-as an Idea status.
+languages, formats, instructions, or creative approaches. After the first
+successful Content it leaves the initial Production Queue but remains
+`ACCEPTED`, and the creator may explicitly Generate Another from the
+Idea-filtered Content context. Creating Content does not freeze the Idea's
+decision state. Later Idea state changes do not invalidate already accepted
+generation operations or delete resulting Content. `USED` remains derived from
+the existence of linked Content and is never stored as an Idea status.
+
+The Content surface is the production workspace and contains:
+
+1. **Production Queue** — accepted Ideas with zero Content, in persisted
+   creator-prioritized order, with Generate and eligible Retry actions.
+2. **Generated Content Library** — generated Content, existing editor links,
+   and a narrow optional source-Idea filter such as `/content?ideaId=<id>`.
+
+The Content-by-Idea view supports zero, one, or multiple linked Content records
+and may expose compact generation activity. It must not turn every Idea Library
+card into an Attempt-history view.
 
 ---
 
@@ -1276,7 +1329,9 @@ without leaving the Library.
 
 ## Content
 
-View and edit content.
+The creator's production workspace: prioritize and generate from the Production
+Queue, then view/edit generated Content in the Content Library. The Content
+surface supports a narrow optional filter by source Idea.
 
 ## Publishing Queue
 
@@ -1314,22 +1369,23 @@ V1 is successful when a creator can complete this complete workflow without deve
 4. Review Ideas in the workspace-wide Library without opening individual
    generation batches.
 5. Accept, save, and reject Ideas.
-6. Choose an Idea.
-7. Generate content from the Idea.
-8. Edit the generated content.
-9. Add supported Performance Directions and Edit Directions.
-10. Save the content as Draft.
-11. Accept a specific content version.
-12. See the item enter the publishing queue.
-13. Publish the content manually on a supported external platform.
-14. Add the external published URL to Better Content.
-15. Connect the relevant social account if required.
-16. Register the external publication.
-17. Automatically retrieve available analytics.
-18. See updated analytics over time.
-19. Trace the publication back to its exact content version.
-20. Trace the content back to its originating Idea.
-21. Trace the Idea back to its generation batch and Content DNA version.
+6. Accept an Idea so it becomes planned production work.
+7. Prioritize the Idea in the Content Production Queue.
+8. Generate Content from the queue.
+9. Edit the generated content.
+10. Add supported Performance Directions and Edit Directions.
+11. Save the content as Draft.
+12. Accept a specific content version.
+13. See the item enter the publishing queue.
+14. Publish the content manually on a supported external platform.
+15. Add the external published URL to Better Content.
+16. Connect the relevant social account if required.
+17. Register the external publication.
+18. Automatically retrieve available analytics.
+19. See updated analytics over time.
+20. Trace the publication back to its exact content version.
+21. Trace the content back to its originating Idea.
+22. Trace the Idea back to its generation batch and Content DNA version.
 
 If this complete loop works reliably, the V1 architecture has proven the central product thesis.
 
@@ -1522,6 +1578,15 @@ Analytics Snapshot
 
 Normal editing and deletion actions must not accidentally destroy this history.
 
+The production workflow must also preserve these queue invariants: membership
+is derived from `ACCEPTED` plus zero linked Content; queue order persists;
+newly queued Ideas append at the end; leaving `ACCEPTED` or creating first
+Content removes queue relevance; failed generation leaves the Idea queued;
+reordering is transactional and stale membership returns `CONFLICT`; foreign
+Idea IDs cannot enter an order; and positions remain deterministic. Content
+count and `USED` remain derived, and one successful generation cannot create
+duplicate queue semantics.
+
 ---
 
 # 57. Soft Deletion and Historical Records
@@ -1573,6 +1638,12 @@ We should prioritize:
 * analytics synchronization tests
 * AI structured-output validation
 * critical end-to-end workflow tests
+
+The Production Queue correction additionally requires tests for derived
+membership, persistent append-at-end ordering, queue exit after state change or
+first Content, failed-generation retention, transactional reordering, stale
+`CONFLICT`, foreign-ID rejection, deterministic positions, multiple Content
+records, and derived Content/`USED` facts.
 
 The goal is confidence in important behavior, not maximizing test counts.
 
@@ -1706,7 +1777,20 @@ or owned-generation-run filter. The default is `New + All runs`. Generation
 batches remain separate provenance entities inside that Library experience,
 not a separate product surface, and the Library is implemented from existing
 Idea, batch, and Content relationships without a new Idea entity, persisted
-Content count, or persisted `USED` status.
+Content count, or persisted `USED` status. Idea cards are compact: accepted
+zero-Content Ideas may show **In content queue**, accepted Ideas with Content
+show a derived localized Content count/link, and full Attempt history plus the
+primary first-generation Generate action belong outside the card.
+
+## Decision 19 — Production Queue Membership and Ordering
+
+The Content product contains the Production Queue and Generated Content Library.
+Queue membership is derived as `ACCEPTED` plus zero linked Content; it is not a
+status and does not use a separate queue entity. Queue order is persisted as a
+nullable positive integer on the existing Idea aggregate, with new queued Ideas
+appended at the end and simple transactional integer reordering. Stale or
+foreign ordered-ID submissions return `CONFLICT`. This decision is recorded in
+ADR-017.
 
 ---
 

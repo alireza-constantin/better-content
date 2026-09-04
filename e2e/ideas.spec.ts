@@ -472,7 +472,7 @@ test("completes deterministic browser generation and persists exactly 20 ideas",
   await expect(
     page.getByText("Generation finished. Your latest batch is ready to review.", { exact: true }),
   ).toBeVisible();
-  await expect(page.getByRole("heading", { name: "20 ideas to work through" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Ideas", exact: true })).toBeVisible();
   await expect(
     page.getByRole("list", { name: "Generated ideas" }).locator(":scope > li"),
   ).toHaveCount(20);
@@ -506,7 +506,7 @@ test("uses keyboard for generation and decision controls", async ({ page }) => {
   await generateButton.focus();
   await expect(generateButton).toBeFocused();
   await generateButton.press("Enter");
-  await expect(page.getByRole("heading", { name: "20 ideas to work through" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Ideas", exact: true })).toBeVisible();
   await expect(
     page.getByRole("list", { name: "Generated ideas" }).locator(":scope > li"),
   ).toHaveCount(20);
@@ -675,26 +675,14 @@ test("covers active, completed, provider rate-limit, retry, and decision transit
 
   const pending = await seedBatch(email, { status: "PENDING" });
   await page.goto("/en/ideas?batchId=" + pending.batchId);
-  await expect(page.locator("#ideas-detail-title")).toHaveText("Your ideas are on their way");
-  await expect(
-    page.getByText(
-      "The request is queued for its safe provider invocation. This view will update when it completes.",
-      { exact: true },
-    ),
-  ).toBeVisible();
+  await expect(page.getByText("Pending", { exact: true })).toBeVisible();
+  await expect(page.getByText("No matching ideas", { exact: true })).toBeVisible();
   await expect(page.getByRole("list", { name: "Generated ideas" })).toHaveCount(0);
 
   const active = await seedBatch(email, { status: "RUNNING" });
   await page.goto("/en/ideas?batchId=" + active.batchId);
-  await expect(page.locator("#ideas-detail-title")).toHaveText("Your ideas are on their way");
-  await expect(
-    page.getByText(
-      "The request is being processed. Keep this page open while the current operation finishes.",
-      {
-        exact: true,
-      },
-    ),
-  ).toBeVisible();
+  await expect(page.getByText("Running", { exact: true })).toBeVisible();
+  await expect(page.getByText("No matching ideas", { exact: true })).toBeVisible();
   await expect(page.getByRole("list", { name: "Generated ideas" })).toHaveCount(0);
 
   await page.goto("/en/ideas?batchId=" + completed.batchId);
@@ -797,4 +785,62 @@ test("keeps a stale generation request in the localized conflict state", async (
   ).toBeVisible();
   expect(await countBatches(email)).toBe(0);
   await editor.close();
+});
+
+test("uses one Ideas Library for cross-batch status and Past Runs intersections", async ({
+  page,
+}) => {
+  const email = emailFor("ideas-library-cross-batch").toLowerCase();
+  await signUp(page, email);
+  await createReadyContentDna(page);
+  const older = await seedBatch(email, { status: "COMPLETED" });
+  const newer = await seedBatch(email, { status: "COMPLETED" });
+
+  await page.goto("/en/ideas");
+  await expect(page.getByRole("link", { name: "New" })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("link", { name: "All runs" })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+  await expect(
+    page.getByRole("list", { name: "Generated ideas" }).locator(":scope > li"),
+  ).toHaveCount(40);
+
+  await page.goto(`/en/ideas?batchId=${older.batchId}`);
+  const oldRunCard = page.locator("article").filter({ hasText: older.firstIdeaTitle }).first();
+  await oldRunCard.getByRole("button", { name: "Save for later" }).click();
+  await expect(
+    page.getByRole("list", { name: "Generated ideas" }).locator(":scope > li"),
+  ).toHaveCount(19);
+
+  await page.goto("/en/ideas?view=saved");
+  await expect(page.locator("article").filter({ hasText: older.firstIdeaTitle })).toHaveCount(1);
+  await page.goto(`/en/ideas?view=saved&batchId=${older.batchId}`);
+  await expect(page.locator("article").filter({ hasText: older.firstIdeaTitle })).toHaveCount(1);
+
+  await page.goto(`/en/ideas?batchId=${older.batchId}`);
+  await page.locator("article").first().getByRole("button", { name: "Accept" }).click();
+  await page.goto(`/en/ideas?view=accepted&batchId=${older.batchId}`);
+  await expect(page.getByRole("button", { name: "Generate Script" })).toHaveCount(1);
+  await page.goto("/en/ideas?view=accepted");
+  await expect(page.getByRole("link", { name: "All runs" })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+
+  await page.goto(`/en/ideas?batchId=${older.batchId}`);
+  await page.locator("article").first().getByRole("button", { name: "Reject" }).click();
+  const rejectionDialog = page.getByRole("dialog", { name: "Reject this idea" });
+  await rejectionDialog.getByRole("button", { name: "Reject idea" }).click();
+  await page.goto(`/en/ideas?view=rejected&batchId=${older.batchId}`);
+  await expect(page.getByRole("article")).toBeVisible();
+
+  await page.goto(`/en/ideas?view=all&batchId=${older.batchId}`);
+  await expect(
+    page.getByRole("list", { name: "Generated ideas" }).locator(":scope > li"),
+  ).toHaveCount(20);
+  await page.goto(`/en/ideas?view=all&batchId=${newer.batchId}`);
+  await expect(
+    page.getByRole("list", { name: "Generated ideas" }).locator(":scope > li"),
+  ).toHaveCount(20);
 });

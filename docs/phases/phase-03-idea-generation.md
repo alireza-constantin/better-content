@@ -8,7 +8,9 @@
 
 Phase 3 lets a workspace owner generate exactly 20 creator-specific ideas from
 the current AI-ready Content DNA version, review them in a workspace-wide Idea
-Library with integrated Past Runs filtering, and classify every idea. It
+Library with integrated Past Runs filtering, and classify every idea. The
+Library is compact and decision-focused; the primary first-generation
+workflow is moved to the Phase 4 Content Production Queue. It
 introduces the narrow provider-neutral AI foundation, one AvalAI adapter,
 traceable AI runs/batches/ideas, safe generation controls, and accessible
 English/Persian UX.
@@ -416,11 +418,14 @@ continues to require its existing explicit creator action.
 
 Library items may show title, description, current decision state, Idea
 language, generation date, lightweight batch provenance, and derived Content
-existence/count. For `ACCEPTED` Ideas, distinguish accepted-but-unused from
-accepted Ideas with one or more Content records, keep Generate Script available
-where the existing Phase 4 eligibility rules allow it, and allow another
-Content to be generated. Preserve the existing Accept, Save for later, and
-Reject actions.
+existence/count. For `ACCEPTED` Ideas, distinguish accepted planned work with
+zero linked Content from accepted Ideas with one or more Content records using
+compact derived indicators. An accepted zero-Content Idea may show **In
+content queue**; an Idea with Content may show a compact localized Content
+count/link. Do not place the primary Generate Script action or full Attempt
+history inline in the Idea card. Preserve the existing Accept, Save for later,
+and Reject actions; Phase 4 Ticket 13 owns the Content Queue presentation and
+generation placement.
 
 Keep compact Past Runs newest-first inside the one Idea Library filter area,
 with date/time, lifecycle result, DNA version number, requested language, and
@@ -544,8 +549,10 @@ required by `docs/agents/frontend-standards.md`.
 - [ ] Generation batches remain separate provenance entities and retain
       Idea-generation lineage, which is exposed through the Library's
       integrated Past Runs filter rather than a separate product surface.
-- [ ] Existing Accept, Save for later, and Reject actions continue to work,
-      and accepted Ideas retain the existing Generate Script behavior.
+- [ ] Existing Accept, Save for later, and Reject actions continue to work.
+- [ ] Idea cards remain compact: accepted zero-Content Ideas may show a queue
+      indicator, Content counts are derived, and full Attempt history plus the
+      primary first-generation Generate Script action are not inline card UI.
 - [ ] Workspace-wide reads require current membership; foreign-workspace Idea
       IDs remain nondisclosing.
 - [ ] The Library works in English/LTR and Persian/RTL, while Idea language
@@ -592,7 +599,9 @@ Provider adapters/selectors/routing/fallbacks, historical DNA generation,
 count/language expansion, bilingual batches, editing/bulk actions/deduplication,
 full-text/semantic search, tags/folders/collections, custom statuses, custom
 sorting, deletion/archive, embeddings/learning, prompt UI, generation jobs,
-content/editor, publishing, social integration, and analytics remain deferred.
+content/editor, Content Production Queue ordering/persistence, publishing,
+social integration, and analytics remain deferred. Phase 4 may add the queue
+through ADR-017 without changing Phase 3 Idea statuses or lineage.
 A future provider requires
 an ADR/amendment, the same neutral contract/privacy/safety requirements, and
 representative English/Persian evaluation; it must not rewrite historic records.
@@ -626,7 +635,7 @@ ticket may introduce deferred scope.
 
 ## 18. Source-of-truth review
 
-The PRD, Architecture, ADR-002/003/005/010/011/012/013/014/015, Phase 2
+The PRD, Architecture, ADR-002/003/005/010/011/012/013/014/015/017, Phase 2
 specification, frontend standards, and supplied resolved Phase 3 planning
 decisions were reviewed. They align on provider-neutral AI, structured runtime
 validation, immutable DNA lineage, 20-idea batches, derived USED state,
@@ -654,12 +663,17 @@ before Phase 4 closure:
   inside the Library, not a secondary product surface;
 - the existing four persisted decision states and derived `USED` rule are
   unchanged; and
-- the correction uses existing Idea, batch, and Content relationships, with no
-  new Idea persistence, persisted Content counts, or new ADR.
+- the correction uses existing Idea, batch, and Content relationships for
+  membership and Content counts. Its separate durable ordering decision is
+  deferred to Phase 4 and is recorded in ADR-017; Phase 3 itself adds no queue
+  persistence.
 
-This is an information-architecture correction only. It does not change
-20-Idea generation, batch lineage, Content-generation eligibility or Attempt
-semantics, provider policy, Script generation, or Draft-editor behavior.
+This remains an information-architecture correction for the Phase 3 Ideas
+surface. The later Production Queue correction changes the presentation and
+adds narrowly scoped ordering persistence in Phase 4; it does not change
+20-Idea generation, batch lineage, the four Idea decision states, Content-
+generation eligibility or Attempt semantics, provider policy, Script generation,
+or Draft-editor behavior.
 
 No unresolved source-of-truth contradictions remain. Architecture §§22 and
 24–25 are aligned: ADR-014 and ADR-015 supply the provider-neutral contract and

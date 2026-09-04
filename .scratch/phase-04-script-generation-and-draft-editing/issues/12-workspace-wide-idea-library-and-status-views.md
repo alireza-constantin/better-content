@@ -1,10 +1,11 @@
-# 12 — Add unified workspace-wide Idea Library filters
+# 12 — Add unified workspace-wide Idea Library filters and compact cards
 
 **What to build:** Replace the batch-first primary Ideas interaction with one
-workspace-wide `/ideas` Idea Library. It lets an authorized creator discover,
-classify, and start Script generation from Ideas using independent status and
-generation-run filters, while retaining generation batches as separate
-provenance entities inside that same Library experience.
+compact workspace-wide `/ideas` Idea Library. It lets an authorized creator
+discover and classify Ideas using independent status and generation-run filters,
+while retaining generation batches as separate provenance entities inside that
+same Library experience. The primary first-generation workflow belongs to the
+Content Production Queue in future Ticket 13, not to each Idea card.
 
 **Blocked by:** 09 — Deliver Generate Script UI and synchronous operation feedback; 10 — Deliver the Content list and Script editor with serialized autosave.
 
@@ -21,9 +22,9 @@ authorization boundaries, and batch lineage.
 
 ## Scope
 
-- Replace the current batch-first primary Ideas view with a workspace-wide
-  Library over the existing Idea, Idea Generation Batch, and Content
-  relationships.
+- Replace the current batch-first primary Ideas view with a compact
+  workspace-wide Library over the existing Idea, Idea Generation Batch, and
+  Content relationships.
 - Provide directly available `All`, `New`, `Saved`, `Accepted`, and `Rejected`
   views or equivalent status filters plus an integrated `All runs` or one
   owned-generation-batch Past Runs filter. The default is `New + All runs`.
@@ -39,8 +40,10 @@ authorization boundaries, and batch lineage.
 - Reuse the existing Idea decision application service/actions for Save,
   Accept, Reject, and other allowed persisted-state changes. Do not duplicate
   transition rules in presentation code.
-- Reuse the completed Ticket 09 Generate Script UI and actions for Accepted
-  Ideas shown in the Library. Do not duplicate Content-generation logic.
+- Do not place the primary first-generation Generate Script action on every
+  Accepted Idea card. Ticket 13 will present the existing Ticket 09 capability
+  in the Content Production Queue; Ticket 12 only communicates the compact
+  queue/Content state needed for navigation.
 - Expose Past Runs within the Library's filter/navigation area. Do not create a
   separate Generation History product surface, disconnected History component,
   or navigation flow that leaves the Library for normal run discovery.
@@ -61,10 +64,14 @@ authorization boundaries, and batch lineage.
   the Library through derived Content existence/count only.
 - Accepting an Idea remains side-effect-free. It does not create Content,
   create a Content Generation Attempt, or invoke AI.
-- Generate Script remains an explicit creator action available only for
-  `ACCEPTED` Ideas. `NEW`, `SAVED`, and `REJECTED` Ideas cannot generate.
-- Generating additional Content from an already accepted Idea remains allowed;
-  existing Content does not remove Generate Script eligibility.
+- An `ACCEPTED` Idea with zero linked Content is planned production work and may
+  show a compact **In content queue** indicator. The primary first-generation
+  Generate Script action is not rendered on the Idea card; Ticket 13 presents
+  the existing capability in the Content Production Queue.
+- An `ACCEPTED` Idea with linked Content may show a compact derived Content
+  count/link. Generating additional Content remains allowed from the
+  Idea-filtered Content context; existing Content does not change the Idea
+  decision state.
 - Rejected Ideas remain stored and retrievable in `Rejected`; they are not
   deleted, archived, permanently hidden, or used for AI learning.
 
@@ -85,8 +92,9 @@ authorization boundaries, and batch lineage.
 - Keep batch provenance/history authoritative for Content DNA version, AI Run,
   requested language, generated order/position, and timestamps. Do not rewrite
   or flatten that lineage into Idea records.
-- No database schema or migration change is planned or authorized for this
-  correction. Do not introduce a new pagination architecture unless an
+- Ticket 12 itself introduces no database schema or migration change. The
+  future queue-position migration belongs to Ticket 13 under ADR-017. Do not
+  introduce a new pagination architecture unless an
   existing documented data-volume requirement already requires it.
 - Library DTOs must contain only safe application-shaped facts; do not expose
   provider settings, prompts, raw AI responses, private persistence rows, or
@@ -122,30 +130,31 @@ authorization boundaries, and batch lineage.
   archive/delete, semantic search, embeddings, recommendations, learning, or
   Content lifecycle UI.
 
-## Generate Script integration
+## Content-generation boundary and navigation
 
-- Accepted Library Ideas use the existing Ticket 09 Generate Script form,
-  action, synchronous feedback, Attempt history, and redirect to the existing
-  localized Content editor.
-- The Library passes only the minimal accepted-Idea identity and existing
-  application inputs to the established Content-generation boundary.
-- The integration does not change Tickets 05–07 acceptance, quota,
-  idempotency, lifecycle, retry, or stale-recovery semantics, and does not
-  change AvalAI/provider behavior.
-- An accepted Idea with existing Content can start another independent Content
-  generation and the derived Library count/state reflects the additional
-  linked Content after the authoritative data is refreshed.
+- Ticket 12 does not implement or place the primary Generate Script action on
+  Idea Library cards. Future Ticket 13 presents the existing Ticket 09
+  Generate Script form/action in the Content Production Queue.
+- For an accepted Idea with linked Content, the Library may link to the Content
+  surface with the narrow source-Idea filter, conceptually
+  `/content?ideaId=<idea-id>`, if that navigation is already available from
+  Ticket 10. Otherwise Ticket 13 owns the navigation implementation.
+- Ticket 12 does not duplicate or alter Tickets 05–09 acceptance, quota,
+  idempotency, lifecycle, retry, stale-recovery, or provider behavior.
+- Full Attempt history is not rendered inline on each Idea card. It remains
+  durable and is exposed by the authorized Content/production context owned by
+  the existing generation/read behavior and Ticket 13 composition.
 
 ## Authorization, internationalization, and UX requirements
 
 - Library reads require authentication and current workspace membership.
-- Decision mutations and Generate Script use the established V1 owner
-  authorization. Client-supplied Idea, batch, or workspace IDs are never
-  ownership proof.
+- Decision mutations use the established V1 owner authorization. Client-
+  supplied Idea, batch, or workspace IDs are never ownership proof.
 - Foreign-workspace Idea IDs and unauthorized Library/batch/resource requests
   remain nondisclosing.
-- Use the existing shadcn/ui and Ideas design system. Keep the surface easy to
-  scan and status-focused without turning it into a project-management system.
+- Use the existing shadcn/ui and Ideas design system. Keep the surface compact,
+  easy to scan, and status-focused without turning it into a project-management
+  system.
 - Desktop is one cohesive Library layout: a left filter/navigation area for
   Status and Past Runs, and a main area for the intersected Idea results.
   Mobile may use a compact control, drawer, or sheet, but must preserve the
@@ -189,15 +198,18 @@ in automated tests.
   field or status.
 - Prove multiple Content records remain linked to the same Idea.
 
-### Generate Script and history
+### Compact cards and history boundary
 
-- Prove an Accepted Idea can start Generate Script from the Library through the
-  completed Ticket 09 path, including while a specific Past Run is selected.
-- Prove an Accepted Idea with existing Content can generate another Content.
-- Prove Saved, New, and Rejected Ideas cannot generate.
+- Prove accepted zero-Content Ideas expose compact planned-production state and
+  do not render the primary Generate Script action or full Attempt history.
+- Prove accepted Ideas with Content expose only a derived Content count/state;
+  any Content link uses the narrow source-Idea filter when available.
+- Prove Saved, New, and Rejected cards do not expose a misleading generation
+  action, while preserving their decision actions.
 - Prove the integrated Past Runs filter retains batch provenance, DNA-version,
   AI Run, requested-language, order/position, lifecycle, and timestamp
-  semantics without leaving the Library.
+  semantics without leaving the Library. Ticket 13 owns queue generation and
+  Generate Another behavior.
 
 ### EN/FA, accessibility, and E2E
 
@@ -207,9 +219,8 @@ in automated tests.
 - At minimum, the E2E flow generates multiple batches, saves an Idea from an
   older batch, finds it in `Saved + All runs` and `Saved + that run`, accepts an
   Idea and finds it in `Accepted + that run`, rejects an Idea and finds it in
-  `Rejected + that run`, starts Generate Script from an Accepted Idea with a
-  run filter active, observes derived Content count/state updates in global and
-  run-filtered views, and verifies the same unified filters in EN/FA and at
+  `Rejected + that run`, observes compact queue/Content count-state updates in
+  global and run-filtered views, and verifies the same unified filters in EN/FA and at
   mobile/desktop widths.
 
 ## Acceptance criteria
@@ -227,7 +238,8 @@ in automated tests.
       Library.
 - [ ] `Accepted` contains every Accepted Idea at `All runs`, supports an owned
       run intersection, exposes derived zero/one/multiple Content state, and
-      retains Generate Script.
+      shows compact planned-production or Content-count state without owning
+      primary first-generation Generate Script.
 - [ ] `Rejected` contains every Rejected Idea at `All runs` and within an
       owned run, while rejected records and rejection reasons remain stored and
       retrievable.
@@ -243,11 +255,12 @@ in automated tests.
       is introduced.
 - [ ] `hasContent` is derived from linked Content, and one Idea can have
       multiple linked Content records without changing its decision state.
-- [ ] Accepting an Idea remains side-effect-free, and only Accepted Ideas can
-      Generate Script; Saved, New, and Rejected Ideas cannot.
-- [ ] An Accepted Idea with existing Content can generate additional Content
-      through the existing Ticket 09 flow without duplicated Content-generation
-      logic or changed Tickets 05–07/provider semantics.
+- [ ] Accepting an Idea remains side-effect-free. Only Accepted Ideas are
+      eligible for generation, but the primary first-generation action is
+      presented by the future Content Production Queue rather than Idea cards.
+- [ ] Accepted Ideas with existing Content can be linked to the narrow
+      source-Idea Content view; Ticket 13 owns Generate Another there without
+      duplicating or changing Tickets 05–07/provider semantics.
 - [ ] Past Runs is an integrated Library filter, not a separate Generation
       History product surface. Its selected-run context keeps existing batch
       provenance and history semantics intact.
@@ -261,8 +274,8 @@ in automated tests.
       archive/delete, custom sorting, new pagination architecture, Content
       lifecycle UI, or Phase 5 behavior is introduced.
 - [ ] Automated coverage uses deterministic providers only and includes the
-      required workspace-wide, transition, derived-Content, Generate Script,
-      Past Runs, security, locale, responsive, and minimum E2E scenarios.
+      required workspace-wide, transition, compact-card, derived-Content, Past
+      Runs, security, locale, responsive, and minimum E2E scenarios.
 
 ## Explicit non-goals and scope guard
 
@@ -283,9 +296,12 @@ Do not change:
 
 ## Dependencies and blockers
 
-- Blocked by Tickets 09 and 10 so the Library can reuse the completed Generate
-  Script and Content/editor integration surfaces.
-- Blocks Ticket 11. Ticket 11 must not begin until this ticket is resolved.
+- Blocked by Ticket 10 for the optional narrow Content-link convention. Ticket
+  09 remains a reusable generation capability but is not a Ticket 12 card UI
+  dependency.
+- Blocks future Ticket 13, which consumes this compact Library, and blocks
+  Ticket 11. Ticket 11 must not begin until both Ticket 12 and future Ticket 13
+  are resolved.
 - This is a corrective Phase 4 prerequisite, not a new phase and not a
   replacement or renumbering of existing Phase 4 tickets.
 

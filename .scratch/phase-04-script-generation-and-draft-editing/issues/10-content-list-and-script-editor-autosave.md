@@ -24,7 +24,7 @@ Give creators a complete minimal Draft workspace while keeping all persistence, 
 ## Explicit non-goals
 
 - Rich text, Markdown, blocks, directions, anchors, editor-library selection, history/diff/restore, manual checkpoint, per-keystroke Version, automatic merge, collaboration, offline persistence/queue, or AI editing.
-- Title, search, filters, folders, bulk actions, archive/delete, acceptance, queue, publication, analytics, or fake metrics.
+- Title, advanced search/filter architecture, folders, bulk actions, archive/delete, acceptance, Production Queue, publication, analytics, or fake metrics. Future Ticket 13 extends the `/content` surface with the approved Production Queue and narrow source-Idea filter.
 - Manual/import/duplicate Content creation.
 
 ## Source-of-truth references

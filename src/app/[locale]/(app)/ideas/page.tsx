@@ -6,7 +6,12 @@ import {
   type IdeaContentGenerationHistoryDto,
 } from "@/modules/content/application";
 import { getCurrentContentDna } from "@/modules/dna/application";
-import { getIdeaGenerationBatch, getIdeaGenerationBatchHistory } from "@/modules/ideas/application";
+import {
+  getIdeaGenerationBatchHistory,
+  getIdeaLibrary,
+  type IdeaLibraryDto,
+} from "@/modules/ideas/application";
+import { parseIdeaLibraryUrlState } from "@/modules/ideas/presentation/idea-library-url-state";
 import { IdeasWorkspace } from "@/modules/ideas/presentation/ideas-workspace";
 import type {
   IdeasContentGenerationHistory,
@@ -43,9 +48,9 @@ function toDnaSummary(current: Awaited<ReturnType<typeof getCurrentContentDna>>)
 
 async function loadContentGenerationHistory(
   workspaceId: string,
-  detail: Awaited<ReturnType<typeof getIdeaGenerationBatch>> | null,
+  library: IdeaLibraryDto,
 ): Promise<IdeasContentGenerationHistory> {
-  const acceptedIdeas = detail?.ideas?.filter((idea) => idea.status === "ACCEPTED") ?? [];
+  const acceptedIdeas = library.ideas.filter((idea) => idea.status === "ACCEPTED");
 
   const entries = await Promise.all(
     acceptedIdeas.map(async (idea): Promise<readonly [string, IdeaContentGenerationHistoryDto]> => [
@@ -60,7 +65,7 @@ async function loadContentGenerationHistory(
 export default async function IdeasPage({
   searchParams,
 }: Readonly<{
-  searchParams: Promise<{ batchId?: string | string[] }>;
+  searchParams: Promise<{ view?: string | string[]; batchId?: string | string[] }>;
 }>) {
   const [session, search] = await Promise.all([getServerSession(), searchParams]);
 
@@ -69,20 +74,18 @@ export default async function IdeasPage({
   }
 
   const workspace = await getOrCreateDefaultWorkspace(session.user.id);
-  const [currentDna, history, t] = await Promise.all([
+  const urlState = parseIdeaLibraryUrlState(search);
+  const [currentDna, history, library, t] = await Promise.all([
     getCurrentContentDna({ workspaceId: workspace.id }),
     getIdeaGenerationBatchHistory({ workspaceId: workspace.id }),
+    getIdeaLibrary({
+      workspaceId: workspace.id,
+      statusFilter: urlState.statusFilter,
+      generationBatchId: urlState.batchId,
+    }),
     getTranslations("Ideas"),
   ]);
-  const requestedBatchId = typeof search.batchId === "string" ? search.batchId : null;
-  const selectedBatchId =
-    requestedBatchId && history.batches.some((batch) => batch.id === requestedBatchId)
-      ? requestedBatchId
-      : history.selectedBatchId;
-  const initialDetail = selectedBatchId
-    ? await getIdeaGenerationBatch({ workspaceId: workspace.id, batchId: selectedBatchId })
-    : null;
-  const contentGenerationHistory = await loadContentGenerationHistory(workspace.id, initialDetail);
+  const contentGenerationHistory = await loadContentGenerationHistory(workspace.id, library);
   const dnaSummary = toDnaSummary(currentDna);
 
   return (
@@ -90,8 +93,8 @@ export default async function IdeasPage({
       <IdeasWorkspace
         dna={dnaSummary}
         contentGenerationHistory={contentGenerationHistory}
-        initialDetail={initialDetail}
-        initialHistory={{ ...history, selectedBatchId }}
+        initialHistory={history}
+        initialLibrary={library}
         key={dnaSummary.currentVersion?.id ?? dnaSummary.status}
         workspaceId={workspace.id}
       />
