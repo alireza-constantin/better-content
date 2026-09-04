@@ -1,5 +1,7 @@
 import "server-only";
 
+import { randomUUID } from "node:crypto";
+
 import { z } from "zod";
 
 import { db } from "@/db";
@@ -40,8 +42,13 @@ import {
   type ContentGenerationPair,
   type ContentGenerationPreflightResult,
 } from "./content-generation-repository";
+import {
+  findCurrentContentDnaVersionId,
+  findContentGenerationAttemptForRetry,
+} from "./content-read-repository";
 
 const recoveryInputSchema = z.object({ workspaceId: z.uuid() }).strict();
+const retryInputSchema = z.object({ workspaceId: z.uuid(), attemptId: z.uuid() }).strict();
 
 export type ContentGenerationAttemptDto = Readonly<{
   id: string;
@@ -233,6 +240,7 @@ export function createContentGenerationApplicationService(
 ): Readonly<{
   acceptContentGeneration(input: unknown): Promise<ContentGenerationAcceptanceResult>;
   generateContentScript(input: unknown): Promise<ContentGenerationResult>;
+  retryContentGenerationAttempt(input: unknown): Promise<ContentGenerationResult>;
   recoverStalePendingAttempts(input: unknown): Promise<Readonly<{ recovered: number }>>;
   recoverStaleRunningAttempts(input: unknown): Promise<Readonly<{ recovered: number }>>;
 }> {
@@ -340,6 +348,70 @@ export function createContentGenerationApplicationService(
     }
 
     return { recovered };
+  }
+
+  async function retryContentGenerationAttempt(input: unknown): Promise<ContentGenerationResult> {
+    const userId = await getAuthenticatedUserId();
+
+    if (!userId) {
+      throw new ApplicationError("UNAUTHORIZED", "Authentication is required.");
+    }
+
+    const parsedInput = retryInputSchema.safeParse(input);
+
+    if (!parsedInput.success) {
+      throw new ApplicationError(
+        "VALIDATION_ERROR",
+        "The Content generation retry request is invalid.",
+      );
+    }
+
+    await requireWorkspaceOwner(userId, parsedInput.data.workspaceId, database);
+
+    const failedAttempt = await findContentGenerationAttemptForRetry(
+      database,
+      parsedInput.data.workspaceId,
+      parsedInput.data.attemptId,
+    );
+
+    if (!failedAttempt) {
+      throw new ApplicationError("NOT_FOUND", "The Content generation Attempt was not found.");
+    }
+
+    if (parseStoredContentGenerationStatus(failedAttempt.status) !== "FAILED") {
+      throw new ApplicationError(
+        "CONFLICT",
+        "Only a failed Content generation Attempt can be retried.",
+      );
+    }
+
+    const currentContentDnaVersionId = await findCurrentContentDnaVersionId(
+      database,
+      parsedInput.data.workspaceId,
+    );
+
+    if (!currentContentDnaVersionId) {
+      throw new ApplicationError(
+        "VALIDATION_ERROR",
+        "Complete Content DNA is required before retrying Content generation.",
+      );
+    }
+
+    logOperation(serviceLogger, "info", "content.generate.retry_started", {
+      userId,
+      workspaceId: parsedInput.data.workspaceId,
+      attemptId: failedAttempt.id,
+    });
+
+    return generateContentScript({
+      workspaceId: parsedInput.data.workspaceId,
+      sourceIdeaId: failedAttempt.sourceIdeaId,
+      baseContentDnaVersionId: currentContentDnaVersionId,
+      requestedLanguage: failedAttempt.requestedLanguage,
+      format: failedAttempt.format,
+      ...(failedAttempt.instructions === null ? {} : { instructions: failedAttempt.instructions }),
+      idempotencyKey: randomUUID(),
+    });
   }
 
   async function recoverStaleRunningAttempts(
@@ -614,6 +686,7 @@ export function createContentGenerationApplicationService(
   return {
     acceptContentGeneration,
     generateContentScript,
+    retryContentGenerationAttempt,
     recoverStalePendingAttempts,
     recoverStaleRunningAttempts,
   };

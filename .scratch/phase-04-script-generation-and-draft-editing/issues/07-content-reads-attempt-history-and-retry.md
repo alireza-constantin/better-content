@@ -4,7 +4,7 @@
 
 **Blocked by:** 06 — Execute generation and create Content artifacts atomically.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 ## Goal
 
