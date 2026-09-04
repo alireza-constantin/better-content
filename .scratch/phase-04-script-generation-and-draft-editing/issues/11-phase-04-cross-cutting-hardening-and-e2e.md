@@ -2,7 +2,7 @@
 
 **What to build:** Verify and harden the assembled Phase 4 implementation across the complete deterministic browser matrix, database/application boundaries, production provider composition, internationalization, accessibility, security, autosave concurrency, and the opt-in live AvalAI smoke, then mark implementation Ready for review without declaring Phase 4 Complete.
 
-**Blocked by:** 09 — Deliver Generate Script UI and synchronous operation feedback; 10 — Deliver the Content list and Script editor with serialized autosave.
+**Blocked by:** 09 — Deliver Generate Script UI and synchronous operation feedback; 10 — Deliver the Content list and Script editor with serialized autosave; 12 — Add workspace-wide Idea Library and status views.
 
 **Status:** ready-for-agent
 
@@ -13,6 +13,7 @@ Produce complete Phase 4 implementation evidence at stable seams without turning
 ## Scope
 
 - Run the complete deterministic accepted Idea → generation → editor → autosave journey through browser and real application/database boundaries.
+- Verify the corrected workspace-wide Idea Library as the primary Ideas surface: `All`, `New`, `Saved`, `Accepted`, and `Rejected` views, `New` as the default, cross-batch discovery without batch selection, derived Content state, secondary Generation History, Generate Script from accepted Library Ideas, authorization/nondisclosure, and EN/FA LTR/RTL behavior.
 - Add only missing integration/component/E2E coverage enumerated by Phase 4 §31.
 - Stress same-key, quota, terminal-winner, immutable-lineage, and Draft-revision concurrency.
 - Verify workspace nondisclosure at reads, replay, Attempt instructions, generation, retry, Content, and Draft mutation boundaries.
@@ -46,6 +47,7 @@ Produce complete Phase 4 implementation evidence at stable seams without turning
 ## Required behavior
 
 - Browser success invokes the deterministic neutral provider once, persists the exact lineage/artifacts, redirects after completion, edits/autosaves, and appears first by Draft last-edited time.
+- The final hardening evidence verifies all five Library views, the `New` default, cross-batch retrieval without opening a batch, derived zero/one/multiple Content state, reachable secondary Generation History, Generate Script from an accepted Library Idea, membership/nondisclosure, and English/Persian LTR/RTL behavior.
 - Ineligible/stale/quota/foreign failures have the exact zero-side-effect guarantees.
 - Provider failures and stale recovery retain history with no artifacts and correct safe Retry behavior.
 - Stored PENDING/RUNNING records render without polling, jobs, split endpoints, `after()`, `waitUntil()`, or simulated background execution.
@@ -76,6 +78,7 @@ Produce complete Phase 4 implementation evidence at stable seams without turning
 ## Acceptance criteria
 
 - [ ] Every Phase 4 §31 unit/integration/component/E2E case is covered at its highest stable seam with no live AvalAI dependency in automated tests.
+- [ ] The corrected workspace-wide Idea Library passes final verification for `All`, `New`, `Saved`, `Accepted`, and `Rejected`, defaults to `New`, retrieves Ideas across batches without batch selection, shows derived Content state/count including multiple Content records, keeps secondary Generation History reachable, supports Generate Script from accepted Library Ideas, preserves authorization/nondisclosure, and works in EN/LTR and FA/RTL.
 - [ ] Browser telemetry proves deterministic tests invoke the fake and issue zero requests to AvalAI.
 - [ ] Production composition selects the accepted AvalAI Content Script adapter and no AvalAI/OpenAI SDK type escapes infrastructure.
 - [ ] Cross-workspace nondisclosure and all zero-side-effect failure cases pass through real application/database boundaries.
@@ -96,11 +99,12 @@ Produce complete Phase 4 implementation evidence at stable seams without turning
 - **Integration:** complete schema/application race, authorization, lineage, quota, recovery, retry, and revision matrix.
 - **Component:** complete generation/list/editor state, locale, direction, keyboard, and announcement matrix.
 - **E2E:** all minimum scenarios in Phase 4 §31, including real browser-triggered deterministic generation, both rate-limit sources, retry/interrupted states, autosave failure, two-tab conflict, locales/directions, accessibility, and responsive layouts.
+- **E2E:** additionally verify the corrected workspace-wide Library flow across all five views, the `New` default, cross-batch status retrieval, derived Content count/state, secondary Generation History, accepted-Library Generate Script, authorization/nondisclosure, and EN/FA LTR/RTL behavior.
 - **Live smoke:** explicit opt-in EN/FA × SHORT/LONG execution with synthetic data; never a normal CI test.
 
 ## Dependencies and blockers
 
-- Blocked by Tickets 09 and 10; transitively requires Tickets 01–08.
+- Blocked by Tickets 09, 10, and 12; transitively requires Tickets 01–08. Ticket 12 is a corrective prerequisite and this ticket must not begin until Ticket 12 is resolved.
 - This is the final implementation ticket. Final Product Architect closure review occurs afterward and is not an implementation ticket.
 
 ## Expected verification commands
