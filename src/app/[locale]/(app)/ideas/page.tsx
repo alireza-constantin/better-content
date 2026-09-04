@@ -1,10 +1,18 @@
 import { getTranslations } from "next-intl/server";
 
 import { getServerSession } from "@/lib/auth/server";
+import {
+  getIdeaContentGenerationHistory,
+  type IdeaContentGenerationHistoryDto,
+} from "@/modules/content/application";
 import { getCurrentContentDna } from "@/modules/dna/application";
 import { getIdeaGenerationBatch, getIdeaGenerationBatchHistory } from "@/modules/ideas/application";
 import { IdeasWorkspace } from "@/modules/ideas/presentation/ideas-workspace";
-import type { IdeasDnaSummary, IdeasLanguage } from "@/modules/ideas/presentation/ideas-types";
+import type {
+  IdeasContentGenerationHistory,
+  IdeasDnaSummary,
+  IdeasLanguage,
+} from "@/modules/ideas/presentation/ideas-types";
 import { getOrCreateDefaultWorkspace } from "@/modules/workspace/application";
 
 function toDnaSummary(current: Awaited<ReturnType<typeof getCurrentContentDna>>): IdeasDnaSummary {
@@ -33,6 +41,22 @@ function toDnaSummary(current: Awaited<ReturnType<typeof getCurrentContentDna>>)
   };
 }
 
+async function loadContentGenerationHistory(
+  workspaceId: string,
+  detail: Awaited<ReturnType<typeof getIdeaGenerationBatch>> | null,
+): Promise<IdeasContentGenerationHistory> {
+  const acceptedIdeas = detail?.ideas?.filter((idea) => idea.status === "ACCEPTED") ?? [];
+
+  const entries = await Promise.all(
+    acceptedIdeas.map(async (idea): Promise<readonly [string, IdeaContentGenerationHistoryDto]> => [
+      idea.id,
+      await getIdeaContentGenerationHistory({ workspaceId, sourceIdeaId: idea.id }),
+    ]),
+  );
+
+  return Object.fromEntries(entries);
+}
+
 export default async function IdeasPage({
   searchParams,
 }: Readonly<{
@@ -58,12 +82,14 @@ export default async function IdeasPage({
   const initialDetail = selectedBatchId
     ? await getIdeaGenerationBatch({ workspaceId: workspace.id, batchId: selectedBatchId })
     : null;
+  const contentGenerationHistory = await loadContentGenerationHistory(workspace.id, initialDetail);
   const dnaSummary = toDnaSummary(currentDna);
 
   return (
     <section className="mx-auto w-full max-w-6xl">
       <IdeasWorkspace
         dna={dnaSummary}
+        contentGenerationHistory={contentGenerationHistory}
         initialDetail={initialDetail}
         initialHistory={{ ...history, selectedBatchId }}
         key={dnaSummary.currentVersion?.id ?? dnaSummary.status}

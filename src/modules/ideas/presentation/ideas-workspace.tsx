@@ -44,6 +44,10 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import type { RateLimitSource } from "@/lib/errors/app-error";
 import { Link, useRouter } from "@/i18n/navigation";
+import {
+  generateContentScriptAction,
+  retryContentGenerationAttemptAction,
+} from "@/modules/content/application/content-actions";
 import type {
   IdeaGenerationBatchDetailDto,
   IdeaGenerationBatchHistoryDto,
@@ -56,16 +60,28 @@ import {
   retryIdeaGenerationAction,
   updateIdeaDecisionAction,
 } from "../application/ideas-actions";
-import type { IdeasDnaSummary, IdeasLanguage } from "./ideas-types";
+import {
+  ContentAttemptHistory,
+  ContentGenerationActionNotice,
+  ContentGenerationDialog,
+  type ContentGenerationFormValues,
+  type ContentGenerationNotice,
+} from "./content-generation-panel";
+import type { IdeasContentGenerationHistory, IdeasDnaSummary, IdeasLanguage } from "./ideas-types";
 
 type IdeasWorkspaceProps = Readonly<{
   workspaceId: string;
   dna: IdeasDnaSummary;
+  contentGenerationHistory?: IdeasContentGenerationHistory;
   initialHistory: IdeaGenerationBatchHistoryResult;
   initialDetail: IdeaGenerationBatchDetailDto | null;
 }>;
 
 type ActiveOperation = "generate" | "retry" | null;
+type ActiveContentOperation =
+  | Readonly<{ kind: "generate"; ideaId: string }>
+  | Readonly<{ kind: "retry"; ideaId: string; attemptId: string }>
+  | null;
 type Notice =
   | Readonly<{ kind: "success"; message: "generationSuccess" | "decisionSuccess" }>
   | Readonly<{ kind: "error"; code: string; rateLimitSource?: RateLimitSource }>;
@@ -458,15 +474,23 @@ function HistoryList({
 }
 
 function IdeaCard({
+  activeRetryAttemptId,
   idea,
   isBusy,
+  contentGenerationHistory,
   onDecision,
+  onGenerateScript,
   onReject,
+  onRetryContentGeneration,
 }: Readonly<{
+  activeRetryAttemptId: string | null;
   idea: IdeaDto;
   isBusy: boolean;
+  contentGenerationHistory: IdeasContentGenerationHistory;
   onDecision: (idea: IdeaDto, nextState: "ACCEPTED" | "SAVED") => void;
+  onGenerateScript: (idea: IdeaDto, trigger: HTMLButtonElement) => void;
   onReject: (idea: IdeaDto, trigger: HTMLButtonElement) => void;
+  onRetryContentGeneration: (ideaId: string, attemptId: string) => void;
 }>) {
   const t = useTranslations("Ideas");
   const locale = useLocale();
@@ -474,6 +498,7 @@ function IdeaCard({
   const uiDirection = uiLocale === "fa" ? "rtl" : "ltr";
   const content = contentPresentation(idea.language);
   const isPending = isBusy;
+  const isAccepted = idea.status === "ACCEPTED";
 
   return (
     <li>
@@ -516,42 +541,65 @@ function IdeaCard({
           </p>
         ) : null}
         <div className="mt-5 border-t border-border pt-4">
-          <fieldset className="flex flex-wrap gap-2">
-            <legend className="sr-only">{t("decisionActionsLabel")}</legend>
-            <Button
-              aria-pressed={idea.status === "ACCEPTED"}
-              className="min-h-11 flex-1 sm:flex-none"
-              disabled={isPending || idea.status === "ACCEPTED"}
-              onClick={() => onDecision(idea, "ACCEPTED")}
-              size="sm"
-              type="button"
-              variant={idea.status === "ACCEPTED" ? "default" : "outline"}
-            >
-              {t("accept")}
-            </Button>
-            <Button
-              aria-pressed={idea.status === "SAVED"}
-              className="min-h-11 flex-1 sm:flex-none"
-              disabled={isPending || idea.status === "SAVED"}
-              onClick={() => onDecision(idea, "SAVED")}
-              size="sm"
-              type="button"
-              variant={idea.status === "SAVED" ? "secondary" : "outline"}
-            >
-              {t("saveForLater")}
-            </Button>
-            <Button
-              aria-pressed={idea.status === "REJECTED"}
-              className="min-h-11 flex-1 sm:flex-none"
-              disabled={isPending}
-              onClick={(event) => onReject(idea, event.currentTarget)}
-              size="sm"
-              type="button"
-              variant={idea.status === "REJECTED" ? "destructive" : "outline"}
-            >
-              {t("reject")}
-            </Button>
-          </fieldset>
+          <div className="grid gap-4">
+            <fieldset className="flex flex-wrap gap-2">
+              <legend className="sr-only">{t("decisionActionsLabel")}</legend>
+              <Button
+                aria-pressed={idea.status === "ACCEPTED"}
+                className="min-h-11 flex-1 sm:flex-none"
+                disabled={isPending || idea.status === "ACCEPTED"}
+                onClick={() => onDecision(idea, "ACCEPTED")}
+                size="sm"
+                type="button"
+                variant={idea.status === "ACCEPTED" ? "default" : "outline"}
+              >
+                {t("accept")}
+              </Button>
+              <Button
+                aria-pressed={idea.status === "SAVED"}
+                className="min-h-11 flex-1 sm:flex-none"
+                disabled={isPending || idea.status === "SAVED"}
+                onClick={() => onDecision(idea, "SAVED")}
+                size="sm"
+                type="button"
+                variant={idea.status === "SAVED" ? "secondary" : "outline"}
+              >
+                {t("saveForLater")}
+              </Button>
+              <Button
+                aria-pressed={idea.status === "REJECTED"}
+                className="min-h-11 flex-1 sm:flex-none"
+                disabled={isPending}
+                onClick={(event) => onReject(idea, event.currentTarget)}
+                size="sm"
+                type="button"
+                variant={idea.status === "REJECTED" ? "destructive" : "outline"}
+              >
+                {t("reject")}
+              </Button>
+            </fieldset>
+
+            {isAccepted ? (
+              <Button
+                className="min-h-11 w-full sm:w-fit"
+                disabled={isPending}
+                onClick={(event) => onGenerateScript(idea, event.currentTarget)}
+                type="button"
+              >
+                <WandSparklesIcon data-icon="inline-start" />
+                {t("generateScript")}
+              </Button>
+            ) : null}
+
+            {isAccepted ? (
+              <ContentAttemptHistory
+                activeRetryAttemptId={activeRetryAttemptId}
+                history={contentGenerationHistory[idea.id]}
+                isBusy={isPending}
+                onRetry={(attemptId) => onRetryContentGeneration(idea.id, attemptId)}
+              />
+            ) : null}
+          </div>
         </div>
       </article>
     </li>
@@ -701,17 +749,25 @@ function RejectReasonDialog({
 }
 
 function DetailPanel({
+  activeContentOperation,
+  contentGenerationHistory,
   detail,
   isBusy,
   activeOperation,
+  onGenerateScript,
   onRetry,
+  onRetryContentGeneration,
   onDecision,
   onReject,
 }: Readonly<{
+  activeContentOperation: ActiveContentOperation;
+  contentGenerationHistory: IdeasContentGenerationHistory;
   detail: IdeaGenerationBatchDetailDto | null;
   isBusy: boolean;
   activeOperation: ActiveOperation;
+  onGenerateScript: (idea: IdeaDto, trigger: HTMLButtonElement) => void;
   onRetry: (batchId: string) => void;
+  onRetryContentGeneration: (ideaId: string, attemptId: string) => void;
   onDecision: (idea: IdeaDto, nextState: "ACCEPTED" | "SAVED") => void;
   onReject: (idea: IdeaDto, trigger: HTMLButtonElement) => void;
 }>) {
@@ -803,11 +859,20 @@ function DetailPanel({
           <ol className="mt-6 grid gap-4 sm:grid-cols-2" aria-label={t("ideasListLabel")}>
             {detail.ideas.map((idea) => (
               <IdeaCard
+                contentGenerationHistory={contentGenerationHistory}
+                activeRetryAttemptId={
+                  activeContentOperation?.kind === "retry" &&
+                  activeContentOperation.ideaId === idea.id
+                    ? activeContentOperation.attemptId
+                    : null
+                }
                 isBusy={isBusy}
                 idea={idea}
                 key={idea.id}
                 onDecision={onDecision}
+                onGenerateScript={onGenerateScript}
                 onReject={onReject}
+                onRetryContentGeneration={onRetryContentGeneration}
               />
             ))}
           </ol>
@@ -820,6 +885,7 @@ function DetailPanel({
 export function IdeasWorkspace({
   workspaceId,
   dna,
+  contentGenerationHistory = {},
   initialHistory,
   initialDetail,
 }: IdeasWorkspaceProps) {
@@ -838,11 +904,16 @@ export function IdeasWorkspace({
     return currentVersion?.defaultContentLanguage ?? currentVersion?.contentLanguages[0] ?? "en";
   });
   const [activeOperation, setActiveOperation] = useState<ActiveOperation>(null);
+  const [activeContentOperation, setActiveContentOperation] =
+    useState<ActiveContentOperation>(null);
   const [pendingDecisionId, setPendingDecisionId] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
+  const [contentNotice, setContentNotice] = useState<ContentGenerationNotice | null>(null);
+  const [generatingIdea, setGeneratingIdea] = useState<IdeaDto | null>(null);
   const [rejectingIdea, setRejectingIdea] = useState<IdeaDto | null>(null);
   const generationButtonRef = useRef<HTMLButtonElement | null>(null);
   const restoreGenerationFocus = useRef(false);
+  const generateScriptTriggerRef = useRef<HTMLButtonElement | null>(null);
   const rejectTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [isPending, startTransition] = useTransition();
   const serverDataSignature = `${initialHistory.selectedBatchId}|${initialHistory.batches.map((batch) => `${batch.id}:${batch.status}:${batch.ideaCount}`).join(",")}|${initialDetail?.id ?? "none"}:${initialDetail?.status ?? "none"}:${initialDetail?.ideas.length ?? 0}`;
@@ -866,7 +937,7 @@ export function IdeasWorkspace({
     }
   }, [initialDetail, initialHistory.batches, initialHistory.selectedBatchId, serverDataSignature]);
 
-  const isBusy = isPending || pendingDecisionId !== null;
+  const isBusy = isPending || pendingDecisionId !== null || activeContentOperation !== null;
   const currentVersion = dna.currentVersion;
   const activeRequestedLanguage = currentVersion?.contentLanguages.includes(requestedLanguage)
     ? requestedLanguage
@@ -949,6 +1020,116 @@ export function IdeasWorkspace({
     });
   }
 
+  function openContentGenerationDialog(idea: IdeaDto, trigger: HTMLButtonElement) {
+    if (idea.status !== "ACCEPTED" || dna.status !== "AI_READY" || !currentVersion) {
+      return;
+    }
+
+    generateScriptTriggerRef.current = trigger;
+    setContentNotice(null);
+    setGeneratingIdea(idea);
+  }
+
+  function closeContentGenerationDialog() {
+    setGeneratingIdea(null);
+  }
+
+  function reloadCurrentContentState() {
+    setGeneratingIdea(null);
+    setContentNotice(null);
+    router.refresh();
+  }
+
+  function shouldRefreshContentHistory(
+    result: Readonly<{ code: string; rateLimitSource?: RateLimitSource }>,
+  ): boolean {
+    return !(
+      result.code === "CONFLICT" ||
+      result.code === "VALIDATION_ERROR" ||
+      (result.code === "RATE_LIMITED" && result.rateLimitSource === "workspace")
+    );
+  }
+
+  function handleContentGenerationSubmit(values: ContentGenerationFormValues) {
+    if (!generatingIdea || !currentVersion) {
+      return;
+    }
+
+    const idea = generatingIdea;
+    const instructions = values.instructions.trim();
+    setContentNotice(null);
+    setActiveContentOperation({ kind: "generate", ideaId: idea.id });
+    startTransition(async () => {
+      try {
+        const result = await generateContentScriptAction({
+          workspaceId,
+          sourceIdeaId: idea.id,
+          baseContentDnaVersionId: currentVersion.id,
+          requestedLanguage: values.requestedLanguage,
+          format: values.format,
+          ...(instructions ? { instructions } : {}),
+          idempotencyKey: crypto.randomUUID(),
+        });
+
+        if (!result.ok) {
+          setContentNotice({
+            code: result.code,
+            ...(result.rateLimitSource ? { rateLimitSource: result.rateLimitSource } : {}),
+          });
+          if (shouldRefreshContentHistory(result)) {
+            router.refresh();
+          }
+          return;
+        }
+
+        if (!result.contentId) {
+          setContentNotice({ code: "INTERNAL_ERROR" });
+          router.refresh();
+          return;
+        }
+
+        router.push(`/content/${result.contentId}`);
+      } catch {
+        setContentNotice({ code: "INTERNAL_ERROR" });
+        router.refresh();
+      } finally {
+        setActiveContentOperation(null);
+      }
+    });
+  }
+
+  function handleContentGenerationRetry(ideaId: string, attemptId: string) {
+    setContentNotice(null);
+    setActiveContentOperation({ kind: "retry", ideaId, attemptId });
+    startTransition(async () => {
+      try {
+        const result = await retryContentGenerationAttemptAction({ workspaceId, attemptId });
+
+        if (!result.ok) {
+          setContentNotice({
+            code: result.code,
+            ...(result.rateLimitSource ? { rateLimitSource: result.rateLimitSource } : {}),
+          });
+          router.refresh();
+          return;
+        }
+
+        if (!result.contentId) {
+          setContentNotice({ code: "INTERNAL_ERROR" });
+          router.refresh();
+          return;
+        }
+
+        router.push(`/content/${result.contentId}`);
+      } catch {
+        setContentNotice({ code: "INTERNAL_ERROR" });
+        router.refresh();
+      } finally {
+        setActiveContentOperation(null);
+      }
+    });
+  }
+
   function handleDecision(idea: IdeaDto, nextState: "ACCEPTED" | "SAVED") {
     setNotice(null);
     setPendingDecisionId(idea.id);
@@ -1016,6 +1197,29 @@ export function IdeasWorkspace({
     };
   }, [isPending, pendingDecisionId, rejectingIdea]);
 
+  useEffect(() => {
+    if (generatingIdea || activeContentOperation) {
+      return;
+    }
+
+    const trigger = generateScriptTriggerRef.current;
+
+    if (!trigger) {
+      return;
+    }
+
+    const focusTimer = window.setTimeout(() => {
+      if (!trigger.disabled) {
+        trigger.focus();
+        generateScriptTriggerRef.current = null;
+      }
+    }, 0);
+
+    return () => {
+      window.clearTimeout(focusTimer);
+    };
+  }, [activeContentOperation, generatingIdea]);
+
   function submitRejectionReason(reason: string) {
     if (!rejectingIdea) {
       return;
@@ -1080,6 +1284,10 @@ export function IdeasWorkspace({
       />
 
       <ActionNotice notice={notice} onRefresh={refreshIdeas} />
+      <ContentGenerationActionNotice
+        notice={generatingIdea ? null : contentNotice}
+        onReload={reloadCurrentContentState}
+      />
 
       {isPending && activeOperation ? (
         <p
@@ -1096,12 +1304,16 @@ export function IdeasWorkspace({
         <HistoryList batches={history} selectedBatchId={selectedBatchId} />
         <div className="min-w-0 flex-1">
           <DetailPanel
+            activeContentOperation={activeContentOperation}
             activeOperation={activeOperation}
+            contentGenerationHistory={contentGenerationHistory}
             detail={detail}
             isBusy={isBusy}
             onDecision={handleDecision}
+            onGenerateScript={openContentGenerationDialog}
             onReject={openRejectDialog}
             onRetry={handleRetry}
+            onRetryContentGeneration={handleContentGenerationRetry}
           />
         </div>
       </div>
@@ -1111,6 +1323,15 @@ export function IdeasWorkspace({
         isSubmitting={pendingDecisionId === rejectingIdea?.id}
         onClose={closeRejectDialog}
         onSubmit={submitRejectionReason}
+      />
+      <ContentGenerationDialog
+        dna={dna}
+        idea={generatingIdea}
+        isSubmitting={activeContentOperation?.kind === "generate"}
+        notice={contentNotice}
+        onClose={closeContentGenerationDialog}
+        onReload={reloadCurrentContentState}
+        onSubmit={handleContentGenerationSubmit}
       />
     </div>
   );

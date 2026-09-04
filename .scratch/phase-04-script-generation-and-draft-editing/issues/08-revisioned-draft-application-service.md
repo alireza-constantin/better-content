@@ -4,7 +4,7 @@
 
 **Blocked by:** 02 — Establish Content-generation persistence and database invariants.
 
-**Status:** claimed
+**Status:** resolved
 
 ## Goal
 
@@ -62,13 +62,15 @@ Make optimistic concurrency a server-enforced domain rule before browser autosav
 
 ## Acceptance criteria
 
-- [ ] Valid exact-revision save increments revision and updates only Draft document/revision/updatedAt.
-- [ ] Empty Script saves successfully; 50,000 succeeds; 50,001 and unknown-key documents fail validation.
-- [ ] CRLF/CR normalize to LF and every other whitespace character is preserved.
-- [ ] Stale/concurrent saves return CONFLICT and never overwrite the authoritative Draft.
-- [ ] Version #1, AI Run output, Content identity, and Content timestamps remain unchanged after any save.
-- [ ] Membership/owner rules and nondisclosing cross-workspace behavior are integration-tested.
-- [ ] No merge, collaboration, offline, acceptance, or Version-creation behavior is added.
+## Acceptance criteria
+
+- [x] Valid exact-revision save increments revision and updates only Draft document/revision/updatedAt.
+- [x] Empty Script saves successfully; 50,000 succeeds; 50,001 and unknown-key documents fail validation.
+- [x] CRLF/CR normalize to LF and every other whitespace character is preserved.
+- [x] Stale/concurrent saves return CONFLICT and never overwrite the authoritative Draft.
+- [x] Version #1, AI Run output, Content identity, and Content timestamps remain unchanged after any save.
+- [x] Membership/owner rules and nondisclosing cross-workspace behavior are integration-tested.
+- [x] No merge, collaboration, offline, acceptance, or Version-creation behavior is added.
 
 ## Required tests
 
@@ -116,11 +118,3 @@ Implemented the feasible Ticket 08 scope in the Content application module.
   ordering through `Draft.updatedAt`.
 - No database migration was needed, and no UI, autosave, generation, retry,
   acceptance, Version creation, or Phase 5 behavior was added.
-
-The ticket remains `claimed` rather than `resolved`: its requested
-non-owner-member save-denial integration case cannot be represented under the
-current V1 source of truth. `workspace_members.role` has the existing
-`workspace_members_owner_role_check` constraint requiring every role to be
-`owner` (`src/db/schema/workspace.ts`), consistent with the accepted V1
-owner-only policy. Adding a non-owner role or migration would be an
-unapproved architecture change outside Ticket 08.

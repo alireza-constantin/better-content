@@ -8,6 +8,10 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 import en from "../../../../messages/en.json";
 import fa from "../../../../messages/fa.json";
 import type {
+  ContentGenerationAttemptHistoryDto,
+  IdeaContentGenerationHistoryDto,
+} from "@/modules/content/application/content-read-service";
+import type {
   IdeaGenerationBatchDetailDto,
   IdeaGenerationBatchHistoryDto,
   IdeaGenerationBatchHistoryResult,
@@ -15,10 +19,18 @@ import type {
 import type { IdeaDto } from "@/modules/ideas/application";
 
 const mocks = vi.hoisted(() => ({
+  generateContent: vi.fn(),
   generate: vi.fn(),
   retry: vi.fn(),
+  retryContent: vi.fn(),
   decision: vi.fn(),
   refresh: vi.fn(),
+  push: vi.fn(),
+}));
+
+vi.mock("@/modules/content/application/content-actions", () => ({
+  generateContentScriptAction: mocks.generateContent,
+  retryContentGenerationAttemptAction: mocks.retryContent,
 }));
 
 vi.mock("../application/ideas-actions", () => ({
@@ -33,7 +45,7 @@ vi.mock("@/i18n/navigation", () => ({
       {children}
     </a>
   ),
-  useRouter: () => ({ refresh: mocks.refresh }),
+  useRouter: () => ({ push: mocks.push, refresh: mocks.refresh }),
 }));
 
 import { IdeasWorkspace } from "./ideas-workspace";
@@ -43,6 +55,7 @@ beforeAll(() => {
   Element.prototype.hasPointerCapture = vi.fn(() => false);
   Element.prototype.setPointerCapture = vi.fn();
   Element.prototype.releasePointerCapture = vi.fn();
+  Element.prototype.scrollIntoView = vi.fn();
 });
 
 const workspaceId = "11111111-1111-4111-8111-111111111111";
@@ -112,16 +125,50 @@ function detail(
   };
 }
 
+function contentAttempt(
+  overrides: Partial<ContentGenerationAttemptHistoryDto> = {},
+): ContentGenerationAttemptHistoryDto {
+  return {
+    id: "content-attempt-1",
+    status: "FAILED",
+    errorCategory: "PROVIDER_UNAVAILABLE",
+    rateLimitSource: null,
+    requestedLanguage: "en",
+    format: "SHORT_VIDEO",
+    instructions: "Keep the opening direct. مرحباً",
+    createdAt: new Date("2026-09-01T10:02:00Z"),
+    startedAt: new Date("2026-09-01T10:02:01Z"),
+    completedAt: null,
+    failedAt: new Date("2026-09-01T10:02:05Z"),
+    resultingContentId: null,
+    ...overrides,
+  };
+}
+
+function contentHistory(
+  attempts: readonly ContentGenerationAttemptHistoryDto[],
+  overrides: Partial<IdeaContentGenerationHistoryDto> = {},
+): IdeaContentGenerationHistoryDto {
+  return {
+    sourceIdea: { id: firstIdeaId, title: "Idea title 1" },
+    isUsed: attempts.some((attempt) => attempt.status === "COMPLETED"),
+    attempts,
+    ...overrides,
+  };
+}
+
 function renderWorkspace({
   locale = "en",
   currentDna = dna(),
   currentDetail = detail(),
   currentHistory = { batches: [batch()], selectedBatchId: batch().id },
+  currentContentGenerationHistory = {},
 }: Readonly<{
   locale?: "en" | "fa";
   currentDna?: IdeasDnaSummary;
   currentDetail?: IdeaGenerationBatchDetailDto | null;
   currentHistory?: IdeaGenerationBatchHistoryResult;
+  currentContentGenerationHistory?: Readonly<Record<string, IdeaContentGenerationHistoryDto>>;
 }> = {}) {
   const user = userEvent.setup();
 
@@ -129,6 +176,7 @@ function renderWorkspace({
     <NextIntlClientProvider locale={locale} messages={locale === "fa" ? fa : en}>
       <IdeasWorkspace
         dna={currentDna}
+        contentGenerationHistory={currentContentGenerationHistory}
         initialDetail={currentDetail}
         initialHistory={currentHistory}
         workspaceId={workspaceId}
@@ -144,6 +192,8 @@ describe("Ideas workspace presentation", () => {
     vi.clearAllMocks();
     mocks.generate.mockResolvedValue({ ok: true });
     mocks.retry.mockResolvedValue({ ok: true });
+    mocks.generateContent.mockResolvedValue({ ok: true, contentId: "content-id" });
+    mocks.retryContent.mockResolvedValue({ ok: true, contentId: "retry-content-id" });
   });
 
   afterEach(cleanup);
@@ -464,6 +514,430 @@ describe("Ideas workspace presentation", () => {
       screen.getAllByText(/This generation attempt was recorded as a failed batch/),
     ).toHaveLength(2);
     expect(screen.queryByText(/No new batch was created/)).toBeNull();
+  });
+
+  it.each(["NEW", "SAVED", "REJECTED"] as const)(
+    "does not expose Script generation for %s ideas",
+    (status) => {
+      renderWorkspace({ currentDetail: detail({ ideas: [idea(1, { status })] }) });
+
+      const card = screen.getByText("Idea title 1").closest("article");
+      if (!card) throw new Error("Idea card was not rendered.");
+
+      expect(within(card).queryByRole("button", { name: "Generate Script" })).toBeNull();
+    },
+  );
+
+  it("only exposes Script generation for accepted ideas, including an idea with existing Content", () => {
+    renderWorkspace({
+      currentDetail: detail({ ideas: [idea(1, { status: "ACCEPTED" })] }),
+      currentContentGenerationHistory: {
+        [firstIdeaId]: contentHistory([
+          contentAttempt({
+            status: "COMPLETED",
+            errorCategory: null,
+            completedAt: new Date("2026-09-01T10:02:05Z"),
+            failedAt: null,
+            resultingContentId: "55555555-5555-4555-8555-555555555555",
+          }),
+        ]),
+      },
+    });
+
+    const card = screen.getByText("Idea title 1").closest("article");
+    if (!card) throw new Error("Idea card was not rendered.");
+
+    expect(
+      within(card).getByRole("button", { name: "Generate Script" }).hasAttribute("disabled"),
+    ).toBe(false);
+    expect(within(card).getByRole("heading", { name: "Script generation history" })).toBeTruthy();
+    expect(
+      within(card).getByRole("link", { name: "Open generated Content" }).getAttribute("href"),
+    ).toBe("/content/55555555-5555-4555-8555-555555555555");
+  });
+
+  it("renders exactly the three approved Script form fields and defaults to current DNA language", async () => {
+    const user = renderWorkspace({
+      currentDna: dna({
+        currentVersion: {
+          ...dna().currentVersion!,
+          defaultContentLanguage: "fa",
+        },
+      }),
+      currentDetail: detail({ ideas: [idea(1, { status: "ACCEPTED" })] }),
+    });
+    const card = screen.getByText("Idea title 1").closest("article");
+    if (!card) throw new Error("Idea card was not rendered.");
+
+    await user.click(within(card).getByRole("button", { name: "Generate Script" }));
+    const dialog = await screen.findByRole("dialog", { name: "Generate a Script" });
+
+    expect(within(dialog).getAllByRole("combobox")).toHaveLength(2);
+    expect(within(dialog).getAllByRole("textbox")).toHaveLength(1);
+    expect(
+      within(dialog).getByRole("combobox", { name: "Requested language" }).textContent,
+    ).toContain("Persian");
+    expect(within(dialog).getByRole("combobox", { name: "Format" }).textContent).toContain(
+      "Short video",
+    );
+    expect(within(dialog).queryByLabelText(/provider|model|prompt|token|temperature/i)).toBeNull();
+
+    await user.click(within(dialog).getByRole("combobox", { name: "Format" }));
+    expect(screen.getByRole("option", { name: "Long video" })).toBeTruthy();
+    await user.click(screen.getByRole("option", { name: "Long video" }));
+    expect(within(dialog).getByRole("combobox", { name: "Format" }).textContent).toContain(
+      "Long video",
+    );
+  });
+
+  it("enforces the 1,000-character instructions boundary before the action", async () => {
+    const user = renderWorkspace({
+      currentDetail: detail({ ideas: [idea(1, { status: "ACCEPTED" })] }),
+    });
+    const card = screen.getByText("Idea title 1").closest("article");
+    if (!card) throw new Error("Idea card was not rendered.");
+    await user.click(within(card).getByRole("button", { name: "Generate Script" }));
+    const dialog = await screen.findByRole("dialog", { name: "Generate a Script" });
+    const instructions = within(dialog).getByLabelText("Instructions (optional)");
+
+    fireEvent.change(instructions, { target: { value: "x".repeat(1_000) } });
+    await waitFor(() => expect(within(dialog).getByText("1000/1,000 characters")).toBeTruthy());
+    await user.click(within(dialog).getByRole("button", { name: "Generate Script" }));
+    await waitFor(() => expect(mocks.generateContent).toHaveBeenCalledOnce());
+
+    cleanup();
+    mocks.generateContent.mockClear();
+    const retryUser = renderWorkspace({
+      currentDetail: detail({ ideas: [idea(1, { status: "ACCEPTED" })] }),
+    });
+    const retryCard = screen.getByText("Idea title 1").closest("article");
+    if (!retryCard) throw new Error("Idea card was not rendered.");
+    await retryUser.click(within(retryCard).getByRole("button", { name: "Generate Script" }));
+    const retryDialog = await screen.findByRole("dialog", { name: "Generate a Script" });
+    fireEvent.change(within(retryDialog).getByLabelText("Instructions (optional)"), {
+      target: { value: "x".repeat(1_001) },
+    });
+    await retryUser.click(within(retryDialog).getByRole("button", { name: "Generate Script" }));
+
+    expect(await within(retryDialog).findByText("Use no more than 1,000 characters.")).toBeTruthy();
+    expect(mocks.generateContent).not.toHaveBeenCalled();
+  });
+
+  it("uses a fresh idempotency key for each new submit and protects the synchronous request", async () => {
+    mocks.generateContent
+      .mockResolvedValueOnce({ ok: false, code: "VALIDATION_ERROR" })
+      .mockResolvedValueOnce({ ok: true, contentId: "66666666-6666-4666-8666-666666666666" });
+    const user = renderWorkspace({
+      currentDetail: detail({ ideas: [idea(1, { status: "ACCEPTED" })] }),
+    });
+    const card = screen.getByText("Idea title 1").closest("article");
+    if (!card) throw new Error("Idea card was not rendered.");
+    await user.click(within(card).getByRole("button", { name: "Generate Script" }));
+    const dialog = await screen.findByRole("dialog", { name: "Generate a Script" });
+    const submit = within(dialog).getByRole("button", { name: "Generate Script" });
+
+    await user.click(submit);
+    await waitFor(() => expect(mocks.generateContent).toHaveBeenCalledOnce());
+    await user.click(within(dialog).getByRole("button", { name: "Generate Script" }));
+    await waitFor(() => expect(mocks.generateContent).toHaveBeenCalledTimes(2));
+
+    const firstKey = mocks.generateContent.mock.calls[0]?.[0].idempotencyKey;
+    const secondKey = mocks.generateContent.mock.calls[1]?.[0].idempotencyKey;
+    expect(firstKey).toMatch(/^[0-9a-f-]{36}$/);
+    expect(secondKey).toMatch(/^[0-9a-f-]{36}$/);
+    expect(firstKey).not.toBe(secondKey);
+    expect(mocks.push).toHaveBeenCalledWith("/content/66666666-6666-4666-8666-666666666666");
+
+    mocks.generateContent.mockClear();
+    mocks.push.mockClear();
+    let resolveGeneration!: (result: { ok: true; contentId: string }) => void;
+    mocks.generateContent.mockReturnValueOnce(
+      new Promise<{ ok: true; contentId: string }>((resolve) => {
+        resolveGeneration = resolve;
+      }),
+    );
+    cleanup();
+    const pendingUser = renderWorkspace({
+      currentDetail: detail({ ideas: [idea(1, { status: "ACCEPTED" })] }),
+    });
+    const pendingCard = screen.getByText("Idea title 1").closest("article");
+    if (!pendingCard) throw new Error("Idea card was not rendered.");
+    await pendingUser.click(within(pendingCard).getByRole("button", { name: "Generate Script" }));
+    const pendingDialog = await screen.findByRole("dialog", { name: "Generate a Script" });
+    await pendingUser.click(within(pendingDialog).getByRole("button", { name: "Generate Script" }));
+    await waitFor(() => expect(mocks.generateContent).toHaveBeenCalledTimes(1));
+    expect(within(pendingDialog).getByRole("status").textContent).toContain("Generating Script…");
+    expect(
+      within(pendingDialog)
+        .getByRole("button", { name: "Generating Script…" })
+        .hasAttribute("disabled"),
+    ).toBe(true);
+    await pendingUser.click(
+      within(pendingDialog).getByRole("button", { name: "Generating Script…" }),
+    );
+    expect(mocks.generateContent).toHaveBeenCalledTimes(1);
+    resolveGeneration({ ok: true, contentId: "77777777-7777-4777-8777-777777777777" });
+    await waitFor(() =>
+      expect(mocks.push).toHaveBeenCalledWith("/content/77777777-7777-4777-8777-777777777777"),
+    );
+  });
+
+  it("does not navigate without a resulting Content ID", async () => {
+    mocks.generateContent.mockResolvedValueOnce({ ok: true, contentId: null });
+    const user = renderWorkspace({
+      currentDetail: detail({ ideas: [idea(1, { status: "ACCEPTED" })] }),
+    });
+    const card = screen.getByText("Idea title 1").closest("article");
+    if (!card) throw new Error("Idea card was not rendered.");
+    await user.click(within(card).getByRole("button", { name: "Generate Script" }));
+    const dialog = await screen.findByRole("dialog", { name: "Generate a Script" });
+    await user.click(within(dialog).getByRole("button", { name: "Generate Script" }));
+
+    expect(
+      await within(dialog).findByText("Script generation could not be completed"),
+    ).toBeTruthy();
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {
+      result: { ok: false as const, code: "VALIDATION_ERROR" },
+      text: "The Script request was not valid. Check the three fields and try again.",
+    },
+    {
+      result: { ok: false as const, code: "CONFLICT" },
+      text: "This form was opened against an older Content DNA version.",
+    },
+    {
+      result: { ok: false as const, code: "RATE_LIMITED", rateLimitSource: "workspace" as const },
+      text: "No Attempt was created and no provider call was made.",
+    },
+    {
+      result: { ok: false as const, code: "RATE_LIMITED", rateLimitSource: "provider" as const },
+      text: "The provider was invoked and this Attempt was recorded as failed.",
+    },
+  ])(
+    "shows safe localized Script action failure copy for $result.code",
+    async ({ result, text }) => {
+      mocks.generateContent.mockResolvedValueOnce(result);
+      const user = renderWorkspace({
+        currentDetail: detail({ ideas: [idea(1, { status: "ACCEPTED" })] }),
+      });
+      const card = screen.getByText("Idea title 1").closest("article");
+      if (!card) throw new Error("Idea card was not rendered.");
+      await user.click(within(card).getByRole("button", { name: "Generate Script" }));
+      const dialog = await screen.findByRole("dialog", { name: "Generate a Script" });
+      await user.click(within(dialog).getByRole("button", { name: "Generate Script" }));
+
+      expect(await within(dialog).findByText(new RegExp(text))).toBeTruthy();
+      expect(within(dialog).queryByText(/private|stack|provider details|sql/i)).toBeNull();
+      if (result.code === "CONFLICT") {
+        expect(mocks.refresh).not.toHaveBeenCalled();
+        await user.click(within(dialog).getByRole("button", { name: "Reload current state" }));
+        expect(mocks.refresh).toHaveBeenCalledOnce();
+      }
+    },
+  );
+
+  it("renders all persisted Attempt states, canonical instructions, and retries only FAILED history", async () => {
+    const attempts = [
+      contentAttempt({
+        id: "attempt-pending",
+        status: "PENDING",
+        instructions: null,
+        errorCategory: null,
+        failedAt: null,
+      }),
+      contentAttempt({
+        id: "attempt-running",
+        status: "RUNNING",
+        instructions: null,
+        errorCategory: null,
+        failedAt: null,
+      }),
+      contentAttempt({ id: "attempt-failed", status: "FAILED", errorCategory: "TIMEOUT" }),
+      contentAttempt({
+        id: "attempt-completed",
+        status: "COMPLETED",
+        errorCategory: null,
+        instructions: "Canonical instruction",
+        completedAt: new Date("2026-09-01T10:02:05Z"),
+        failedAt: null,
+        resultingContentId: "88888888-8888-4888-8888-888888888888",
+      }),
+    ];
+    const user = renderWorkspace({
+      currentDetail: detail({ ideas: [idea(1, { status: "ACCEPTED" })] }),
+      currentContentGenerationHistory: { [firstIdeaId]: contentHistory(attempts) },
+    });
+    const card = screen.getByText("Idea title 1").closest("article");
+    if (!card) throw new Error("Idea card was not rendered.");
+
+    expect(within(card).getAllByText("Pending", { exact: true })).toHaveLength(1);
+    expect(within(card).getAllByText("Running", { exact: true })).toHaveLength(1);
+    expect(within(card).getAllByText("Failed", { exact: true })).toHaveLength(1);
+    expect(within(card).getAllByText("Completed", { exact: true })).toHaveLength(1);
+    expect(
+      within(card).getByText("Canonical instruction", { exact: true }).getAttribute("dir"),
+    ).toBe("auto");
+    expect(
+      within(card).getByRole("link", { name: "Open generated Content" }).getAttribute("href"),
+    ).toBe("/content/88888888-8888-4888-8888-888888888888");
+    expect(within(card).getAllByRole("button", { name: "Retry Script generation" })).toHaveLength(
+      1,
+    );
+    expect(mocks.generateContent).not.toHaveBeenCalled();
+
+    await user.click(within(card).getByRole("button", { name: "Retry Script generation" }));
+    await waitFor(() => expect(mocks.retryContent).toHaveBeenCalledOnce());
+    expect(mocks.retryContent).toHaveBeenCalledWith({ workspaceId, attemptId: "attempt-failed" });
+    expect(mocks.push).toHaveBeenCalledWith("/content/retry-content-id");
+  });
+
+  it("maps every durable failed category to safe localized history copy", () => {
+    renderWorkspace({
+      currentDetail: detail({ ideas: [idea(1, { status: "ACCEPTED" })] }),
+      currentContentGenerationHistory: {
+        [firstIdeaId]: contentHistory([
+          contentAttempt({
+            id: "attempt-workspace-rate",
+            errorCategory: "RATE_LIMITED",
+            rateLimitSource: "workspace",
+          }),
+          contentAttempt({ id: "attempt-provider-rate", errorCategory: "RATE_LIMITED" }),
+          contentAttempt({ id: "attempt-timeout", errorCategory: "TIMEOUT" }),
+          contentAttempt({ id: "attempt-unavailable", errorCategory: "PROVIDER_UNAVAILABLE" }),
+          contentAttempt({ id: "attempt-invalid", errorCategory: "INVALID_OUTPUT" }),
+          contentAttempt({ id: "attempt-interrupted", errorCategory: "INTERRUPTED" }),
+          contentAttempt({ id: "attempt-unknown", errorCategory: "UNKNOWN" }),
+        ]),
+      },
+    });
+    const card = screen.getByText("Idea title 1").closest("article");
+    if (!card) throw new Error("Idea card was not rendered.");
+
+    expect(
+      within(card).getByText(/The workspace quota stopped this request before provider invocation/),
+    ).toBeTruthy();
+    expect(within(card).getByText(/The provider rate-limited this invoked Attempt/)).toBeTruthy();
+    expect(within(card).getByText(/The invoked request exceeded its allowed time/)).toBeTruthy();
+    expect(
+      within(card).getByText(/The provider was unavailable for this invoked Attempt/),
+    ).toBeTruthy();
+    expect(within(card).getByText(/The invoked result did not pass validation/)).toBeTruthy();
+    expect(
+      within(card).getByText(/The invoked request was interrupted before completion/),
+    ).toBeTruthy();
+    expect(within(card).getByText(/The invoked request did not complete safely/)).toBeTruthy();
+  });
+
+  it("retains form values when the server refreshes the current DNA object", async () => {
+    const currentDna = dna();
+    const currentDetail = detail({ ideas: [idea(1, { status: "ACCEPTED" })] });
+    const user = userEvent.setup();
+    const view = render(
+      <NextIntlClientProvider locale="en" messages={en}>
+        <IdeasWorkspace
+          dna={currentDna}
+          contentGenerationHistory={{}}
+          initialDetail={currentDetail}
+          initialHistory={{ batches: [batch()], selectedBatchId: batch().id }}
+          workspaceId={workspaceId}
+        />
+      </NextIntlClientProvider>,
+    );
+    const card = screen.getByText("Idea title 1").closest("article");
+    if (!card) throw new Error("Idea card was not rendered.");
+    await user.click(within(card).getByRole("button", { name: "Generate Script" }));
+    const dialog = await screen.findByRole("dialog", { name: "Generate a Script" });
+    await user.click(within(dialog).getByRole("combobox", { name: "Format" }));
+    await user.click(screen.getByRole("option", { name: "Long video" }));
+    await user.type(
+      within(dialog).getByLabelText("Instructions (optional)"),
+      "Keep this exact guidance after refresh.",
+    );
+
+    const refreshedDna: IdeasDnaSummary = {
+      ...currentDna,
+      currentVersion: {
+        ...currentDna.currentVersion!,
+        contentLanguages: [...currentDna.currentVersion!.contentLanguages],
+      },
+    };
+    view.rerender(
+      <NextIntlClientProvider locale="en" messages={en}>
+        <IdeasWorkspace
+          dna={refreshedDna}
+          contentGenerationHistory={{}}
+          initialDetail={currentDetail}
+          initialHistory={{ batches: [batch()], selectedBatchId: batch().id }}
+          workspaceId={workspaceId}
+        />
+      </NextIntlClientProvider>,
+    );
+
+    expect(within(dialog).getByRole("combobox", { name: "Format" }).textContent).toContain(
+      "Long video",
+    );
+    expect(
+      (within(dialog).getByLabelText("Instructions (optional)") as HTMLTextAreaElement).value,
+    ).toBe("Keep this exact guidance after refresh.");
+  });
+
+  it("keeps a failed retry safe and distinct when the workspace quota rejects it", async () => {
+    mocks.retryContent.mockResolvedValueOnce({
+      ok: false,
+      code: "RATE_LIMITED",
+      rateLimitSource: "workspace",
+    });
+    const user = renderWorkspace({
+      currentDetail: detail({ ideas: [idea(1, { status: "ACCEPTED" })] }),
+      currentContentGenerationHistory: {
+        [firstIdeaId]: contentHistory([contentAttempt({ errorCategory: "PROVIDER_UNAVAILABLE" })]),
+      },
+    });
+    const card = screen.getByText("Idea title 1").closest("article");
+    if (!card) throw new Error("Idea card was not rendered.");
+    await user.click(within(card).getByRole("button", { name: "Retry Script generation" }));
+
+    expect(
+      await screen.findByText(/No Attempt was created and no provider call was made/),
+    ).toBeTruthy();
+    expect(
+      within(card).getByText(/The provider was unavailable for this invoked Attempt/),
+    ).toBeTruthy();
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
+
+  it("keeps UI RTL, mixed-direction instructions, and focus restoration truthful", async () => {
+    const user = renderWorkspace({
+      locale: "fa",
+      currentDna: dna({
+        currentVersion: {
+          ...dna().currentVersion!,
+          defaultContentLanguage: "fa",
+        },
+      }),
+      currentDetail: detail({ ideas: [idea(1, { status: "ACCEPTED" })] }),
+      currentContentGenerationHistory: {
+        [firstIdeaId]: contentHistory([contentAttempt({ status: "FAILED" })]),
+      },
+    });
+    const root = screen.getByText("Idea title 1").closest("div[dir=rtl]");
+    expect(root).toBeTruthy();
+    const card = screen.getByText("Idea title 1").closest("article");
+    if (!card) throw new Error("Idea card was not rendered.");
+    const trigger = within(card).getByRole("button", { name: "تولید اسکریپت" });
+    trigger.focus();
+    await user.keyboard("{Enter}");
+    const dialog = await screen.findByRole("dialog", { name: "یک اسکریپت تولید کنید" });
+    expect(within(dialog).getByRole("combobox", { name: "زبان درخواستی" }).textContent).toContain(
+      "فارسی",
+    );
+    expect(within(dialog).getByLabelText("دستورها (اختیاری)").getAttribute("dir")).toBe("auto");
+    const cancelButtons = within(dialog).getAllByRole("button", { name: "لغو" });
+    await user.click(cancelButtons[cancelButtons.length - 1]!);
+    await waitFor(() => expect(document.activeElement).toBe(trigger));
   });
 
   it("renders the same content decisions under Persian RTL", () => {

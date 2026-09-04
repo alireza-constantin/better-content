@@ -15,6 +15,7 @@ import {
   getIdeaContentUsage,
   listContent,
   retryContentGenerationAttempt,
+  generateContentScript,
   saveContentDraft,
 } from "./content-application";
 import type {
@@ -51,6 +52,8 @@ export type GetContentGenerationAttemptResultActionResult =
   Readonly<{ ok: true; content: ContentDetailDto | null }> | ContentActionFailure;
 export type GetIdeaContentUsageActionResult =
   Readonly<{ ok: true; usage: IdeaContentUsageDto }> | ContentActionFailure;
+export type GenerateContentScriptActionResult =
+  Readonly<{ ok: true; contentId: string }> | ContentActionFailure;
 
 export type ContentGenerationRetryAttemptDto = Readonly<{
   id: string;
@@ -69,7 +72,7 @@ export type RetryContentGenerationAttemptActionResult =
   | Readonly<{
       ok: true;
       attempt: ContentGenerationRetryAttemptDto;
-      contentId: ContentGenerationResult["contentId"];
+      contentId: string;
     }>
   | ContentActionFailure;
 
@@ -96,6 +99,29 @@ function toRetryAttemptDto(attempt: ContentGenerationAttemptDto): ContentGenerat
     completedAt: attempt.completedAt,
     failedAt: attempt.failedAt,
   };
+}
+
+function requireResultingContentId(result: ContentGenerationResult): string {
+  if (!result.contentId) {
+    throw new ApplicationError(
+      "INTERNAL_ERROR",
+      "The completed Content generation has no resulting Content.",
+    );
+  }
+
+  return result.contentId;
+}
+
+export async function generateContentScriptAction(
+  input: unknown,
+): Promise<GenerateContentScriptActionResult> {
+  try {
+    const result = await generateContentScript(input);
+
+    return { ok: true, contentId: requireResultingContentId(result) };
+  } catch (error) {
+    return failureFrom(error);
+  }
 }
 
 export async function listContentAction(input: unknown): Promise<ListContentActionResult> {
@@ -188,7 +214,7 @@ export async function retryContentGenerationAttemptAction(
     return {
       ok: true,
       attempt: toRetryAttemptDto(result.attempt),
-      contentId: result.contentId,
+      contentId: requireResultingContentId(result),
     };
   } catch (error) {
     return failureFrom(error);

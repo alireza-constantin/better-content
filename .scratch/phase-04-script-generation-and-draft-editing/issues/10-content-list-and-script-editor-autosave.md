@@ -4,7 +4,7 @@
 
 **Blocked by:** 07 — Deliver authorized Content reads, Attempt history, and retry; 08 — Add the authoritative revisioned Draft service.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 ## Goal
 
@@ -73,16 +73,16 @@ Give creators a complete minimal Draft workspace while keeping all persistence, 
 
 ## Acceptance criteria
 
-- [ ] Content list contains only approved metadata, orders by Draft `updatedAt`, and has accessible loading/empty/error states.
-- [ ] Editor loads source context and exact Draft/revision through authorized DTOs.
-- [ ] Debounce falls within 750–1000 ms, only one save is in flight, and intermediate edits coalesce to the latest document.
-- [ ] Successful saves advance displayed revision/status; empty Script saves successfully.
-- [ ] Save failure retains local text and exposes an explicit Retry/Save control.
-- [ ] Conflict stops autosave, retains local text, announces the problem, and offers working Reload and Copy actions.
-- [ ] A stale tab never overwrites a newer Draft and no automatic merge occurs.
-- [ ] HTML-like and mixed-direction text render literally and retain their stored value.
-- [ ] Editor direction follows Content language across both UI locales.
-- [ ] No forbidden list/editor controls or Phase 5 schema/UI appear.
+- [x] Content list contains only approved metadata, orders by Draft `updatedAt`, and has accessible loading/empty/error states.
+- [x] Editor loads source context and exact Draft/revision through authorized DTOs.
+- [x] Debounce falls within 750–1000 ms, only one save is in flight, and intermediate edits coalesce to the latest document.
+- [x] Successful saves advance displayed revision/status; empty Script saves successfully.
+- [x] Save failure retains local text and exposes an explicit Retry/Save control.
+- [x] Conflict stops autosave, retains local text, announces the problem, and offers working Reload and Copy actions.
+- [x] A stale tab never overwrites a newer Draft and no automatic merge occurs.
+- [x] HTML-like and mixed-direction text render literally and retain their stored value.
+- [x] Editor direction follows Content language across both UI locales.
+- [x] No forbidden list/editor controls or Phase 5 schema/UI appear.
 
 ## Required tests
 
@@ -110,3 +110,10 @@ npm run build
 npm run test:e2e
 git diff --check
 ```
+
+## Implementation notes
+
+- Added localized `/content` and `/content/{contentId}` Server Component routes using the Ticket 07 authorized DTO services, with a cohesive client editor and autosave hook around Ticket 08.
+- Added the minimal Content list, source Idea context, plain-text Script textarea, accessible save states, failure recovery, conflict Reload/Copy recovery, and EN/FA Content-language direction handling.
+- Added focused list, route, boundary, editor, and serialized-autosave tests plus deterministic PostgreSQL-backed Playwright coverage. No schema/migration change or provider call was added.
+- Verification passed: `npm run db:up`, `npm run db:check`, `npm run db:migrate:test`, `npm run format:check`, `npm run lint`, `npm run typecheck`, `npm run test` (34 unit files/260 tests and 10 integration files/147 tests), `npm run build`, `npm run test:e2e` (17 tests), and `git diff --check`.

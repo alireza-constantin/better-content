@@ -4,7 +4,7 @@
 
 **Blocked by:** 04 — Implement the ADR-016 AvalAI Content Script adapter; 06 — Execute generation and create Content artifacts atomically; 07 — Deliver authorized Content reads, Attempt history, and retry; 10 — Deliver the Content list and Script editor with serialized autosave.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 ## Goal
 
@@ -74,16 +74,16 @@ Let an authorized creator deliberately turn an accepted Idea into a Script while
 
 ## Acceptance criteria
 
-- [ ] Accepted Idea → form → deterministic successful Attempt redirects to localized editor after Content exists.
-- [ ] The redirect target is Ticket 10’s real authorized Script editor; no placeholder or temporary editor route exists.
-- [ ] NEW/SAVED/REJECTED Ideas cannot generate, while an accepted Idea with existing Content can generate again.
-- [ ] Form contains exactly language, format, and optional instructions and sends no provider/model/prompt controls.
-- [ ] Immediate accessible local generating feedback is visible during the synchronous request.
-- [ ] Persisted PENDING/RUNNING states render when observed with no polling/background mechanism.
-- [ ] Conflict, validation, both rate-limit sources, provider failures, and interrupted failures are safely localized; eligible FAILED history offers Retry.
-- [ ] Retry delegates to Ticket 07 behavior and a successful retry redirects only after its new Content exists.
-- [ ] Navigation creates no cancellation transition and no CANCELLED UI/state exists.
-- [ ] Components have correct labels, focus, disabled states, announcements, touch targets, mobile behavior, EN/FA, and RTL/LTR.
+- [x] Accepted Idea → form → deterministic successful Attempt redirects to localized editor after Content exists.
+- [x] The redirect target is Ticket 10’s real authorized Script editor; no placeholder or temporary editor route exists.
+- [x] NEW/SAVED/REJECTED Ideas cannot generate, while an accepted Idea with existing Content can generate again.
+- [x] Form contains exactly language, format, and optional instructions and sends no provider/model/prompt controls.
+- [x] Immediate accessible local generating feedback is visible during the synchronous request.
+- [x] Persisted PENDING/RUNNING states render when observed with no polling/background mechanism.
+- [x] Conflict, validation, both rate-limit sources, provider failures, and interrupted failures are safely localized; eligible FAILED history offers Retry.
+- [x] Retry delegates to Ticket 07 behavior and a successful retry redirects only after its new Content exists.
+- [x] Navigation creates no cancellation transition and no CANCELLED UI/state exists.
+- [x] Components have correct labels, focus, disabled states, announcements, touch targets, mobile behavior, EN/FA, and RTL/LTR.
 
 ## Required tests
 
@@ -111,3 +111,11 @@ npm run build
 npm run test:e2e
 git diff --check
 ```
+
+## Comments
+
+- Added the localized accepted-Idea Generate Script dialog with React Hook Form + Zod, current-DNA language defaults, exact SHORT/LONG inputs, 1,000-character instructions, synchronous loading feedback, safe failures, and focus restoration.
+- Connected the client boundary to the existing Content application generation/retry services. Production keeps the AvalAI adapter; E2E runs use the guarded deterministic fake and telemetry seam. Successful actions require a resulting Content ID before routing to the real localized Ticket 10 editor.
+- Added authorized accepted-Idea Attempt history rendering for PENDING, RUNNING, FAILED, and COMPLETED, including canonical instructions, derived Content links, and FAILED-only retry.
+- No database schema or migration changes were needed. No Ticket 11/live AvalAI smoke work was started.
+- Verification: database setup/check/migration passed; focused UI/action tests passed 46/46; full unit tests passed 34 files/282 tests; full integration tests passed 10 files/147 tests; format, lint, typecheck, build, full E2E (24/24), and `git diff --check` passed.

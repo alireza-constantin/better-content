@@ -1,13 +1,47 @@
 import "server-only";
 
+import { cookies } from "next/headers";
+
 import { createAvalAIGenerateContentScriptProvider } from "@/modules/ai/infrastructure/avalai";
+import {
+  createFakeGenerateContentScriptProvider,
+  fakeGenerateContentScriptScenarios,
+  type FakeGenerateContentScriptScenario,
+} from "@/modules/ai/testing/fake-generate-content-script-provider";
+import { recordE2eContentProviderInvocation } from "@/modules/ai/testing/e2e-content-provider-telemetry";
 
 import { createContentGenerationApplicationService } from "./content-generation-service";
 import { createContentDraftApplicationService } from "./content-draft-service";
 import { createContentReadApplicationService } from "./content-read-service";
 
+const e2eContentProviderScenarioCookie = "better-content-e2e-content-script-scenario";
+
+function getE2eContentProviderScenario(
+  value: string | undefined,
+): FakeGenerateContentScriptScenario {
+  return value &&
+    fakeGenerateContentScriptScenarios.includes(value as FakeGenerateContentScriptScenario)
+    ? (value as FakeGenerateContentScriptScenario)
+    : "success";
+}
+
+async function createContentGenerationProvider(userId: string) {
+  if (process.env.BETTER_CONTENT_E2E === "1") {
+    const cookieStore = await cookies();
+
+    return createFakeGenerateContentScriptProvider({
+      onInvocation: recordE2eContentProviderInvocation,
+      scenario: getE2eContentProviderScenario(
+        cookieStore.get(e2eContentProviderScenarioCookie)?.value,
+      ),
+    });
+  }
+
+  return createAvalAIGenerateContentScriptProvider({ userId });
+}
+
 const contentGenerationApplicationService = createContentGenerationApplicationService({
-  providerFactory: (userId) => createAvalAIGenerateContentScriptProvider({ userId }),
+  providerFactory: createContentGenerationProvider,
 });
 const contentDraftApplicationService = createContentDraftApplicationService();
 const contentReadApplicationService = createContentReadApplicationService();
