@@ -386,7 +386,12 @@ generation batches. The Library must let a creator discover and organize Ideas
 across **all** generation batches in the current workspace without first
 opening a particular batch.
 
-The Library provides these views or equivalent status filters:
+The Library has two independent, server-applied filtering dimensions:
+
+1. **Idea status**
+2. **Generation run**
+
+The status filter provides these views or equivalent controls:
 
 * **All** — every Idea in the workspace
 * **New** — Ideas with status `NEW`
@@ -394,9 +399,15 @@ The Library provides these views or equivalent status filters:
 * **Accepted** — Ideas with status `ACCEPTED`
 * **Rejected** — Ideas with status `REJECTED`
 
-The default view is **New**, which favors active review of Ideas that have not
-yet been deliberately classified. The other views remain directly available;
-the default does not limit discovery.
+The generation-run filter provides **All runs** or one generation batch in the
+current workspace. Results always match the intersection of both filters. For
+example, `Saved + All runs` is the cross-batch backlog, while `Saved + Run A`
+contains only Saved Ideas from that generation run.
+
+The default is **New + All runs**, which favors active review of Ideas that
+have not yet been deliberately classified without selecting a batch. The other
+status views and Past Runs remain directly available; the default does not
+limit discovery.
 
 The **Saved** view is a useful backlog: it shows all Ideas deliberately kept
 for later across every generation batch without requiring batch navigation.
@@ -411,12 +422,27 @@ current read model supports that link. Generating another Content remains
 allowed; accepting an Idea alone remains side-effect-free and never generates
 Content automatically.
 
-Generation batches remain accessible as a secondary Generation History
-surface. They remain the authoritative provenance containers for Idea
-generation lineage, the associated Content DNA version, AI Run, requested
-language, generated position/order, and generation timestamps. The Library
-does not flatten or duplicate that lineage into Idea records merely for
-convenience.
+Past Runs are an integrated part of this one Idea Library experience, not a
+separate Generation History product surface. Selecting a run keeps the creator
+on `/ideas`, preserves the selected status where practical, and exposes that
+batch's safe provenance in the Library: batch date/time, requested language,
+Idea count, lifecycle facts, bound Content DNA version, AI Run lineage, and
+generated position/order. Clearing the run returns to **All runs** while
+preserving the selected status. Generation batches remain the authoritative
+provenance containers; the Library does not flatten or duplicate that lineage
+into Idea records merely for convenience.
+
+The Library URL preserves these filters with simple query state:
+
+```text
+/ideas                         → New + All runs
+/ideas?view=saved              → Saved + All runs
+/ideas?view=saved&batchId=...  → Saved + the selected owned batch
+```
+
+Unsupported status values normalize safely to `New`. A missing, invalid, or
+foreign-workspace `batchId` never discloses the batch and is treated as no
+selected run.
 
 The Library uses the existing Idea, batch, and Content relationships. It does
 not require a new persisted Idea status, a persisted Content count, or a
@@ -1245,8 +1271,8 @@ High-level current activity and workflow status.
 ## Ideas
 
 Use the workspace-wide Idea Library to discover and manage Ideas across all
-generation batches. Generation History remains available as a secondary
-provenance surface.
+generation batches. Its integrated Past Runs filter exposes batch provenance
+without leaving the Library.
 
 ## Content
 
@@ -1674,12 +1700,13 @@ V1 avoids unnecessary distributed architecture.
 
 ## Decision 18 — Workspace-wide Idea Library
 
-The primary Ideas surface is a workspace-wide Library with `All`, `New`,
-`Saved`, `Accepted`, and `Rejected` views spanning every generation batch. The
-default view is `New`. Generation History remains a secondary provenance
-surface, and the Library is implemented from existing Idea, batch, and Content
-relationships without a new Idea entity, persisted Content count, or persisted
-`USED` status.
+The primary Ideas surface is one workspace-wide Library with `All`, `New`,
+`Saved`, `Accepted`, and `Rejected` status views plus an integrated `All runs`
+or owned-generation-run filter. The default is `New + All runs`. Generation
+batches remain separate provenance entities inside that Library experience,
+not a separate product surface, and the Library is implemented from existing
+Idea, batch, and Content relationships without a new Idea entity, persisted
+Content count, or persisted `USED` status.
 
 ---
 

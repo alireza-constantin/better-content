@@ -1,6 +1,10 @@
-# 12 — Add workspace-wide Idea Library and status views
+# 12 — Add unified workspace-wide Idea Library filters
 
-**What to build:** Replace the batch-first primary Ideas interaction with a workspace-wide `/ideas` Idea Library that lets an authorized creator discover, classify, and start Script generation from Ideas across all generation batches, while keeping generation batches available as secondary provenance and history.
+**What to build:** Replace the batch-first primary Ideas interaction with one
+workspace-wide `/ideas` Idea Library. It lets an authorized creator discover,
+classify, and start Script generation from Ideas using independent status and
+generation-run filters, while retaining generation batches as separate
+provenance entities inside that same Library experience.
 
 **Blocked by:** 09 — Deliver Generate Script UI and synchronous operation feedback; 10 — Deliver the Content list and Script editor with serialized autosave.
 
@@ -8,10 +12,11 @@
 
 ## Goal
 
-Make the workspace-wide Idea Library the primary Ideas experience. A creator
-must be able to find New, Saved, Accepted, and Rejected Ideas from every
-generation batch without opening a batch first, while preserving the existing
-Idea decision rules, Content-generation eligibility, derived Content state,
+Make the workspace-wide Idea Library the one primary Ideas experience. A
+creator must be able to find New, Saved, Accepted, and Rejected Ideas from
+every generation batch without opening a batch first, and narrow any status by
+one owned Past Run without leaving `/ideas`. Preserve the existing Idea
+decision rules, Content-generation eligibility, derived Content state,
 authorization boundaries, and batch lineage.
 
 ## Scope
@@ -20,10 +25,14 @@ authorization boundaries, and batch lineage.
   Library over the existing Idea, Idea Generation Batch, and Content
   relationships.
 - Provide directly available `All`, `New`, `Saved`, `Accepted`, and `Rejected`
-  views or equivalent status filters. `New` is the default view.
-- Use the existing route and URL/query-state conventions. If query state is
-  needed, use a stable simple status value rather than introducing a complex
-  routing model.
+  views or equivalent status filters plus an integrated `All runs` or one
+  owned-generation-batch Past Runs filter. The default is `New + All runs`.
+- Combine the selected status and Past Run server-side. Do not load every Idea
+  into the browser to filter client-side.
+- Use simple stable URL/query state consistent with existing route conventions:
+  `/ideas`, `/ideas?view=saved`, and
+  `/ideas?view=saved&batchId=<owned-batch-id>` are the required model. Do not
+  introduce a complex routing hierarchy.
 - Return safe Library DTO facts such as Idea identity and text, decision state,
   Idea language, generation timestamp, optional lightweight batch provenance,
   and derived Content existence/count.
@@ -32,8 +41,9 @@ authorization boundaries, and batch lineage.
   transition rules in presentation code.
 - Reuse the completed Ticket 09 Generate Script UI and actions for Accepted
   Ideas shown in the Library. Do not duplicate Content-generation logic.
-- Keep the existing Generation History surface reachable as a secondary
-  provenance/history surface and preserve its batch semantics.
+- Expose Past Runs within the Library's filter/navigation area. Do not create a
+  separate Generation History product surface, disconnected History component,
+  or navigation flow that leaves the Library for normal run discovery.
 - Add focused unit, integration, component, and deterministic E2E coverage for
   cross-batch reads, status transitions, derived Content state, generation
   integration, history, security, and EN/FA RTL/LTR behavior.
@@ -64,6 +74,11 @@ authorization boundaries, and batch lineage.
   Do not add `workspaceId` to Idea.
 - Query existing relational data efficiently. The Library is a read model over
   existing tables, not a new aggregate or persistence model.
+- Define the authoritative server-side read boundary with
+  `statusFilter = ALL | NEW | SAVED | ACCEPTED | REJECTED` and
+  `generationBatchFilter = ALL | one owned generation batch ID`. Apply both
+  filters in the relational query, derive Content count/state without N+1
+  Content-count queries, and return only safe DTOs.
 - Do not add an Idea Library table, persisted status counts, persisted
   `hasContent`, persisted `USED`, or denormalized batch lineage for UI
   convenience.
@@ -77,25 +92,31 @@ authorization boundaries, and batch lineage.
   provider settings, prompts, raw AI responses, private persistence rows, or
   sensitive operational data.
 
-## Library and Generation History behavior
+## Unified status and Past Runs behavior
 
-- `/ideas` opens the workspace-wide `New` view by default, without selecting a
-  batch or requiring batch navigation.
-- `All` returns every Idea in the current workspace regardless of decision
-  state.
-- `New` returns every `NEW` Idea in the current workspace across all batches.
-- `Saved` returns every `SAVED` Idea in the current workspace across all
-  batches and acts as the cross-batch backlog.
-- `Accepted` returns every `ACCEPTED` Idea in the current workspace across all
-  batches and supports derived Content state plus Generate Script.
-- `Rejected` returns every `REJECTED` Idea in the current workspace across all
-  batches without making rejected Ideas part of the default active workflow.
-- Decision actions remain available from Library items and use the existing
-  server-authoritative action/service. After a mutation, the active view and
-  any refreshed view reflect the authoritative new state.
-- Generation History remains directly reachable as a secondary surface. Its
-  existing batch list/detail, lifecycle, DNA-version, requested-language,
-  position/order, timestamp, retry, and completed-idea behavior remain intact.
+- `/ideas` opens the workspace-wide `New + All runs` view by default, without
+  selecting a batch or requiring batch navigation.
+- `All`, `New`, `Saved`, `Accepted`, and `Rejected` are the status dimension.
+  With `All runs`, each returns all matching Ideas in the current workspace.
+- `All runs` or one owned generation batch is the Past Runs dimension. A
+  selected run narrows the status result to that batch only; changing status
+  preserves the run, and clearing the run preserves status.
+- Past Runs appear in the same Library UI, preferably alongside status filters
+  on desktop and through a responsive compact control on mobile. Each uses only
+  existing safe facts such as generation date/time, requested language, Idea
+  count, and lifecycle state where useful; no editable run names or new
+  persisted metadata are allowed.
+- Batch provenance remains authoritative: batch identity, bound Content DNA
+  version, AI Run, requested language, generated position/order, lifecycle,
+  and timestamps are exposed within the selected Library context. Do not
+  rewrite storage or flatten provenance into Ideas.
+- Decision actions remain available from filtered Library items and use the
+  existing server-authoritative action/service. After a mutation, the active
+  status/run intersection reflects the authoritative new state. For example,
+  accepting `New + Run A` removes the Idea there and makes it discoverable at
+  `Accepted + Run A`.
+- Unsupported status values normalize safely to `New`. A missing, invalid, or
+  foreign-workspace `batchId` is nondisclosing and selects no run.
 - The correction does not add search, tags, folders, collections, separate
   favorites, Kanban, drag/drop, bulk actions, custom statuses, custom sorting,
   archive/delete, semantic search, embeddings, recommendations, learning, or
@@ -125,6 +146,10 @@ authorization boundaries, and batch lineage.
   remain nondisclosing.
 - Use the existing shadcn/ui and Ideas design system. Keep the surface easy to
   scan and status-focused without turning it into a project-management system.
+- Desktop is one cohesive Library layout: a left filter/navigation area for
+  Status and Past Runs, and a main area for the intersected Idea results.
+  Mobile may use a compact control, drawer, or sheet, but must preserve the
+  same status/run semantics and must not create a separate History surface.
 - All visible strings use `next-intl`. Verify English UI is LTR and Persian UI
   is RTL with logical-direction CSS.
 - Idea language remains independent of route locale. Mixed Persian/English
@@ -142,12 +167,17 @@ in automated tests.
 ### Workspace-wide querying
 
 - Create Ideas in multiple generation batches and prove `NEW`, `SAVED`,
-  `ACCEPTED`, `REJECTED`, and `ALL` reads span every batch.
-- Prove the default `/ideas` load is `New` and does not select a batch first.
-- Prove Saved, Accepted, Rejected, and New can be opened directly without
-  reopening a generation batch.
+  `ACCEPTED`, `REJECTED`, and `ALL` reads span every batch when `All runs` is
+  selected.
+- Prove `Saved + All runs`, `Saved + an older run`, `Accepted + All runs`,
+  `Accepted + a selected run`, `Rejected + All runs`, `Rejected + a selected
+  run`, and `All + a selected run` return their exact intersections.
+- Prove the default `/ideas` load is `New + All runs` and does not select a
+  batch first. Prove direct URL state restores the selected status/run,
+  changing status preserves the run, and clearing the run preserves status.
 - Prove workspace isolation and nondisclosure for foreign-workspace Ideas,
-  batches, and client-supplied identifiers.
+  batches, and client-supplied identifiers. A selected run must belong to the
+  current workspace and never disclose a foreign batch.
 
 ### Decision transitions and derived Content state
 
@@ -162,40 +192,49 @@ in automated tests.
 ### Generate Script and history
 
 - Prove an Accepted Idea can start Generate Script from the Library through the
-  completed Ticket 09 path.
+  completed Ticket 09 path, including while a specific Past Run is selected.
 - Prove an Accepted Idea with existing Content can generate another Content.
 - Prove Saved, New, and Rejected Ideas cannot generate.
-- Prove Generation History remains reachable and retains batch provenance,
-  DNA-version, AI Run, requested-language, order/position, lifecycle, and
-  timestamp semantics.
+- Prove the integrated Past Runs filter retains batch provenance, DNA-version,
+  AI Run, requested-language, order/position, lifecycle, and timestamp
+  semantics without leaving the Library.
 
 ### EN/FA, accessibility, and E2E
 
 - Verify English/LTR, Persian/RTL, mixed-direction Idea text, keyboard
-  decision controls, accessible status feedback, and responsive Library/history
-  behavior.
+  decision controls, accessible status feedback, and responsive unified
+  status/Past Runs filter behavior.
 - At minimum, the E2E flow generates multiple batches, saves an Idea from an
-  older batch, finds it in Saved without reopening that batch, accepts an Idea
-  and finds it in Accepted, rejects an Idea and finds it in Rejected, starts
-  Generate Script from an Accepted Library Idea, observes derived Content
-  count/state updates, and reaches Generation History.
+  older batch, finds it in `Saved + All runs` and `Saved + that run`, accepts an
+  Idea and finds it in `Accepted + that run`, rejects an Idea and finds it in
+  `Rejected + that run`, starts Generate Script from an Accepted Idea with a
+  run filter active, observes derived Content count/state updates in global and
+  run-filtered views, and verifies the same unified filters in EN/FA and at
+  mobile/desktop widths.
 
 ## Acceptance criteria
 
 - [ ] The primary localized `/ideas` surface is a workspace-wide Idea Library,
       not a batch-first detail view, and it can render without a selected batch.
-- [ ] The default `/ideas` view is `New` and includes every `NEW` Idea across
-      all generation batches in the current workspace.
+- [ ] The default `/ideas` state is `New + All runs` and includes every `NEW`
+      Idea across all generation batches in the current workspace.
 - [ ] `All`, `New`, `Saved`, `Accepted`, and `Rejected` views or equivalent
-      simple status filters are directly available and span all workspace
-      batches.
-- [ ] `Saved` is the complete cross-batch backlog; no batch must be opened to
-      find a Saved Idea.
-- [ ] `Accepted` contains every Accepted Idea across batches, exposes derived
-      zero/one/multiple Content state, and retains Generate Script.
-- [ ] `Rejected` contains every Rejected Idea across batches, while rejected
-      records and rejection reasons remain stored and retrievable.
-- [ ] `All` returns every workspace Idea regardless of decision state.
+      simple status filters are directly available, and `All runs` plus owned
+      Past Runs filters combine with them server-side on the same `/ideas`
+      surface.
+- [ ] `Saved` is the complete cross-batch backlog at `All runs`, and `Saved +
+      a selected run` finds an older-batch Saved Idea without leaving the
+      Library.
+- [ ] `Accepted` contains every Accepted Idea at `All runs`, supports an owned
+      run intersection, exposes derived zero/one/multiple Content state, and
+      retains Generate Script.
+- [ ] `Rejected` contains every Rejected Idea at `All runs` and within an
+      owned run, while rejected records and rejection reasons remain stored and
+      retrievable.
+- [ ] `All + a selected run` returns every Idea in that owned batch regardless
+      of decision state.
+- [ ] Changing status preserves the selected run, clearing the run preserves
+      status, and direct URL state restores the exact safe filter combination.
 - [ ] Save, Accept, Reject, and existing allowed state changes work from the
       Library through the existing decision service/actions, with filters
       updating after mutation.
@@ -209,19 +248,21 @@ in automated tests.
 - [ ] An Accepted Idea with existing Content can generate additional Content
       through the existing Ticket 09 flow without duplicated Content-generation
       logic or changed Tickets 05–07/provider semantics.
-- [ ] Generation History remains reachable as a secondary surface and keeps
-      its existing batch provenance and history semantics intact.
+- [ ] Past Runs is an integrated Library filter, not a separate Generation
+      History product surface. Its selected-run context keeps existing batch
+      provenance and history semantics intact.
 - [ ] Library reads require current workspace membership, mutations use the
       established owner policy, and foreign-workspace resources are
       nondisclosing.
 - [ ] English/LTR, Persian/RTL, Idea-language independence, mixed-direction
-      text, accessibility, and responsive behavior are verified.
+      text, accessibility, and responsive status/Past Runs filter behavior are
+      verified.
 - [ ] No search, advanced organization, custom status, bulk action,
       archive/delete, custom sorting, new pagination architecture, Content
       lifecycle UI, or Phase 5 behavior is introduced.
 - [ ] Automated coverage uses deterministic providers only and includes the
       required workspace-wide, transition, derived-Content, Generate Script,
-      history, security, locale, and minimum E2E scenarios.
+      Past Runs, security, locale, responsive, and minimum E2E scenarios.
 
 ## Explicit non-goals and scope guard
 

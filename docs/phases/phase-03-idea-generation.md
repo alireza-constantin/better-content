@@ -8,7 +8,7 @@
 
 Phase 3 lets a workspace owner generate exactly 20 creator-specific ideas from
 the current AI-ready Content DNA version, review them in a workspace-wide Idea
-Library, inspect secondary generation history, and classify every idea. It
+Library with integrated Past Runs filtering, and classify every idea. It
 introduces the narrow provider-neutral AI foundation, one AvalAI adapter,
 traceable AI runs/batches/ideas, safe generation controls, and accessible
 English/Persian UX.
@@ -402,10 +402,12 @@ authorization, quota, or lifecycle truth.
 
 Make the workspace-wide Idea Library the primary Ideas surface. Provide
 `All`, `New`, `Saved`, `Accepted`, and `Rejected` views or equivalent status
-filters, each spanning every generation batch in the current workspace. The
-default view is `New`. A creator must be able to open `Saved`, `Accepted`,
-`Rejected`, or `New` and see all matching Ideas without opening individual
-batches. `All` includes every Idea in the workspace.
+filters, each spanning every generation batch in the current workspace. Pair
+them with an integrated `All runs` or one owned-generation-run filter. The
+results always show the intersection of the selected status and run. The
+default is `New + All runs`. A creator must be able to open `Saved`,
+`Accepted`, `Rejected`, or `New` and see all matching Ideas without opening
+individual batches. `All` includes every Idea in the workspace.
 
 The `Saved` view is a useful backlog: it shows all deliberately retained Ideas
 across every batch without requiring the creator to remember or open their
@@ -420,15 +422,16 @@ where the existing Phase 4 eligibility rules allow it, and allow another
 Content to be generated. Preserve the existing Accept, Save for later, and
 Reject actions.
 
-Keep compact batch history newest-first as a secondary Generation History
-surface with date/time, lifecycle result, DNA version number, requested
-language, and count. After start/failure, keep that operation visible.
-Completed detail shows exactly 20 Ideas/current decision state; failed detail
-shows safe failure information and Retry; active detail shows in-progress state.
-Generation batches remain the authoritative provenance container. Exclude
-full-text/semantic search and advanced organization such as tags, folders,
-collections, bulk actions, custom sorting, deletion/archive, analytics, quality
-score, and Idea editing.
+Keep compact Past Runs newest-first inside the one Idea Library filter area,
+with date/time, lifecycle result, DNA version number, requested language, and
+count. Selecting a run stays on `/ideas`, preserves the selected status, and
+shows only that run's Ideas. Clearing the run returns to `All runs` without
+changing status. Existing lifecycle facts, safe failure information, Retry, and
+generated position/order remain available as integrated batch provenance, not
+a disconnected Generation History surface. Generation batches remain the
+authoritative provenance container. Exclude full-text/semantic search and
+advanced organization such as tags, folders, collections, bulk actions, custom
+sorting, deletion/archive, analytics, quality score, and Idea editing.
 
 Each idea has keyboard-accessible **Accept**, **Save for later**, and **Reject**
 controls plus clear current status. Reject opens a labelled optional
@@ -439,10 +442,10 @@ heading hierarchy, status announcements, and usable mobile touch targets. Do
 not add fake metrics, decorative dashboard complexity, or placeholder controls.
 
 All visible strings use `next-intl`, work under `/en/...` and `/fa/...`, and
-use logical-direction CSS. Verify history, buttons, dialog, focus, and
-responsive layout in LTR and RTL. UI locale never translates or mutates DNA,
-batches, ideas, or reasons; mixed-language creator text retains normal Unicode
-bidirectional behavior.
+use logical-direction CSS. Verify integrated Past Runs filters, buttons,
+dialog, focus, and responsive layout in LTR and RTL. UI locale never translates
+or mutates DNA, batches, ideas, or reasons; mixed-language creator text retains
+normal Unicode bidirectional behavior.
 
 ## 13. Migration requirements
 
@@ -484,14 +487,15 @@ PostgreSQL-backed integration tests must cover:
   failure quota consumption; and
 - history ordering and safe failed-batch detail; and
 - workspace-wide Library reads across multiple batches, each status view,
-  derived Content existence/count, and cross-workspace nondisclosure without
-  adding Idea persistence.
+  `All runs` and owned-run intersections, derived Content existence/count, and
+  cross-workspace nondisclosure without adding Idea persistence.
 
 E2E/UI review must cover ready DNA through mocked generation and decisions;
 DNA-not-created/incomplete/active/rate-limited/conflict/failed states; English
 and Persian locale switching; LTR/RTL; keyboard/focus/status feedback;
 rejection reason; workspace-wide `All`/`New`/`Saved`/`Accepted`/`Rejected`
-views with secondary Generation History; and desktop/mobile responsiveness.
+status filters combined with `All runs` and owned Past Runs filters; and
+desktop/mobile responsiveness.
 
 Phase completion also requires formatting, lint, typecheck, unit/integration
 tests, build, required Playwright coverage, and `git diff --check`. Frontend
@@ -512,13 +516,16 @@ required by `docs/agents/frontend-standards.md`.
 - [ ] Database constraints protect lifecycle/count/relationship/idempotency/
       position invariants.
 
-### Idea Library and history
+### Unified Idea Library
 
 - [ ] `/ideas` provides workspace-wide Idea discovery across all generation
       batches without requiring a batch to be opened first.
 - [ ] The Library provides `All`, `New`, `Saved`, `Accepted`, and `Rejected`
       views or equivalent status filters spanning the current workspace; the
-      default view is `New`.
+      default is `New + All runs`.
+- [ ] The Library provides `All runs` and an owned Past Runs filter. Status
+      and run filters combine server-side, and selecting/clearing a run stays
+      on `/ideas` while preserving the selected status.
 - [ ] A creator can view all `SAVED` Ideas without opening individual batches.
 - [ ] A creator can view all `ACCEPTED` Ideas without opening individual
       batches.
@@ -534,8 +541,9 @@ required by `docs/agents/frontend-standards.md`.
       records.
 - [ ] One Idea may have multiple Content records, and generating another
       Content remains an explicit creator action.
-- [ ] Generation batches remain available as secondary provenance/history and
-      retain Idea-generation lineage.
+- [ ] Generation batches remain separate provenance entities and retain
+      Idea-generation lineage, which is exposed through the Library's
+      integrated Past Runs filter rather than a separate product surface.
 - [ ] Existing Accept, Save for later, and Reject actions continue to work,
       and accepted Ideas retain the existing Generate Script behavior.
 - [ ] Workspace-wide reads require current membership; foreign-workspace Idea
@@ -573,8 +581,9 @@ required by `docs/agents/frontend-standards.md`.
       resources reveal no private existence.
 - [ ] Raw prompts/DNA logs/provider envelopes or IDs/refusals/reasoning/API keys
       are not exposed or persisted; `store: false` and HMAC safety ID are used.
-- [ ] UI covers all required generation/history/detail/decision states in EN/FA,
-      LTR/RTL, keyboard-accessibly and responsively.
+- [ ] UI covers all required generation lifecycle, integrated run-provenance,
+      and decision states in EN/FA, LTR/RTL, keyboard-accessibly and
+      responsively.
 - [ ] Deterministic provider-mocked CI covers the strategy in Section 14.
 
 ## 16. Explicitly deferred scope
@@ -639,8 +648,10 @@ before Phase 4 closure:
 
 - the primary `/ideas` surface is a workspace-wide Idea Library with `All`,
   `New`, `Saved`, `Accepted`, and `Rejected` views across all batches;
-- the default Library view is `New`;
-- generation batches remain a secondary provenance/history surface;
+- the default Library state is `New + All runs`, with status and owned Past
+  Runs filters combined on the same route;
+- generation batches remain separate provenance/history entities exposed
+  inside the Library, not a secondary product surface;
 - the existing four persisted decision states and derived `USED` rule are
   unchanged; and
 - the correction uses existing Idea, batch, and Content relationships, with no
