@@ -379,39 +379,104 @@ This will later allow us to measure AI idea-generation quality.
 
 ---
 
+## Workspace-wide Idea Library
+
+The primary Ideas experience is a workspace-wide Idea Library, not a list of
+generation batches. The Library must let a creator discover and organize Ideas
+across **all** generation batches in the current workspace without first
+opening a particular batch.
+
+The Library provides these views or equivalent status filters:
+
+* **All** — every Idea in the workspace
+* **New** — Ideas with status `NEW`
+* **Saved** — Ideas with status `SAVED`
+* **Accepted** — Ideas with status `ACCEPTED`
+* **Rejected** — Ideas with status `REJECTED`
+
+The default view is **New**, which favors active review of Ideas that have not
+yet been deliberately classified. The other views remain directly available;
+the default does not limit discovery.
+
+The **Saved** view is a useful backlog: it shows all Ideas deliberately kept
+for later across every generation batch without requiring batch navigation.
+
+A Library item may show useful existing facts such as its title, description,
+current decision state, Idea language, generation date, lightweight batch
+provenance, and derived Content existence or count. The Library preserves the
+existing Save, Accept, and Reject actions. For an `ACCEPTED` Idea it keeps
+Generate Script available where the existing Content-generation eligibility
+rules allow it, and it makes existing linked Content discoverable where the
+current read model supports that link. Generating another Content remains
+allowed; accepting an Idea alone remains side-effect-free and never generates
+Content automatically.
+
+Generation batches remain accessible as a secondary Generation History
+surface. They remain the authoritative provenance containers for Idea
+generation lineage, the associated Content DNA version, AI Run, requested
+language, generated position/order, and generation timestamps. The Library
+does not flatten or duplicate that lineage into Idea records merely for
+convenience.
+
+The Library uses the existing Idea, batch, and Content relationships. It does
+not require a new persisted Idea status, a persisted Content count, or a
+`workspaceId` on Idea. Idea ownership continues to resolve through its
+generation batch and workspace. This correction does not add full-text or
+semantic search, embeddings, tags, folders, collections, separate favorites,
+custom statuses, Kanban/drag-and-drop, bulk actions, custom sorting,
+pagination architecture unless existing data-volume/query conventions require
+it, deletion/archive, AI recommendations, or learning from Saved or Rejected
+Ideas.
+
+---
+
 # 15. Idea States
 
-V1 supports these conceptual states:
+V1 persists exactly these Idea decision states:
 
 ```text
 NEW
-ACCEPTED
 SAVED
+ACCEPTED
 REJECTED
-USED
 ```
 
 ## NEW
 
-Generated but not evaluated.
-
-## ACCEPTED
-
-The creator wants to produce this idea.
+Generated and not yet deliberately classified by the creator.
 
 ## SAVED
 
-Interesting but not currently ready for production.
+Interesting or worth keeping, but not currently approved for Content
+generation.
+
+## ACCEPTED
+
+Deliberately approved as an Idea that may proceed into Content generation.
 
 ## REJECTED
 
-The creator does not want the idea.
+Deliberately unwanted or rejected by the creator. Rejected Ideas remain stored
+as historical and future-learning evidence and remain retrievable through the
+Rejected Library view.
 
-The UI may use **Delete** as the action label, but the learning signal should normally remain stored.
+## USED (derived indicator)
 
-## USED
+`USED` is not a persisted Idea status. Derive:
 
-Content has been created from the idea.
+```text
+hasContent = exists Content linked to this Idea
+```
+
+The Library may communicate this derived fact as **No content yet**, **Has
+content**, a Content count, or an equivalent presentation. An `ACCEPTED` Idea
+must make it easy to distinguish accepted-but-unused from accepted Ideas with
+one or more linked Content records. One Idea may have multiple Content
+records.
+
+The UI may use **Reject** as the action label, but rejection is not deletion;
+the Idea record and its current rejection reason remain stored. No separate
+decision-event history is introduced.
 
 ---
 
@@ -420,6 +485,12 @@ Content has been created from the idea.
 Rejected AI ideas must not normally be permanently destroyed.
 
 They represent valuable future learning data.
+
+Rejected Ideas should not dominate the creator's normal active workflow. They
+remain retrievable through the Rejected view of the workspace-wide Idea
+Library, and rejection does not become deletion or archive. Rejected Ideas are
+not used for AI learning in this correction; future learning remains out of
+scope.
 
 Optional V1 rejection reasons may include:
 
@@ -1173,7 +1244,9 @@ High-level current activity and workflow status.
 
 ## Ideas
 
-Generate and manage content ideas.
+Use the workspace-wide Idea Library to discover and manage Ideas across all
+generation batches. Generation History remains available as a secondary
+provenance surface.
 
 ## Content
 
@@ -1212,23 +1285,25 @@ V1 is successful when a creator can complete this complete workflow without deve
 1. Create an account.
 2. Configure Content DNA.
 3. Generate 20 ideas.
-4. Accept, save, and reject ideas.
-5. Choose an idea.
-6. Generate content from the idea.
-7. Edit the generated content.
-8. Add supported Performance Directions and Edit Directions.
-9. Save the content as Draft.
-10. Accept a specific content version.
-11. See the item enter the publishing queue.
-12. Publish the content manually on a supported external platform.
-13. Add the external published URL to Better Content.
-14. Connect the relevant social account if required.
-15. Register the external publication.
-16. Automatically retrieve available analytics.
-17. See updated analytics over time.
-18. Trace the publication back to its exact content version.
-19. Trace the content back to its originating idea.
-20. Trace the idea back to its generation batch and Content DNA version.
+4. Review Ideas in the workspace-wide Library without opening individual
+   generation batches.
+5. Accept, save, and reject Ideas.
+6. Choose an Idea.
+7. Generate content from the Idea.
+8. Edit the generated content.
+9. Add supported Performance Directions and Edit Directions.
+10. Save the content as Draft.
+11. Accept a specific content version.
+12. See the item enter the publishing queue.
+13. Publish the content manually on a supported external platform.
+14. Add the external published URL to Better Content.
+15. Connect the relevant social account if required.
+16. Register the external publication.
+17. Automatically retrieve available analytics.
+18. See updated analytics over time.
+19. Trace the publication back to its exact content version.
+20. Trace the content back to its originating Idea.
+21. Trace the Idea back to its generation batch and Content DNA version.
 
 If this complete loop works reliably, the V1 architecture has proven the central product thesis.
 
@@ -1519,7 +1594,9 @@ The following decisions are currently established.
 
 ## Decision 1 — Ideas are first-class entities
 
-Ideas are stored objects, not temporary AI text.
+Ideas are stored objects, not temporary AI text. They are primarily discovered
+through a workspace-wide Idea Library, while generation batches remain their
+provenance and history containers.
 
 ## Decision 2 — Idea generation precedes content generation
 
@@ -1532,7 +1609,8 @@ Idea generation batches produce 20 creator-specific suggestions.
 
 ## Decision 4 — Rejected ideas retain learning value
 
-UI deletion does not necessarily mean immediate database destruction.
+Rejected Ideas remain stored and retrievable through the Library's Rejected
+view. A rejection action is not database deletion.
 
 ## Decision 5 — Content DNA is versioned
 
@@ -1593,6 +1671,15 @@ RTL/LTR support must exist from the beginning.
 ## Decision 17 — Modular monolith
 
 V1 avoids unnecessary distributed architecture.
+
+## Decision 18 — Workspace-wide Idea Library
+
+The primary Ideas surface is a workspace-wide Library with `All`, `New`,
+`Saved`, `Accepted`, and `Rejected` views spanning every generation batch. The
+default view is `New`. Generation History remains a secondary provenance
+surface, and the Library is implemented from existing Idea, batch, and Content
+relationships without a new Idea entity, persisted Content count, or persisted
+`USED` status.
 
 ---
 

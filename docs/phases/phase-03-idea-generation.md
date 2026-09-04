@@ -7,10 +7,11 @@
 ## 1. Goal and boundaries
 
 Phase 3 lets a workspace owner generate exactly 20 creator-specific ideas from
-the current AI-ready Content DNA version, inspect generation history, and
-classify every idea. It introduces the narrow provider-neutral AI foundation,
-one AvalAI adapter, traceable AI runs/batches/ideas, safe generation controls,
-and accessible English/Persian UX.
+the current AI-ready Content DNA version, review them in a workspace-wide Idea
+Library, inspect secondary generation history, and classify every idea. It
+introduces the narrow provider-neutral AI foundation, one AvalAI adapter,
+traceable AI runs/batches/ideas, safe generation controls, and accessible
+English/Persian UX.
 
 Required lineage:
 
@@ -64,6 +65,11 @@ provides its source traceability; the batch itself owns the DNA version,
 language, and requested count. An **Idea** is a first-class immutable generated
 proposal; only its decision state, state timestamp, and rejection reason mutate.
 It belongs to a batch, not directly to a workspace.
+
+The **Idea Library** is the primary workspace-wide read surface over these
+existing relationships. It is not a new aggregate: Idea ownership still
+resolves through `Idea → Idea Generation Batch → Workspace`, and Content
+existence remains derived from linked Content records.
 
 ## 3. Persistence model and invariants
 
@@ -362,10 +368,20 @@ localized messages are safe and actionable.
 
 ## 11. Idea decisions
 
-Persist exactly `NEW`, `SAVED`, `ACCEPTED`, or `REJECTED`. `USED` is never
-stored; it is later derived from a content reference under ADR-005. Any Phase 3
-state can move directly to any other. Submitting the current canonical state is
-a no-op where practical and should not needlessly change `status_changed_at`.
+Persist exactly `NEW`, `SAVED`, `ACCEPTED`, or `REJECTED`. Their meanings are:
+
+- `NEW`: generated and not yet deliberately classified by the creator;
+- `SAVED`: interesting or worth keeping, but not currently approved for
+  Content generation;
+- `ACCEPTED`: deliberately approved as an Idea that may proceed into Content
+  generation; and
+- `REJECTED`: deliberately unwanted or rejected, retained as historical and
+  future-learning evidence.
+
+`USED` is never stored; it is derived from whether Content exists with this
+Idea as its source under ADR-005. Any persisted Phase 3 state can move directly
+to any other persisted state. Submitting the current canonical state is a no-op
+where practical and should not needlessly change `status_changed_at`.
 
 `rejection_reason` is optional free text up to 500 characters, has no taxonomy,
 may be blank, and is cleared atomically whenever status leaves REJECTED. Do not
@@ -384,13 +400,35 @@ conflict, provider failure, and completed result. When DNA is not AI-ready,
 guide users back to Content DNA. The client reflects but never owns readiness,
 authorization, quota, or lifecycle truth.
 
-Show compact batch history newest-first with date/time, lifecycle result, DNA
-version number, requested language, and count. Initial normal view is newest
-successful batch. After start/failure, keep that operation visible. Completed
-detail shows exactly 20 ideas/current decision state; failed detail shows safe
-failure information and Retry; active detail shows in-progress state. Exclude
-search, filters, deletion, archive, comparison, analytics, quality score, and
-idea editing.
+Make the workspace-wide Idea Library the primary Ideas surface. Provide
+`All`, `New`, `Saved`, `Accepted`, and `Rejected` views or equivalent status
+filters, each spanning every generation batch in the current workspace. The
+default view is `New`. A creator must be able to open `Saved`, `Accepted`,
+`Rejected`, or `New` and see all matching Ideas without opening individual
+batches. `All` includes every Idea in the workspace.
+
+The `Saved` view is a useful backlog: it shows all deliberately retained Ideas
+across every batch without requiring the creator to remember or open their
+source batch. Accepting an Idea remains side-effect-free; Content generation
+continues to require its existing explicit creator action.
+
+Library items may show title, description, current decision state, Idea
+language, generation date, lightweight batch provenance, and derived Content
+existence/count. For `ACCEPTED` Ideas, distinguish accepted-but-unused from
+accepted Ideas with one or more Content records, keep Generate Script available
+where the existing Phase 4 eligibility rules allow it, and allow another
+Content to be generated. Preserve the existing Accept, Save for later, and
+Reject actions.
+
+Keep compact batch history newest-first as a secondary Generation History
+surface with date/time, lifecycle result, DNA version number, requested
+language, and count. After start/failure, keep that operation visible.
+Completed detail shows exactly 20 Ideas/current decision state; failed detail
+shows safe failure information and Retry; active detail shows in-progress state.
+Generation batches remain the authoritative provenance container. Exclude
+full-text/semantic search and advanced organization such as tags, folders,
+collections, bulk actions, custom sorting, deletion/archive, analytics, quality
+score, and Idea editing.
 
 Each idea has keyboard-accessible **Accept**, **Save for later**, and **Reject**
 controls plus clear current status. Reject opens a labelled optional
@@ -444,12 +482,16 @@ PostgreSQL-backed integration tests must cover:
 - idempotency replay/no provider call/no quota and mismatched fingerprint;
 - workspace quota concurrency, both windows, no-record denial, and invoked
   failure quota consumption; and
-- history ordering and safe failed-batch detail.
+- history ordering and safe failed-batch detail; and
+- workspace-wide Library reads across multiple batches, each status view,
+  derived Content existence/count, and cross-workspace nondisclosure without
+  adding Idea persistence.
 
 E2E/UI review must cover ready DNA through mocked generation and decisions;
 DNA-not-created/incomplete/active/rate-limited/conflict/failed states; English
 and Persian locale switching; LTR/RTL; keyboard/focus/status feedback;
-rejection reason; and desktop/mobile responsiveness.
+rejection reason; workspace-wide `All`/`New`/`Saved`/`Accepted`/`Rejected`
+views with secondary Generation History; and desktop/mobile responsiveness.
 
 Phase completion also requires formatting, lint, typecheck, unit/integration
 tests, build, required Playwright coverage, and `git diff --check`. Frontend
@@ -469,6 +511,43 @@ required by `docs/agents/frontend-standards.md`.
       is only canonical validated output.
 - [ ] Database constraints protect lifecycle/count/relationship/idempotency/
       position invariants.
+
+### Idea Library and history
+
+- [ ] `/ideas` provides workspace-wide Idea discovery across all generation
+      batches without requiring a batch to be opened first.
+- [ ] The Library provides `All`, `New`, `Saved`, `Accepted`, and `Rejected`
+      views or equivalent status filters spanning the current workspace; the
+      default view is `New`.
+- [ ] A creator can view all `SAVED` Ideas without opening individual batches.
+- [ ] A creator can view all `ACCEPTED` Ideas without opening individual
+      batches.
+- [ ] A creator can view all `REJECTED` Ideas without opening individual
+      batches.
+- [ ] A creator can view all `NEW` Ideas without opening individual batches.
+- [ ] Persisted Idea states remain exactly `NEW`, `SAVED`, `ACCEPTED`, and
+      `REJECTED`; no additional decision state is introduced.
+- [ ] `USED` remains derived from linked Content and is never persisted as an
+      Idea status.
+- [ ] Accepted Ideas can show derived Content existence/count, including the
+      distinction between no linked Content and one or more linked Content
+      records.
+- [ ] One Idea may have multiple Content records, and generating another
+      Content remains an explicit creator action.
+- [ ] Generation batches remain available as secondary provenance/history and
+      retain Idea-generation lineage.
+- [ ] Existing Accept, Save for later, and Reject actions continue to work,
+      and accepted Ideas retain the existing Generate Script behavior.
+- [ ] Workspace-wide reads require current membership; foreign-workspace Idea
+      IDs remain nondisclosing.
+- [ ] The Library works in English/LTR and Persian/RTL, while Idea language
+      remains independent from UI locale and mixed creator text keeps normal
+      browser bidi behavior.
+- [ ] No search, tags, folders, collections, custom statuses, separate
+      favorites, Kanban/drag-and-drop, bulk management, custom sorting,
+      pagination architecture unless existing data-volume/query conventions
+      require it, deletion/archive, recommendations, or learning from Saved or
+      Rejected Ideas is introduced.
 
 ### Generation safety
 
@@ -502,8 +581,10 @@ required by `docs/agents/frontend-standards.md`.
 
 Provider adapters/selectors/routing/fallbacks, historical DNA generation,
 count/language expansion, bilingual batches, editing/bulk actions/deduplication,
-embeddings/learning, prompt UI, generation jobs, content/editor, publishing,
-social integration, and analytics remain deferred. A future provider requires
+full-text/semantic search, tags/folders/collections, custom statuses, custom
+sorting, deletion/archive, embeddings/learning, prompt UI, generation jobs,
+content/editor, publishing, social integration, and analytics remain deferred.
+A future provider requires
 an ADR/amendment, the same neutral contract/privacy/safety requirements, and
 representative English/Persian evaluation; it must not rewrite historic records.
 
@@ -552,6 +633,22 @@ The Product Architect explicitly resolved the earlier documentation conflicts:
   DNA freshness/readiness, or workspace-rate-limit denial, which creates none.
   It also states that an idempotent replay returns the existing batch rather
   than creating another.
+
+The Product Architect subsequently approved a narrow Idea workflow correction
+before Phase 4 closure:
+
+- the primary `/ideas` surface is a workspace-wide Idea Library with `All`,
+  `New`, `Saved`, `Accepted`, and `Rejected` views across all batches;
+- the default Library view is `New`;
+- generation batches remain a secondary provenance/history surface;
+- the existing four persisted decision states and derived `USED` rule are
+  unchanged; and
+- the correction uses existing Idea, batch, and Content relationships, with no
+  new Idea persistence, persisted Content counts, or new ADR.
+
+This is an information-architecture correction only. It does not change
+20-Idea generation, batch lineage, Content-generation eligibility or Attempt
+semantics, provider policy, Script generation, or Draft-editor behavior.
 
 No unresolved source-of-truth contradictions remain. Architecture §§22 and
 24–25 are aligned: ADR-014 and ADR-015 supply the provider-neutral contract and

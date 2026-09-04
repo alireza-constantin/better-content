@@ -205,7 +205,9 @@ Owns:
 
 * idea generation batches,
 * ideas,
-* idea acceptance/rejection.
+* idea acceptance/rejection,
+* workspace-wide Idea Library reads, and
+* secondary generation-history reads.
 
 ## Content
 
@@ -851,6 +853,12 @@ created_at
 updated_at
 ```
 
+These fields support two distinct read surfaces. The primary Ideas read surface
+is a workspace-wide Idea Library; the generation batch remains the authoritative
+provenance/history container. The Library is a query/view over existing
+`ideas`, `idea_generation_batches`, and `contents` relationships, not a new
+aggregate or persistence model.
+
 ---
 
 # 28. Important State Decision: USED Is Derived
@@ -874,10 +882,10 @@ These represent different facts.
 Therefore persistent idea state should remain:
 
 ```text
-new
-accepted
-saved
-rejected
+NEW
+SAVED
+ACCEPTED
+REJECTED
 ```
 
 And:
@@ -888,13 +896,68 @@ used = EXISTS(content where source_idea_id = idea.id)
 
 is derived.
 
+The workspace-wide Idea Library can communicate this derived fact as:
+
+* **No content yet**
+* **Has content**
+* a Content count
+* or an equivalent presentation
+
 The UI can still display:
 
 **Used**
 
 This avoids inconsistent state transitions.
 
-This decision should become an ADR.
+This decision is recorded in ADR-005.
+
+---
+
+# 28A. Workspace-wide Idea Library
+
+The primary `/ideas` experience is a workspace-wide Idea Library. It must
+discover Ideas across every generation batch in the current workspace without
+requiring the creator to open a particular batch first.
+
+The Library provides these views or equivalent status filters:
+
+```text
+All       → every Idea in the workspace
+New       → status = NEW
+Saved     → status = SAVED
+Accepted  → status = ACCEPTED
+Rejected  → status = REJECTED
+```
+
+The default view is `New`, which favors active review of unclassified Ideas.
+All other views remain directly available. These are views over the four
+persisted decision states, not new states; `USED` remains derived from linked
+Content and is not a fifth Library status.
+
+A Library item may expose existing Idea facts, Idea language, generation date,
+lightweight batch provenance, and derived Content existence/count. For an
+`ACCEPTED` Idea, the read model should make accepted-but-unused versus accepted
+with one or more linked Content records clear and should preserve the existing
+Generate Script action. One Idea may have multiple Content aggregates.
+
+Library reads require current workspace membership. Ownership must continue to
+be proved through `Idea → Idea Generation Batch → Workspace`; do not add
+`workspace_id` to `ideas` merely for the Library. Foreign-workspace Idea IDs
+remain nondisclosing.
+
+The Library does not add persisted counts, a separate Idea-library table, a
+search index, or advanced organization features. Full-text/semantic search,
+embeddings, tags, folders, collections, custom statuses, bulk management,
+separate favorites, Kanban/drag-and-drop, custom sorting, pagination
+architecture unless existing data-volume/query conventions require it,
+deletion/archive, recommendations, and learning from rejected/saved Ideas
+remain out of scope.
+
+Generation batches remain available as a secondary Generation History surface.
+They retain authoritative Idea-generation lineage, including the Content DNA
+version, AI Run, requested language, generated position/order, and generation
+timestamps. The Library must not flatten or duplicate those facts into Idea
+rows merely for convenience.
 
 ---
 
@@ -2724,6 +2787,8 @@ Create/configure DNA
  ↓
 Generate ideas
  ↓
+Review Ideas in the workspace-wide Library
+ ↓
 Accept idea
  ↓
 Generate content
@@ -3182,7 +3247,7 @@ Implement:
 * generation of 20 ideas
 * accept/save/reject
 * rejection reason
-* idea history
+* workspace-wide Idea Library with secondary generation history
 
 ---
 
@@ -3371,6 +3436,8 @@ Architecture v0.1 is ready to guide implementation when we agree that:
 * English/Persian and RTL/LTR exist from Phase 1.
 * Content DNA uses immutable versions.
 * Ideas are first-class entities.
+* The primary Ideas surface is a workspace-wide Idea Library; generation
+  batches remain secondary provenance/history.
 * Idea `USED` state is derived.
 * Editable content and immutable content versions are separated.
 * Structured content uses a versioned document schema.

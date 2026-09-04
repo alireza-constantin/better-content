@@ -42,6 +42,11 @@ The authoritative repository documents form a source-of-truth set: `docs/PRD.md`
 
 ADR-003, ADR-004, ADR-005, ADR-010, ADR-011, ADR-012, ADR-014, ADR-015, and accepted ADR-016 are especially relevant. Section 34 records the Product Architect-approved reconciliation applied to this source-of-truth set.
 
+The corrected Phase 3 Ideas specification is also a dependency: `/ideas` is
+the workspace-wide Idea Library, with generation batches retained as secondary
+provenance/history. Phase 4 consumes that Ideas surface and does not redefine
+its four persisted decision states, derived `USED` rule, or ownership model.
+
 ## 5. User Stories
 
 1. As a creator, I want to generate a Script only from an Idea I have accepted, so that generation reflects an intentional production choice.
@@ -87,7 +92,9 @@ Phase 4 includes:
 - debounced serialized autosave and optimistic revision conflicts;
 - minimal Content list/editor and source-Idea Attempt history;
 - full EN/FA, LTR/RTL, accessibility, and responsive behavior;
-- deterministic unit/integration/UI/E2E verification; and
+- deterministic unit/integration/UI/E2E verification;
+- closure hardening verification of the corrected Phase 3 Ideas surface before
+  Ticket 11 can close; and
 - opt-in live AvalAI smoke verification before phase closure.
 
 ## 7. Explicit non-goals
@@ -116,7 +123,9 @@ The following are explicitly excluded from Phase 4:
 - background-job infrastructure;
 - provider/model selectors, prompt editor, or sampling controls;
 - semantic deduplication, embeddings, or vector storage;
-- language-detection heuristics/dependencies; and
+- language-detection heuristics/dependencies;
+- changing the Phase 3 Idea Library's information architecture, adding Idea
+  persistence, or redefining Idea decision states; and
 - any Phase 5 editor-library, taxonomy, or anchoring decision.
 
 ## 8. Domain terminology
@@ -582,7 +591,9 @@ Safe structured logs may contain request ID, workspace/user IDs, Attempt/AI Run/
 
 ### Generate Script
 
-An accepted Idea exposes a keyboard-accessible Generate Script action. It opens a focused form containing only:
+An accepted Idea exposes a keyboard-accessible Generate Script action whether
+the creator reached it through the primary Idea Library or secondary Generation
+History. It opens a focused form containing only:
 
 - requested language;
 - SHORT_VIDEO or LONG_VIDEO;
@@ -707,6 +718,8 @@ Cover at minimum:
 - safe provider failure and Retry;
 - failed Attempt history absent from Content list;
 - multiple Content items from one accepted Idea;
+- the corrected workspace-wide Idea Library with all five status views and
+  secondary Generation History before closure hardening;
 - Content list ordering and metadata;
 - autosave sequence, failure preservation, and conflict recovery;
 - empty human Draft;
@@ -748,6 +761,23 @@ Do not deliberately force a 16,000-token output or a real 90-second timeout. Thi
 - [ ] Stale baseContentDnaVersionId returns CONFLICT with no Attempt, AI Run, reservation, or provider invocation.
 - [ ] After acceptance, no current-pointer recheck occurs and the immutable accepted DNA version remains authoritative despite later DNA changes.
 - [ ] The Idea batch’s historical DNA version is not substituted for current Content-generation DNA.
+
+### Ideas-surface prerequisite for Phase 4 closure
+
+- [ ] Before Ticket 11 cross-cutting hardening can close Phase 4, `/ideas` is
+      implemented as the workspace-wide Idea Library defined by Phase 3, with
+      `All`, `New`, `Saved`, `Accepted`, and `Rejected` views across all
+      generation batches and `New` as the default.
+- [ ] Ticket 11 verifies that Saved, Accepted, Rejected, and New Ideas are
+      discoverable without opening individual batches, while Generation History
+      remains available as a secondary provenance surface.
+- [ ] Ticket 11 verifies derived Content existence/count for Accepted Ideas,
+      multiple Content records per Idea, continued decision actions and
+      Generate Script behavior, membership authorization/nondisclosure, and
+      EN/FA LTR/RTL behavior.
+- [ ] The Ideas correction introduces no persisted `USED` status, new Idea
+      persistence, persisted Content counts, or out-of-scope search/advanced
+      organization behavior.
 
 ### Attempt, AI Run, and atomic artifacts
 
@@ -809,7 +839,7 @@ Do not deliberately force a 16,000-token output or a real 90-second timeout. Thi
 - [ ] Successful generation redirects to localized Content editor only after resulting Content exists.
 - [ ] Minimal Content list sorts and labels last edited by Draft.updatedAt and shows only approved metadata.
 - [ ] Failed Attempts appear in authorized source-Idea history and never Content list.
-- [ ] No title/search/filter/folder/bulk/archive/delete/history/diff/restore UI is present.
+- [ ] No Content title/search/filter/folder/bulk/archive/delete/history/diff/restore UI is present.
 
 ### Authorization, provider, i18n, and verification
 
@@ -853,6 +883,7 @@ The Product Architect approved the following surgical corrections. They have bee
 | Architecture | Section 108, Phase 4 conditional Production Directions | Phase 4 excludes all Production Direction generation/design. | Recorded that Script-only Phase 4 adds no directions, blocks, anchors, or taxonomy. |
 | Architecture | Section 108, Phase 5 “optimistic concurrency” | Approved Draft concurrency and autosave conflict behavior belong to Phase 4. | Moved initial optimistic Draft revision behavior to Phase 4 and made Phase 5 build on it. |
 | Architecture | Section 108, Phase 5 “Script layer” | Phase 4 already establishes the minimal Script document/editor. | Clarified that Phase 5 evolves Script into a structured block/anchor-aware layer. |
+| Phase 3 | Section 12, batch history as the primary Ideas surface | The approved V1 workflow requires workspace-wide Idea discovery and status views. | Replaced batch-first primary navigation with the Idea Library; retained batch history as secondary provenance and selected `New` as the default view. |
 
 ### Additions applied for consistency
 
@@ -871,6 +902,7 @@ The Product Architect approved the following surgical corrections. They have bee
 | Architecture | Section 106 | Added accepted ADR-016. |
 | Architecture | Section 108 | Replaced Phase 4/5 bullets with the approved boundary described above. |
 | Architecture / ADR-016 | RATE_LIMITED contract | Added application source WORKSPACE versus PROVIDER while retaining durable provider category RATE_LIMITED. |
+| Phase 3 / Phase 4 closure | Idea Library correction | Phase 4 hardening must verify the actual V1 Ideas surface before closure. | Added an explicit Ticket 11 prerequisite without changing Idea persistence, statuses, lineage, or Phase 5 scope. |
 
 ### ADR review
 
@@ -882,10 +914,23 @@ The Product Architect approved the following surgical corrections. They have bee
 | ADR-004 | No contradiction and no decision change. Its block example is expressly conceptual; Phase 4’s Script-only schema does not settle Phase 5 structure. A cross-reference may clarify sequencing but is not required. |
 | ADR-003, ADR-005, ADR-010, ADR-012, ADR-014 | No Phase 4 decision change required. |
 
+The Idea Library correction is an information-architecture/product UX change
+over existing Idea, batch, and Content relationships. It does not change
+ADR-005's derived `USED` decision, workspace ownership, lineage, or any other
+accepted architectural decision; no new ADR is required.
+
 ## 35. Readiness and unresolved issues
 
-Requirements grilling Q1–Q49 leaves no unresolved product decision.
+Requirements grilling Q1–Q49 and the approved Idea Library correction leave no
+unresolved product decision. The default Idea Library view is resolved as
+`New`.
 
 The Product Architect review corrections are applied, PRD and Architecture are reconciled, ADR-016 is accepted, and the acceptance criteria are complete. No unresolved product or architecture contradiction remains for Phase 4.
 
-Phase 4 is **Ready for implementation**. This review task does not create tickets or authorize opportunistic Phase 5 work. Implementation must still follow the repository's ticket-decomposition and approval workflow.
+Phase 4 core implementation is **Ready for implementation**. Ticket 11
+cross-cutting hardening and Phase 4 closure remain paused until the corrected
+workspace-wide Idea Library is implemented and its actual EN/FA, LTR/RTL,
+authorization, status-view, derived-Content, and secondary-history behavior is
+verified. This documentation correction does not create tickets or authorize
+opportunistic Phase 5 work. Implementation must still follow the repository's
+ticket-decomposition and approval workflow.
