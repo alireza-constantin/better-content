@@ -793,29 +793,22 @@ Cover:
 
 ### End-to-end tests
 
-Cover at minimum:
+E2E is not an acceptance-criteria matrix. Follow
+`docs/agents/testing-standards.md`: prove the remaining validation,
+authorization, persistence, concurrency, locale semantics, and presentation
+states at their highest reliable lower seam.
 
-- accepted Idea → Generate Script form → mocked successful Attempt → editor;
-- NEW/SAVED/REJECTED Ideas cannot generate;
-- stale current-DNA conflict with no provider telemetry;
-- immediate local generating feedback during the synchronous request;
-- correct rendering when a persisted PENDING/RUNNING Attempt is observed;
-- safe provider failure and Retry;
-- failed Attempt history absent from Content list;
-- Production Queue membership/order, accessible reorder controls, queue
-  generation, failed queue generation retention, and Content-by-Idea filtering;
-- multiple Content items from one accepted Idea;
-- the corrected workspace-wide Idea Library with all five status views, `All
-  runs`, owned Past Runs filters, and combined status/run behavior before
-  closure hardening;
-- Content list ordering and metadata;
-- autosave sequence, failure preservation, and conflict recovery;
-- empty human Draft;
-- cross-workspace nondisclosure;
-- English UI/LTR and Persian UI/RTL;
-- Content-language direction independent of UI locale;
-- mixed-direction creator text; and
-- desktop/mobile keyboard, focus, and status feedback.
+Keep only critical deterministic journeys:
+
+- accepted Idea → Production Queue → mocked successful Attempt → real editor,
+  including the queue advancing after success;
+- reorder queue → refresh → persisted order, with keyboard operation covered;
+- failed queue generation → visible safe failure → Retry → real editor;
+- Content-by-Idea → Generate Another → multiple Content records; and
+- one representative Persian/RTL production journey.
+
+Manual UX QA covers broader visual/responsive review. A two-tab E2E remains
+appropriate only for the user-facing Draft-conflict recovery experience.
 
 Normal CI never calls AvalAI.
 E2E tests must not require polling, split execution endpoints, jobs, `after()`, `waitUntil()`, or simulated background execution for the initiating request.

@@ -1139,6 +1139,12 @@ Do not expand scope merely because an additional feature appears easy to impleme
 
 ## Agent skills
 
+### Testing standards
+
+Automated-test design and E2E cleanup must follow
+`docs/agents/testing-standards.md`. Use the lowest test layer that can
+reliably prove the behavior; reserve E2E for critical cross-boundary journeys.
+
 ### Issue tracker
 
 Issues are tracked as local Markdown files under `.scratch/<feature>/`. See `docs/agents/issue-tracker.md`.

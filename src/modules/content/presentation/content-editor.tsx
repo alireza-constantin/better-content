@@ -27,7 +27,6 @@ import {
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/textarea";
 import { useUnsavedChanges } from "@/components/navigation/unsaved-changes-provider";
-import { cn } from "@/lib/utils";
 import { getContentDraftAction, saveContentDraftAction } from "../application/content-actions";
 import type { ContentDetailDto } from "../application/content-read-service";
 import {
@@ -43,11 +42,8 @@ type ContentEditorProps = Readonly<{
 
 function contentPresentation(language: ContentDetailDto["contentLanguage"]): Readonly<{
   dir: "ltr" | "rtl";
-  fontClassName: "font-content-english" | "font-content-persian";
 }> {
-  return language === "fa"
-    ? { dir: "rtl", fontClassName: "font-content-persian" }
-    : { dir: "ltr", fontClassName: "font-content-english" };
+  return language === "fa" ? { dir: "rtl" } : { dir: "ltr" };
 }
 
 function formatLabel(
@@ -151,7 +147,11 @@ export function ContentEditor({ content, workspaceId }: ContentEditorProps) {
             <dt className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
               {t("sourceIdea")}
             </dt>
-            <dd className="mt-1 break-words font-medium text-foreground" dir="auto">
+            <dd
+              className="mt-1 break-words font-medium text-foreground"
+              dir={presentation.dir}
+              lang={content.contentLanguage}
+            >
               {content.sourceIdea.title}
             </dd>
           </div>
@@ -251,10 +251,7 @@ export function ContentEditor({ content, workspaceId }: ContentEditorProps) {
             <FieldLabel htmlFor="content-script-text">{t("scriptLabel")}</FieldLabel>
             <Textarea
               aria-describedby="content-script-help"
-              className={cn(
-                presentation.fontClassName,
-                "min-h-[28rem] resize-y text-base leading-7",
-              )}
+              className="min-h-[28rem] resize-y text-base leading-7"
               dir={presentation.dir}
               id="content-script-text"
               lang={content.contentLanguage}

@@ -56,7 +56,7 @@ export default async function ContentPage({
     const view = await getContentByIdea({ workspaceId: workspace.id, sourceIdeaId });
 
     return (
-      <section className="mx-auto w-full max-w-6xl">
+      <section className="mx-auto w-full max-w-[1360px]">
         {header}
         <ContentIdeaContext
           dna={dna}
@@ -75,20 +75,23 @@ export default async function ContentPage({
   ]);
 
   return (
-    <section className="mx-auto w-full max-w-6xl">
+    <section className="mx-auto w-full max-w-[1360px]">
       {header}
-      <ProductionQueue
-        dna={dna}
-        initialQueue={queue}
-        key={queue
-          .map(
-            (item) =>
-              `${item.id}:${item.productionQueuePosition}:${item.lastAttempt?.id ?? "none"}:${item.lastAttempt?.status ?? "none"}`,
-          )
-          .join("|")}
-        workspaceId={workspace.id}
-      />
-      <ContentList content={content} locale={locale} />
+      <div className="mt-8 grid items-start gap-6 lg:grid-cols-2">
+        <ProductionQueue
+          className="lg:sticky lg:top-6"
+          dna={dna}
+          initialQueue={queue}
+          key={queue
+            .map(
+              (item) =>
+                `${item.id}:${item.productionQueuePosition}:${item.lastAttempt?.id ?? "none"}:${item.lastAttempt?.status ?? "none"}`,
+            )
+            .join("|")}
+          workspaceId={workspace.id}
+        />
+        <ContentList className="mt-0" content={content} locale={locale} />
+      </div>
     </section>
   );
 }

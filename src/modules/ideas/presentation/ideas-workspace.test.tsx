@@ -235,7 +235,32 @@ describe("Ideas Workspace Library presentation", () => {
       }),
     });
 
-    expect(screen.getByText("راهنمای English برای سازنده").getAttribute("dir")).toBe("rtl");
+    const title = screen.getByText("راهنمای English برای سازنده");
+    expect(title.getAttribute("lang")).toBe("fa");
+    expect(title.getAttribute("dir")).toBe("rtl");
+    expect(title.textContent).toBe("راهنمای English برای سازنده");
     expect(screen.getByLabelText("فیلترهای کتابخانهٔ ایده")).toBeTruthy();
+  });
+
+  it("keeps Persian Ideas semantic inside English UI", () => {
+    renderWorkspace({
+      locale: "en",
+      currentLibrary: library({
+        ideas: [
+          libraryIdea(1, {
+            language: "fa",
+            title: "ایدهٔ فارسی",
+            description: "توضیح فارسی",
+          }),
+        ],
+      }),
+    });
+
+    const title = screen.getByRole("heading", { name: "ایدهٔ فارسی" });
+    expect(title.getAttribute("lang")).toBe("fa");
+    expect(title.getAttribute("dir")).toBe("rtl");
+    const description = screen.getByText("توضیح فارسی");
+    expect(description.getAttribute("lang")).toBe("fa");
+    expect(description.getAttribute("dir")).toBe("rtl");
   });
 });

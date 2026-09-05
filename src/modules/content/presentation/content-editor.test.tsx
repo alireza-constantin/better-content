@@ -129,35 +129,34 @@ describe("ContentEditor", () => {
       contentLanguage: "en" as const,
       locale: "en" as const,
       dir: "ltr",
-      font: "font-content-english",
     },
     {
       contentLanguage: "fa" as const,
       locale: "en" as const,
       dir: "rtl",
-      font: "font-content-persian",
     },
     {
       contentLanguage: "en" as const,
       locale: "fa" as const,
       dir: "ltr",
-      font: "font-content-english",
     },
     {
       contentLanguage: "fa" as const,
       locale: "fa" as const,
       dir: "rtl",
-      font: "font-content-persian",
     },
   ])(
-    "derives the editor direction from Content language independently of UI locale",
-    ({ contentLanguage, locale, dir, font }) => {
+    "derives editor language and direction from Content language independently of UI locale",
+    ({ contentLanguage, locale, dir }) => {
       renderEditor({ locale, content: makeContent({ contentLanguage }) });
 
       const field = scriptField();
       expect(field.getAttribute("lang")).toBe(contentLanguage);
       expect(field.getAttribute("dir")).toBe(dir);
-      expect(field.classList.contains(font)).toBe(true);
+      expect(field.className).not.toContain("font-content");
+      const sourceIdea = screen.getByText("A source idea");
+      expect(sourceIdea.getAttribute("lang")).toBe(contentLanguage);
+      expect(sourceIdea.getAttribute("dir")).toBe(dir);
     },
   );
 

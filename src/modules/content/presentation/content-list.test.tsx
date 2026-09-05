@@ -99,6 +99,7 @@ describe("ContentList", () => {
     expect(within(rows[0]!).getByRole("link").getAttribute("href")).toBe("/content/content-2");
     expect(within(rows[0]!).getByRole("link").querySelector("dl")).toBeNull();
     expect(within(rows[0]!).getByRole("link").className).toContain("min-h-32");
+    expect(rows[0]!.className).toContain("sm:max-w-[22rem]");
   });
 
   it("keeps content-language metadata explicit for RTL content", async () => {
@@ -116,7 +117,8 @@ describe("ContentList", () => {
     const row = title.closest("li");
     if (!row) throw new Error("Content row was not rendered.");
 
-    expect(title.getAttribute("dir")).toBe("auto");
+    expect(title.getAttribute("lang")).toBe("fa");
+    expect(title.getAttribute("dir")).toBe("rtl");
     expect(
       within(row)
         .getByText(/Persian/)
@@ -141,5 +143,13 @@ describe("ContentList", () => {
     expect(
       screen.getByRole("link", { name: "باز کردن ویرایشگر اسکریپت برای ایدهٔ محتوایی" }),
     ).toBeTruthy();
+  });
+
+  it("keeps English creator titles LTR inside Persian UI", async () => {
+    await renderList([item(1, { contentLanguage: "en" })], "fa");
+
+    const title = screen.getByRole("heading", { name: "Source idea 1" });
+    expect(title.getAttribute("lang")).toBe("en");
+    expect(title.getAttribute("dir")).toBe("ltr");
   });
 });

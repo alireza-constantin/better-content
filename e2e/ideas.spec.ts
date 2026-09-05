@@ -796,64 +796,6 @@ test("keeps a stale generation request in the localized conflict state", async (
   await editor.close();
 });
 
-test("uses one Ideas Library for cross-batch status and Past Runs intersections", async ({
-  page,
-}) => {
-  const email = emailFor("ideas-library-cross-batch").toLowerCase();
-  await signUp(page, email);
-  await createReadyContentDna(page);
-  const older = await seedBatch(email, { status: "COMPLETED" });
-  const newer = await seedBatch(email, { status: "COMPLETED" });
-
-  await page.goto("/en/ideas");
-  await expect(page.getByRole("link", { name: "New" })).toHaveAttribute("aria-current", "page");
-  await expect(page.getByRole("link", { name: "All runs" })).toHaveAttribute(
-    "aria-current",
-    "page",
-  );
-  await expect(
-    page.getByRole("list", { name: "Generated ideas" }).locator(":scope > li"),
-  ).toHaveCount(40);
-
-  await page.goto(`/en/ideas?batchId=${older.batchId}`);
-  const oldRunCard = page.locator("article").filter({ hasText: older.firstIdeaTitle }).first();
-  await oldRunCard.getByRole("button", { name: "Save for later" }).click();
-  await expect(
-    page.getByRole("list", { name: "Generated ideas" }).locator(":scope > li"),
-  ).toHaveCount(19);
-
-  await page.goto("/en/ideas?view=saved");
-  await expect(page.locator("article").filter({ hasText: older.firstIdeaTitle })).toHaveCount(1);
-  await page.goto(`/en/ideas?view=saved&batchId=${older.batchId}`);
-  await expect(page.locator("article").filter({ hasText: older.firstIdeaTitle })).toHaveCount(1);
-
-  await page.goto(`/en/ideas?view=all&batchId=${older.batchId}`);
-  await page.locator("article").first().getByRole("button", { name: "Accept" }).click();
-  await page.goto(`/en/ideas?view=accepted&batchId=${older.batchId}`);
-  await expect(page.getByRole("button", { name: "Generate Script" })).toHaveCount(0);
-  await expect(page.getByText("In content queue", { exact: true })).toBeVisible();
-  await page.goto("/en/ideas?view=accepted");
-  await expect(page.getByRole("link", { name: "All runs" })).toHaveAttribute(
-    "aria-current",
-    "page",
-  );
-  await page.goto(`/en/ideas?view=all&batchId=${older.batchId}`);
-  await page.locator("article").first().getByRole("button", { name: "Reject" }).click();
-  const rejectionDialog = page.getByRole("dialog", { name: "Reject this idea" });
-  await rejectionDialog.getByRole("button", { name: "Reject idea" }).click();
-  await page.goto(`/en/ideas?view=rejected&batchId=${older.batchId}`);
-  await expect(page.getByRole("article")).toBeVisible();
-
-  await page.goto(`/en/ideas?view=all&batchId=${older.batchId}`);
-  await expect(
-    page.getByRole("list", { name: "Generated ideas" }).locator(":scope > li"),
-  ).toHaveCount(20);
-  await page.goto(`/en/ideas?view=all&batchId=${newer.batchId}`);
-  await expect(
-    page.getByRole("list", { name: "Generated ideas" }).locator(":scope > li"),
-  ).toHaveCount(20);
-});
-
 test("normalizes a foreign Past Run without disclosing its Ideas", async ({ browser, page }) => {
   const ownerEmail = emailFor("ideas-library-owner").toLowerCase();
   const foreignEmail = emailFor("ideas-library-foreign").toLowerCase();

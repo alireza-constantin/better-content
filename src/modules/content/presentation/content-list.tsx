@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import type { ContentListItemDto } from "../application";
 
 type ContentListProps = Readonly<{
+  className?: string;
   content: readonly ContentListItemDto[];
   locale: AppLocale;
 }>;
@@ -32,12 +33,12 @@ function languageLabel(
   return language === "fa" ? t("persian") : t("english");
 }
 
-export async function ContentList({ content, locale }: ContentListProps) {
+export async function ContentList({ className, content, locale }: ContentListProps) {
   const t = await getTranslations("Content");
 
   if (content.length === 0) {
     return (
-      <Card className="mt-8 border-dashed shadow-none">
+      <Card className={`border-dashed shadow-none ${className ?? "mt-8"}`}>
         <CardHeader>
           <CardTitle>
             <h2 className="text-xl font-semibold tracking-tight">{t("emptyTitle")}</h2>
@@ -49,7 +50,7 @@ export async function ContentList({ content, locale }: ContentListProps) {
   }
 
   return (
-    <Card className="mt-8 overflow-hidden shadow-sm">
+    <Card className={`overflow-hidden shadow-sm ${className ?? "mt-8"}`}>
       <CardHeader className="flex-row items-baseline justify-between gap-4 border-b px-4 py-4 sm:px-6 sm:py-5">
         <CardTitle>
           <h2 className="text-xl font-semibold tracking-tight">{t("listLabel")}</h2>
@@ -59,9 +60,12 @@ export async function ContentList({ content, locale }: ContentListProps) {
         </span>
       </CardHeader>
       <CardContent className="p-4 sm:p-5">
-        <ul aria-label={t("listLabel")} className="grid gap-3 sm:grid-cols-2 sm:gap-4">
+        <ul
+          aria-label={t("listLabel")}
+          className="grid justify-start gap-3 sm:grid-cols-2 sm:gap-4"
+        >
           {content.map((item) => (
-            <li className="min-w-0" key={item.id}>
+            <li className="min-w-0 sm:max-w-[22rem]" key={item.id}>
               <Link
                 aria-label={t("openEditorFor", { title: item.sourceIdeaTitle })}
                 className="group flex min-h-32 flex-col justify-between rounded-lg border bg-card p-4 outline-none transition-colors hover:bg-muted/50 focus-visible:bg-muted/50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
@@ -70,7 +74,8 @@ export async function ContentList({ content, locale }: ContentListProps) {
                 <div className="flex items-start justify-between gap-4">
                   <h2
                     className="min-w-0 truncate text-base font-semibold tracking-tight text-foreground group-hover:underline group-hover:underline-offset-4"
-                    dir="auto"
+                    dir={item.contentLanguage === "fa" ? "rtl" : "ltr"}
+                    lang={item.contentLanguage}
                     title={item.sourceIdeaTitle}
                   >
                     {item.sourceIdeaTitle}

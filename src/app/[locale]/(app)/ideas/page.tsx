@@ -34,7 +34,7 @@ export default async function IdeasPage({
   const dnaSummary = toIdeasDnaSummary(currentDna);
 
   return (
-    <section className="mx-auto w-full max-w-6xl">
+    <section className="mx-auto w-full max-w-[1360px]">
       <IdeasWorkspace
         dna={dnaSummary}
         initialHistory={history}

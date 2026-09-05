@@ -46,20 +46,9 @@ body {
   color: #171717;
 }
 
-body[data-locale="en"] {
-  --font-active-sans: var(--font-roboto);
-}
-
-body[data-locale="fa"] {
-  --font-active-sans: var(--font-vazirmatn);
-}
-
 @theme inline {
   --font-heading: var(--font-source-serif);
-  /* The locale layout selects Roboto or Vazirmatn into this shared slot. */
-  --font-sans: var(--font-active-sans);
-  --font-content-english: var(--font-roboto);
-  --font-content-persian: var(--font-vazirmatn);
+  --font-sans: var(--font-latin);
   --font-mono: var(--font-ibm-plex-mono);
   --font-serif: var(--font-source-serif);
   --color-sidebar-ring: var(--sidebar-ring);
@@ -149,4 +138,14 @@ body[data-locale="fa"] {
   select:focus-visible {
     @apply outline-none ring-2 ring-ring ring-offset-2;
   }
+}
+
+/* UI and creator-content language are independent. Nested semantic language
+   regions select their typeface even when the route locale differs. */
+:lang(en) {
+  font-family: var(--font-latin), sans-serif;
+}
+
+:lang(fa) {
+  font-family: var(--font-persian), var(--font-latin), sans-serif;
 }

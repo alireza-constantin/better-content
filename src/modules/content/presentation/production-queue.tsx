@@ -35,6 +35,7 @@ import {
 import type { ProductionQueueItemDto } from "../application/production-queue-service";
 
 type ProductionQueueProps = Readonly<{
+  className?: string;
   workspaceId: string;
   dna: IdeasDnaSummary;
   initialQueue: readonly ProductionQueueItemDto[];
@@ -74,7 +75,12 @@ function errorNotice(
   return code ? { code, ...(rateLimitSource ? { rateLimitSource } : {}) } : null;
 }
 
-export function ProductionQueue({ workspaceId, dna, initialQueue }: ProductionQueueProps) {
+export function ProductionQueue({
+  className,
+  workspaceId,
+  dna,
+  initialQueue,
+}: ProductionQueueProps) {
   const t = useTranslations("Content");
   const router = useRouter();
   const [items, setItems] = useState(initialQueue);
@@ -208,11 +214,14 @@ export function ProductionQueue({ workspaceId, dna, initialQueue }: ProductionQu
     setSelectedIdea(idea);
   }
 
+  const nextIdea = items[0] ?? null;
+  const canGenerateNext = nextIdea !== null && dna.currentVersion !== null;
+
   return (
     <>
-      <Card className="mt-8 overflow-hidden shadow-sm">
-        <CardHeader className="border-b bg-muted/20 px-4 py-4 sm:px-6 sm:py-5">
-          <div className="flex flex-wrap items-start justify-between gap-4">
+      <Card className={`overflow-hidden shadow-sm ${className ?? "mt-8"}`}>
+        <CardHeader className="border-b bg-muted/20 px-4 sm:px-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <CardTitle className="text-lg">
                 <h2 className="flex items-center gap-2">
@@ -220,11 +229,25 @@ export function ProductionQueue({ workspaceId, dna, initialQueue }: ProductionQu
                   {t("productionQueueTitle")}
                 </h2>
               </CardTitle>
-              <CardDescription className="mt-1 max-w-2xl text-sm leading-6">
+              <CardDescription className="mt-1 max-w-sm text-sm leading-6">
                 {t("productionQueueDescription")}
               </CardDescription>
             </div>
-            <Badge variant="outline">{t("queueCount", { count: items.length })}</Badge>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <Badge variant="outline">{t("queueCount", { count: items.length })}</Badge>
+              {nextIdea ? (
+                <Button
+                  aria-label={t("generateNextFor", { title: nextIdea.title })}
+                  className="min-h-11 shrink-0 px-3 text-sm"
+                  disabled={busyAction !== null || !canGenerateNext}
+                  onClick={() => openGenerate(nextIdea)}
+                  type="button"
+                >
+                  <SparklesIcon data-icon="inline-start" />
+                  {t("generateNext")}
+                </Button>
+              ) : null}
+            </div>
           </div>
         </CardHeader>
         <CardContent className="p-0">
@@ -264,7 +287,7 @@ export function ProductionQueue({ workspaceId, dna, initialQueue }: ProductionQu
 
                   return (
                     <li
-                      className="grid items-center gap-x-3 gap-y-2 px-4 py-3 sm:grid-cols-[2.75rem_minmax(0,1fr)_auto_auto] sm:px-5 sm:py-3"
+                      className="group grid min-w-0 gap-3 px-4 py-4 transition-colors hover:bg-muted/30 sm:px-5"
                       draggable={!isBusy}
                       key={item.id}
                       onDragEnd={() => {
@@ -290,7 +313,7 @@ export function ProductionQueue({ workspaceId, dna, initialQueue }: ProductionQu
                         draggedIdeaIdRef.current = null;
                       }}
                     >
-                      <div className="flex min-w-0 items-center gap-3 sm:contents">
+                      <div className="flex min-w-0 items-start gap-3">
                         <div
                           aria-label={t("dragQueueItem", { title: item.title })}
                           aria-describedby="production-queue-reorder-help"
@@ -310,94 +333,109 @@ export function ProductionQueue({ workspaceId, dna, initialQueue }: ProductionQu
                         >
                           <GripVerticalIcon aria-hidden="true" />
                         </div>
-                        <div className="min-w-0 sm:col-start-2 sm:col-end-3">
-                          <div className="flex min-w-0 items-baseline gap-3">
-                            <span className="w-7 shrink-0 text-xs font-medium tabular-nums text-muted-foreground/70">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex min-w-0 items-baseline gap-2">
+                            <span className="shrink-0 text-xs font-medium tabular-nums text-muted-foreground/70">
                               {t("queueOrder", { position: String(index + 1).padStart(2, "0") })}
                             </span>
                             <h3
-                              className="min-w-0 flex-1 truncate text-sm font-semibold tracking-tight"
-                              dir="auto"
+                              className="min-w-0 truncate text-sm font-semibold tracking-tight"
+                              dir={item.language === "fa" ? "rtl" : "ltr"}
+                              lang={item.language}
                               title={item.title}
                             >
                               {item.title}
                             </h3>
                           </div>
                           <p
-                            className="mt-0.5 truncate ps-10 text-xs leading-5 text-muted-foreground"
-                            dir="auto"
+                            className="mt-1 truncate text-xs leading-5 text-muted-foreground"
+                            dir={item.language === "fa" ? "rtl" : "ltr"}
+                            lang={item.language}
                             title={item.description}
                           >
                             {item.description}
                           </p>
-                          {attemptText ? (
-                            <p
-                              className={`mt-1 flex items-center gap-1.5 ps-10 text-xs ${item.lastAttempt?.status === "FAILED" ? "text-destructive" : "text-muted-foreground"}`}
-                              role={item.lastAttempt?.status === "FAILED" ? "alert" : "status"}
-                            >
-                              {item.lastAttempt?.status === "FAILED" ? (
-                                <AlertCircleIcon aria-hidden="true" className="size-4" />
-                              ) : (
-                                <LoaderCircleIcon
-                                  aria-hidden="true"
-                                  className="size-4 motion-safe:animate-spin"
-                                />
-                              )}
-                              {attemptText}
-                            </p>
-                          ) : null}
+                          <div className="mt-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                            <Badge className="w-fit text-[11px]" variant="outline">
+                              {languageLabel(t, item.language)}
+                            </Badge>
+                            {attemptText ? (
+                              <p
+                                className={`flex min-w-0 items-center gap-1.5 text-xs ${item.lastAttempt?.status === "FAILED" ? "text-destructive" : "text-muted-foreground"}`}
+                                role={item.lastAttempt?.status === "FAILED" ? "alert" : "status"}
+                              >
+                                {item.lastAttempt?.status === "FAILED" ? (
+                                  <AlertCircleIcon aria-hidden="true" className="size-4 shrink-0" />
+                                ) : (
+                                  <LoaderCircleIcon
+                                    aria-hidden="true"
+                                    className="size-4 shrink-0 motion-safe:animate-spin"
+                                  />
+                                )}
+                                <span className="truncate">{attemptText}</span>
+                              </p>
+                            ) : null}
+                          </div>
                         </div>
-                      </div>
-                      <Badge className="w-fit text-xs" variant="outline">
-                        {languageLabel(t, item.language)}
-                      </Badge>
-                      <div className="flex flex-wrap items-center justify-end gap-1.5 sm:justify-start">
-                        <Button
-                          className="min-h-11 px-3 text-sm"
-                          disabled={isBusy}
-                          onClick={() => openGenerate(item)}
-                          type="button"
-                        >
-                          <SparklesIcon data-icon="inline-start" />
-                          {t("generate")}
-                        </Button>
-                        {item.lastAttempt?.status === "FAILED" ? (
-                          <Button
-                            className="min-h-11 px-3 text-sm"
-                            disabled={isBusy}
-                            onClick={() => void retry(item.lastAttempt!.id, item.id)}
-                            type="button"
-                            variant="outline"
-                          >
-                            <RefreshCwIcon data-icon="inline-start" />
-                            {t("retryGeneration")}
-                          </Button>
-                        ) : null}
-                        <Button
-                          className="min-h-11 px-3 text-sm"
-                          disabled={isBusy}
-                          onClick={() => void decide(item.id, "SAVED")}
-                          type="button"
-                          variant="outline"
-                        >
-                          {t("saveIdea")}
-                        </Button>
-                        <Button
-                          className="min-h-11 px-3 text-sm"
-                          disabled={isBusy}
-                          onClick={() =>
-                            setRejectingIdea({
-                              id: item.id,
-                              title: item.title,
-                              language: item.language,
-                              rejectionReason: null,
-                            })
-                          }
-                          type="button"
-                          variant="outline"
-                        >
-                          {t("rejectIdea")}
-                        </Button>
+                        <div className="flex shrink-0 items-start gap-2">
+                          {item.lastAttempt?.status === "FAILED" ? (
+                            <Button
+                              aria-label={t("retryGeneration")}
+                              className="size-11 min-h-11 shrink-0 px-0"
+                              disabled={isBusy}
+                              onClick={() => void retry(item.lastAttempt!.id, item.id)}
+                              title={t("retryGenerationFor", { title: item.title })}
+                              type="button"
+                              variant="outline"
+                            >
+                              <RefreshCwIcon aria-hidden="true" />
+                            </Button>
+                          ) : null}
+                          <details className="relative shrink-0">
+                            <summary
+                              aria-label={t("moreActionsFor", { title: item.title })}
+                              className="flex size-11 cursor-pointer list-none items-center justify-center rounded-md border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden"
+                              title={t("moreActionsFor", { title: item.title })}
+                            >
+                              <span aria-hidden="true" className="text-lg leading-none">
+                                …
+                              </span>
+                            </summary>
+                            <div className="absolute end-0 top-12 z-10 grid min-w-44 gap-1 rounded-md border bg-popover p-1 text-popover-foreground shadow-md">
+                              <button
+                                className="min-h-10 rounded-sm px-3 text-start text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                disabled={isBusy}
+                                onClick={() => openGenerate(item)}
+                                type="button"
+                              >
+                                {t("generateNow")}
+                              </button>
+                              <button
+                                className="min-h-10 rounded-sm px-3 text-start text-sm transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                disabled={isBusy}
+                                onClick={() => void decide(item.id, "SAVED")}
+                                type="button"
+                              >
+                                {t("saveIdea")}
+                              </button>
+                              <button
+                                className="min-h-10 rounded-sm px-3 text-start text-sm text-destructive transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                disabled={isBusy}
+                                onClick={() =>
+                                  setRejectingIdea({
+                                    id: item.id,
+                                    title: item.title,
+                                    language: item.language,
+                                    rejectionReason: null,
+                                  })
+                                }
+                                type="button"
+                              >
+                                {t("rejectIdea")}
+                              </button>
+                            </div>
+                          </details>
+                        </div>
                       </div>
                     </li>
                   );

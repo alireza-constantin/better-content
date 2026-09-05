@@ -106,11 +106,8 @@ function lifecycleLabel(
 
 function contentPresentation(language: IdeasLanguage): Readonly<{
   dir: "ltr" | "rtl";
-  fontClassName: "font-content-english" | "font-content-persian";
 }> {
-  return language === "fa"
-    ? { dir: "rtl", fontClassName: "font-content-persian" }
-    : { dir: "ltr", fontClassName: "font-content-english" };
+  return language === "fa" ? { dir: "rtl" } : { dir: "ltr" };
 }
 
 function DecisionStatus({ status }: Readonly<{ status: IdeaLibraryItemDto["status"] }>) {
@@ -587,14 +584,14 @@ function IdeaCard({
           <DecisionStatus status={idea.status} />
         </div>
         <h3
-          className={`mt-5 break-words text-balance text-lg font-semibold tracking-tight ${content.fontClassName}`}
+          className="mt-5 break-words text-balance text-lg font-semibold tracking-tight"
           dir={content.dir}
           lang={idea.language}
         >
           {idea.title}
         </h3>
         <p
-          className={`mt-3 flex-1 break-words whitespace-pre-wrap text-sm leading-6 text-muted-foreground ${content.fontClassName}`}
+          className="mt-3 flex-1 break-words whitespace-pre-wrap text-sm leading-6 text-muted-foreground"
           dir={content.dir}
           lang={idea.language}
         >
@@ -608,11 +605,7 @@ function IdeaCard({
             <bdi className="font-sans text-muted-foreground" dir={uiDirection} lang={uiLocale}>
               {t("categoryLabel")}:
             </bdi>
-            <bdi
-              className={`min-w-0 break-words ${content.fontClassName}`}
-              dir={content.dir}
-              lang={idea.language}
-            >
+            <bdi className="min-w-0 break-words" dir={content.dir} lang={idea.language}>
               {idea.category}
             </bdi>
           </p>
@@ -762,7 +755,7 @@ export function RejectReasonDialog({
               {t("rejectDescription")}
             </DialogDescription>
             <p
-              className={`mt-4 rounded-lg bg-muted px-3 py-2 text-sm font-medium ${content?.fontClassName ?? ""}`}
+              className="mt-4 rounded-lg bg-muted px-3 py-2 text-sm font-medium"
               dir={content?.dir}
               lang={idea.language}
             >

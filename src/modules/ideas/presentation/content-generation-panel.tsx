@@ -354,7 +354,7 @@ export function ContentGenerationDialog({
   onReload,
   onSubmit,
 }: Readonly<{
-  idea: Pick<{ id: string; title: string }, "id" | "title"> | null;
+  idea: Readonly<{ id: string; title: string; language: "en" | "fa" }> | null;
   dna: IdeasDnaSummary;
   isSubmitting: boolean;
   notice: ContentGenerationNotice | null;
@@ -435,7 +435,11 @@ export function ContentGenerationDialog({
             <DialogDescription className="mt-4">
               {t("generateScriptDialogDescription")}
             </DialogDescription>
-            <p className="mt-4 rounded-lg bg-muted px-3 py-2 text-sm font-medium" dir="auto">
+            <p
+              className="mt-4 rounded-lg bg-muted px-3 py-2 text-sm font-medium"
+              dir={idea.language === "fa" ? "rtl" : "ltr"}
+              lang={idea.language}
+            >
               {idea.title}
             </p>
 

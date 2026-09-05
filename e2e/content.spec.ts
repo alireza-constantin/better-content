@@ -262,6 +262,7 @@ test("opens the persisted Content list and saves an empty Draft through the real
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
   await expect(page.locator("html")).toHaveAttribute("dir", "ltr");
   await expect(page.getByRole("heading", { name: "Content workspace" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Generate next Content for/ })).toHaveCount(0);
   const contentList = page.getByRole("list", { name: "Content Drafts" });
   const contentRows = contentList.getByRole("listitem");
   await expect(contentRows).toHaveCount(3);
@@ -420,17 +421,17 @@ test("keeps Content language direction independent from route locale and preserv
   await page.goto(`/en/content/${fixture.persianContentId}`);
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
   await expect(page.locator("html")).toHaveAttribute("dir", "ltr");
-  await expect(page.getByRole("textbox", { name: "Script text" })).toHaveAttribute("lang", "fa");
-  await expect(page.getByRole("textbox", { name: "Script text" })).toHaveAttribute("dir", "rtl");
-  await expect(page.getByRole("textbox", { name: "Script text" })).toHaveValue(
-    "متن فارسی / English 42",
-  );
+  const persianScript = page.getByRole("textbox", { name: "Script text" });
+  await expect(persianScript).toHaveAttribute("lang", "fa");
+  await expect(persianScript).toHaveAttribute("dir", "rtl");
+  await expect(persianScript).toHaveValue("متن فارسی / English 42");
 
   await page.goto(`/fa/content/${fixture.englishContentId}`);
   await expect(page.locator("html")).toHaveAttribute("lang", "fa");
   await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
-  await expect(page.getByRole("textbox", { name: "متن اسکریپت" })).toHaveAttribute("lang", "en");
-  await expect(page.getByRole("textbox", { name: "متن اسکریپت" })).toHaveAttribute("dir", "ltr");
+  const englishScript = page.getByRole("textbox", { name: "متن اسکریپت" });
+  await expect(englishScript).toHaveAttribute("lang", "en");
+  await expect(englishScript).toHaveAttribute("dir", "ltr");
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.locator("body")).toHaveJSProperty(

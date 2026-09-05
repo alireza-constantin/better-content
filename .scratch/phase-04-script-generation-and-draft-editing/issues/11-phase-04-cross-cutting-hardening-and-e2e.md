@@ -19,11 +19,14 @@ Produce complete Phase 4 implementation evidence at stable seams without turning
   combined status/run behavior; compact queue/Content state; queue generation
   using the reusable Generate Script capability; authorization/nondisclosure; and EN/FA
   LTR/RTL behavior.
-- Add only missing integration/component/E2E coverage enumerated by Phase 4 §31.
+- Add only missing coverage enumerated by Phase 4 §31 at the appropriate test
+  layer; do not turn hardening into an exhaustive Playwright matrix.
 - Stress same-key, quota, terminal-winner, immutable-lineage, and Draft-revision concurrency.
 - Verify workspace nondisclosure at reads, replay, Attempt instructions, generation, retry, Content, and Draft mutation boundaries.
 - Verify normal CI and Playwright can select only the guarded deterministic fake and make zero AvalAI calls.
-- Verify complete EN/FA, LTR/RTL, content-language direction, mixed bidi, keyboard/focus/status, and desktop/mobile matrix.
+- Verify complete EN/FA, LTR/RTL, content-language direction, mixed bidi,
+  keyboard/focus/status, and desktop/mobile requirements through focused
+  component/integration tests, representative E2E, and manual QA.
 - Verify distinct safe UX for application `RATE_LIMITED` source WORKSPACE versus PROVIDER, plus retry and INTERRUPTED-state behavior.
 - Verify autosave failure preservation and a real two-tab optimistic-revision conflict.
 - Verify production composition selects the ADR-016 AvalAI adapter while provider/SDK types remain confined to infrastructure.
@@ -86,7 +89,8 @@ Produce complete Phase 4 implementation evidence at stable seams without turning
 
 ## Acceptance criteria
 
-- [ ] Every Phase 4 §31 unit/integration/component/E2E case is covered at its highest stable seam with no live AvalAI dependency in automated tests.
+- [ ] Every Phase 4 §31 requirement is covered at its highest stable seam with
+      no live AvalAI dependency in automated tests.
 - [ ] The corrected compact workspace-wide Idea Library passes final verification for
       `All`, `New`, `Saved`, `Accepted`, and `Rejected`; defaults to `New + All
       runs`; combines status with `All runs` or an owned Past Run; retrieves
@@ -100,7 +104,10 @@ Produce complete Phase 4 implementation evidence at stable seams without turning
 - [ ] Production composition selects the accepted AvalAI Content Script adapter and no AvalAI/OpenAI SDK type escapes infrastructure.
 - [ ] Cross-workspace nondisclosure and all zero-side-effect failure cases pass through real application/database boundaries.
 - [ ] Idempotency, both quota windows, stale recovery, terminal winner, atomic artifacts, immutability, and Draft concurrency remain green under race tests.
-- [ ] Full EN/LTR and FA/RTL workflows, Content-language direction independent of UI locale, mixed bidi, keyboard/focus/accessibility, and responsive desktop/mobile review pass.
+- [ ] Full EN/LTR and FA/RTL requirements, Content-language direction
+      independent of UI locale, mixed bidi, keyboard/focus/accessibility, and
+      responsive desktop/mobile review pass through focused automated coverage,
+      representative E2E, and concise manual QA.
 - [ ] WORKSPACE-versus-PROVIDER rate-limit UX, retry, and INTERRUPTED-state behavior are distinct, safe, and tested.
 - [ ] Autosave failure preserves local text and a two-tab conflict preserves the losing tab’s unsaved text without overwriting the winner.
 - [ ] Safe logs/errors/DTOs/markup/persistence expose none of the forbidden raw or sensitive fields.
@@ -115,12 +122,15 @@ Produce complete Phase 4 implementation evidence at stable seams without turning
 - **Unit:** full deterministic suite and any missing boundary/privacy cases.
 - **Integration:** complete schema/application race, authorization, lineage, quota, recovery, retry, and revision matrix.
 - **Component:** complete generation/list/editor state, locale, direction, keyboard, and announcement matrix.
-- **E2E:** all minimum scenarios in Phase 4 §31, including real browser-triggered deterministic generation, both rate-limit sources, retry/interrupted states, autosave failure, two-tab conflict, locales/directions, accessibility, and responsive layouts.
-- **E2E:** additionally verify the corrected compact workspace-wide Library flow across
-  all five status views, the `New + All runs` default, cross-batch and
-  selected-run retrieval, status/run preservation and clearing, derived Content
-  count/state, integrated Past Runs provenance, compact Idea-to-Queue handoff,
-  queue generation/retry, authorization/nondisclosure, and EN/FA LTR/RTL behavior.
+- **E2E:** retain only critical browser/application wiring: sign-in/protected
+  routing; one deterministic accepted-Idea → queue → editor journey; persisted
+  queue reorder; failed generation → Retry; Content-by-Idea → Generate Another;
+  a representative Persian/RTL journey; and the two-tab Draft-conflict recovery
+  experience if it remains user-critical.
+- **Unit/component/integration:** prove the exhaustive validation, provider and
+  error mapping, Library filter states, authorization/nondisclosure, races,
+  persistence, locale semantics, and responsive objective invariants required
+  by Phase 4 §31. Use manual QA for broader visual/responsive quality.
 - **Live smoke:** explicit opt-in EN/FA × SHORT/LONG execution with synthetic data; never a normal CI test.
 
 ## Dependencies and blockers

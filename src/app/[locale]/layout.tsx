@@ -17,13 +17,13 @@ type LocaleLayoutProps = Readonly<{
 const fontEnglishSans = Roboto({
   weight: ["400", "500", "700"],
   subsets: ["latin"],
-  variable: "--font-roboto",
+  variable: "--font-latin",
 });
 
 const fontPersianSans = Vazirmatn({
   weight: ["400", "500", "600", "700"],
   subsets: ["arabic", "latin"],
-  variable: "--font-vazirmatn",
+  variable: "--font-persian",
 });
 
 const fontSerif = Source_Serif_4({
@@ -69,7 +69,6 @@ export default async function LocaleLayout({ children, params }: LocaleLayoutPro
     <html dir={getTextDirection(locale)} lang={locale}>
       <body
         className={`${fontEnglishSans.variable} ${fontPersianSans.variable} ${fontSerif.variable} ${fontMono.variable} antialiased`}
-        data-locale={locale}
       >
         <NextIntlClientProvider>{children}</NextIntlClientProvider>
       </body>

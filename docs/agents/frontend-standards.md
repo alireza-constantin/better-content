@@ -175,6 +175,11 @@ reversed based on UI locale.
 
 UI locale and creator content language are separate concepts.
 
+UI typography follows the UI locale, while creator-content typography follows
+the creator Content's semantic language. Components must expose the applicable
+`lang` and `dir`; global language-aware typography selects the font. Do not
+solve language typography with scattered feature-specific font classes.
+
 ## 9. Installed Skills
 
 For substantial frontend implementation, agents must actively use the relevant
@@ -221,3 +226,13 @@ Relevant work must pass:
 For a substantial user-facing feature, the completion report must state which
 frontend/design skills were actually used and summarize material findings and
 fixes.
+
+## 11. Manual visual and UX QA
+
+Automated component and E2E tests should prove objective interaction and
+semantic invariants, not subjective visual quality or brittle pixel values.
+Major user-facing phases need concise manual QA in representative English and
+Persian desktop/mobile layouts, with mixed-direction content and long Persian
+text where relevant. Review hierarchy, typography, spacing, responsive feel,
+drag/animation feel, readability, and editor usability. See
+`testing-standards.md` for the test-layer policy.

@@ -12,7 +12,7 @@ export function AuthScreen({ mode }: AuthScreenProps) {
   const isSignUp = mode === "sign-up";
 
   return (
-    <main className="mx-auto grid min-h-screen w-full max-w-6xl grid-cols-1 gap-10 px-5 py-6 sm:px-8 sm:py-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-center lg:gap-16">
+    <main className="mx-auto grid min-h-screen w-full max-w-[1360px] grid-cols-1 gap-10 px-5 py-6 sm:px-8 sm:py-8 lg:grid-cols-[0.9fr_1.1fr] lg:items-center lg:gap-16">
       <section className="self-start lg:self-center">
         <header className="flex items-center justify-between gap-4 border-b border-border pb-5">
           <Link

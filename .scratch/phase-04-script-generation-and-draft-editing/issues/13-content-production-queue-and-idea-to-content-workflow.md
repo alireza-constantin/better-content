@@ -356,10 +356,17 @@ layouts without horizontal overflow.
 - failed Attempt is visible in production context and Retry delegates to the
   existing path;
 - no expanded Attempt history returns to Idea cards;
-- deterministic E2E covers accepting multiple Ideas, persisted reorder,
-  keyboard reorder, first generation, failed generation, retry success,
-  Save/Reject exit, source-Idea filter, Generate Another, multiple Content,
-  foreign-ID nondisclosure, EN/FA RTL/LTR, and responsive/mobile behavior.
+- deterministic E2E is limited to critical wiring journeys: Accept Idea →
+  Production Queue; persisted mouse/keyboard reorder; Generate next → real
+  editor and queue advance; failed generation → Retry → editor;
+  Content-by-Idea → Generate Another; and one Persian/RTL production journey.
+  Combine coherent journeys where that reduces duplication. Do not create an
+  acceptance-criterion-per-test browser matrix.
+- authorization/nondisclosure, membership/exit rules, validation boundaries,
+  queue conflicts and races, source-Idea cardinality, locale semantics, and
+  responsive/visual permutations remain mandatory but are proved through the
+  unit, component, PostgreSQL integration, and manual-QA layers specified in
+  `docs/agents/testing-standards.md`.
 
 No live provider call is required for this ticket’s deterministic tests.
 
@@ -429,13 +436,11 @@ No live provider call is required for this ticket’s deterministic tests.
     concurrent Accept ordering, Save/Reject entry/exit, first-success queue
     clearing, failed-generation preservation, and Content-by-Idea
     nondisclosure. Existing Ticket 06 race/late-result tests remain green.
-15. **E2E results and six former skips:** The deterministic browser suite is
-    30/30 passing. All six former Ticket 09 Idea-card generation skips were
-    removed and rewritten through the correct Production Queue or Content
-    workflow: queued success/editor landing; stale DNA conflict; provider
-    failure plus queue retry; workspace/provider rate-limit feedback;
-    persisted PENDING/RUNNING activity; and Persian RTL generation form
-    behavior. No `test.skip` remains in the E2E suite.
+15. **E2E results and six former skips:** The obsolete Ticket 09 Idea-card
+    generation tests are deleted, not restored. The retained queue and Content
+    journeys are intentionally small and use deterministic provider wiring;
+    lower-level suites prove the server rules and races. No `test.skip` remains
+    in the E2E suite.
 16. **Full verification:** `db:up`, `db:check`, `db:migrate:test`,
     `format:check`, `lint`, `typecheck`, `build`, `git diff --check`, the
     deterministic unit remainder (36 files / 258 tests), integration tests

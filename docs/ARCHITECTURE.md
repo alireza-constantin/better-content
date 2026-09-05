@@ -2908,7 +2908,9 @@ This will matter when diagnosing asynchronous analytics failures.
 
 Testing should focus on behavior that can damage user data or break core workflow.
 
-Use three levels.
+Use the lowest test layer that can reliably prove the behavior. E2E tests are
+reserved for critical cross-boundary user journeys and must not duplicate
+exhaustive unit, integration, or component coverage.
 
 ## Unit tests
 
@@ -2936,7 +2938,11 @@ For:
 
 ## End-to-end tests
 
-For critical user journeys.
+For a small number of critical user journeys proving browser, application,
+database, navigation, and deterministic-provider wiring. Validation boundaries,
+authorization permutations, migrations, and concurrency belong primarily in
+unit/component or PostgreSQL integration tests. Visual quality is reviewed
+through manual product/UX QA rather than brittle pixel assertions.
 
 ---
 

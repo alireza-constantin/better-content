@@ -131,13 +131,21 @@ export function ContentIdeaContext({
 
       <Card className="mt-6 shadow-sm">
         <CardHeader>
-          <CardTitle className="text-2xl" dir="auto">
+          <CardTitle
+            className="text-2xl"
+            dir={sourceIdea.language === "fa" ? "rtl" : "ltr"}
+            lang={sourceIdea.language}
+          >
             {sourceIdea.title}
           </CardTitle>
           <CardDescription>{t("sourceIdeaContext")}</CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="leading-7 text-muted-foreground" dir="auto">
+          <p
+            className="leading-7 text-muted-foreground"
+            dir={sourceIdea.language === "fa" ? "rtl" : "ltr"}
+            lang={sourceIdea.language}
+          >
             {sourceIdea.description}
           </p>
           <dl className="mt-5 grid gap-4 text-sm sm:grid-cols-2">
