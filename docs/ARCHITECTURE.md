@@ -1304,16 +1304,18 @@ outer-trimmed, non-empty, and at most 50,000 characters. Human Draft edits
 normalize line endings, preserve other whitespace, may be empty, and remain
 bounded to 50,000 characters.
 
-This does not approve blocks, direction taxonomy, or anchors. Phase 5 must
-explicitly transform mutable Drafts if it evolves the representation, while
-immutable schema-v1 Content Versions retain their original meaning.
+Phase 5 evolves mutable working state to V2: ordered stable-ID paragraph blocks
+with embedded ordered Performance and Edit Direction arrays. V2 is strictly
+validated, block-scoped, and has no text-range anchors. Existing V1 Drafts are
+lazily transformed only through the approved checkpoint transaction; immutable
+schema-v1 Content Versions and AI Run outputs retain their original meaning.
 
 Example conceptually:
 
 ```json
 {
-  "schemaVersion": 1,
-  "blocks": [...]
+  "schemaVersion": 2,
+  "script": { "blocks": [...] }
 }
 ```
 
@@ -1336,7 +1338,8 @@ Edit Direction describes how the resulting footage should be edited during post-
 
 Performance Direction and Edit Direction must remain associated with the relevant Script content.
 
-The exact internal block/direction schema is intentionally deferred until the structured-editor phase.
+The approved Phase 5 specification defines the exact V2 taxonomy, limits,
+canonicalization, block behavior, and accessibility model.
 
 ---
 
@@ -3461,15 +3464,19 @@ Before implementation, explicitly approve:
 - canonical V1 Edit Direction taxonomy
 - direction anchoring model
 
-Then implement:
+Then implement, in the approved expand → support → UI → cutover sequence:
 
-- structured editor that evolves the Phase 4 Script document
-- structured Script block/anchor-aware layer
-- Performance Direction layer
-- Edit Direction layer
-* build on Phase 4 optimistic Draft concurrency
-* accepted snapshot
-* version history
+- V2 document/persistence foundation without changing runtime generation;
+- V2 Draft persistence and lazy V1 checkpoint migration;
+- a structured paragraph-block editor that can read projected V1 and persisted V2;
+- generation cutover where AI output and Version #1 remain V1 while the mutable
+  Draft is created as V2 in the existing atomic generation/queue-exit transaction;
+- block-local Performance/Edit Direction authoring; and
+- accepted snapshots with a retained same-Content accepted pointer and read-only
+  V1/V2 Version History.
+
+Phase 5 retains whole-document optimistic Draft concurrency. It adds no
+range anchors, rich-text framework, AI direction generation, or collaboration.
 
 ---
 

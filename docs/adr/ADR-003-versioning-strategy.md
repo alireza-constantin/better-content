@@ -34,6 +34,25 @@ Use two complementary patterns.
 
 The mutable content draft uses a revision number for optimistic concurrency control.
 
+### Phase 5 clarification — accepted Content pointer and Version sources
+
+Content has a nullable `accepted_version_id` that designates one currently
+approved immutable Version. It is not a terminal Content status and does not
+lock the mutable Draft. Editing after acceptance leaves the pointer unchanged;
+re-acceptance creates a new meaningful immutable Version and moves the pointer.
+Publications later reference their selected immutable Version, never the
+mutable Draft or a moving accepted pointer.
+
+The only Phase 5 Version sources are `AI_GENERATED`, migration-only
+`LEGACY_DRAFT_CHECKPOINT`, and acceptance-only `CREATOR_ACCEPTED`. Autosaves
+never create Versions. A non-null accepted pointer must reference a Version of
+the same Content and may designate only `CREATOR_ACCEPTED`.
+
+AI-generated Versions retain their linked AI Run. Legacy checkpoints and
+creator-accepted Versions have no AI Run link. The database must enforce the
+same-Content pointer relationship with the strongest practical composite
+constraint; the application enforces the allowed-source rule.
+
 ## Consequences
 
 ### Positive
@@ -55,6 +74,9 @@ The mutable content draft uses a revision number for optimistic concurrency cont
 - A publication never references a mutable draft.
 - Editing the current draft never changes an existing publication.
 - Changing active DNA never changes historical idea-generation context.
+- Acceptance points to an immutable Version belonging to the same Content.
+- `AI_GENERATED` and `LEGACY_DRAFT_CHECKPOINT` Versions can never be current
+  accepted pointers.
 
 ## Rejected alternatives
 

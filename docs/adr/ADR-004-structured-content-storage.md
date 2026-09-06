@@ -93,6 +93,25 @@ The exact anchoring representation and exact V1 direction taxonomy are deferred 
 
 Both mutable drafts and immutable content versions store the structured document.
 
+### Phase 5 resolution — V2 document and preserved V1 history
+
+The canonical current editor document is V2: an ordered non-empty `script.blocks`
+array of stable-ID paragraph blocks. Each block embeds ordered Performance and
+Edit Direction arrays. Directions are block-scoped, not relational rows, and
+there are no range anchors, offsets, or speculative anchor wrappers. V2 uses
+strict discriminated unions, exact bounded taxonomy payloads, and canonical
+empty-block normalization as defined by the approved Phase 5 specification.
+
+V1 Drafts are lazily projected and migrate only in an atomic first meaningful
+V2 save or acceptance transaction. That transaction preserves an exact stored
+V1 document value as `LEGACY_DRAFT_CHECKPOINT` before writing canonical V2.
+Historical V1 Versions and AI Run output snapshots are never rewritten.
+
+After Phase 5, provider output and `AI_GENERATED` Version #1 remain exact V1
+artifacts, while newly generated mutable Drafts are deterministically derived
+as V2. This changes Draft serialization, not the historical AI artifact or its
+Script meaning.
+
 ## Schema evolution
 
 Every document contains `schemaVersion`.
