@@ -4,13 +4,13 @@
 
 **Blocked by:** 03 — Replace the textarea with the structured Script block editor.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Keep provider output and AI Run output snapshot as validated V1 Script documents.
-- [ ] Keep `AI_GENERATED` Version #1 as the exact V1 creator-work artifact.
-- [ ] Deterministically create the initial mutable Draft as canonical V2 inside the existing successful-generation transaction.
-- [ ] Preserve all-or-nothing Content, Version #1, Draft, AI Run, Attempt completion, and Production Queue exit/source-Idea queue-position clearing behavior.
-- [ ] Apply the same behavior through normal Generate, Retry, and Generate Another shared paths; failed or rolled-back generation must not clear queue membership or leave partial artifacts.
+- [x] Keep provider output and AI Run output snapshot as validated V1 Script documents.
+- [x] Keep `AI_GENERATED` Version #1 as the exact V1 creator-work artifact.
+- [x] Deterministically create the initial mutable Draft as canonical V2 inside the existing successful-generation transaction.
+- [x] Preserve all-or-nothing Content, Version #1, Draft, AI Run, Attempt completion, and Production Queue exit/source-Idea queue-position clearing behavior.
+- [x] Apply the same behavior through normal Generate, Retry, and Generate Another shared paths; failed or rolled-back generation must not clear queue membership or leave partial artifacts.
 
 ## Required invariants
 

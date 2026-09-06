@@ -13,6 +13,7 @@ import {
 import { useTranslations } from "next-intl";
 import { useCallback, useEffect } from "react";
 
+import { useUnsavedChanges } from "@/components/navigation/unsaved-changes-provider";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,100 +25,43 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
-import { Textarea } from "@/components/ui/textarea";
-import { useUnsavedChanges } from "@/components/navigation/unsaved-changes-provider";
 import { getContentDraftAction, saveContentDraftAction } from "../application/content-actions";
 import type { ContentDetailDto } from "../application/content-read-service";
+import { StructuredScriptEditor } from "./structured-script-editor";
 import {
   useContentDraftAutosave,
   type AutosaveReloadResult,
   type AutosaveSaveInput,
 } from "./use-content-draft-autosave";
 
-type ContentEditorProps = Readonly<{
-  content: ContentDetailDto;
-  workspaceId: string;
-}>;
-
-function contentPresentation(language: ContentDetailDto["contentLanguage"]): Readonly<{
-  dir: "ltr" | "rtl";
-}> {
-  return language === "fa" ? { dir: "rtl" } : { dir: "ltr" };
-}
-
-function formatLabel(
-  t: ReturnType<typeof useTranslations>,
-  format: ContentDetailDto["format"],
-): string {
-  return format === "SHORT_VIDEO" ? t("shortVideo") : t("longVideo");
-}
-
-function languageLabel(
-  t: ReturnType<typeof useTranslations>,
-  language: ContentDetailDto["contentLanguage"],
-): string {
-  return language === "fa" ? t("persian") : t("english");
-}
-
-const STATUS_ICONS = {
+type Props = Readonly<{ content: ContentDetailDto; workspaceId: string }>;
+const icons = {
   unsaved: FilePenLineIcon,
   saving: LoaderCircleIcon,
   saved: CheckCircle2Icon,
   failed: AlertCircleIcon,
   conflict: AlertCircleIcon,
 } as const;
-
-function statusVariant(
-  status: ReturnType<typeof useContentDraftAutosave>["status"],
-): "default" | "secondary" | "outline" | "destructive" {
-  switch (status) {
-    case "saved":
-      return "default";
-    case "saving":
-      return "secondary";
-    case "unsaved":
-      return "outline";
-    case "failed":
-    case "conflict":
-      return "destructive";
-  }
+function initialDocument(draft: ContentDetailDto["draft"]) {
+  if (draft.document.schemaVersion === 2) return draft.document;
+  if (draft.v2Projection) return draft.v2Projection;
+  throw new Error("The legacy Content Draft projection is unavailable.");
+}
+function presentation(language: ContentDetailDto["contentLanguage"]) {
+  return language === "fa" ? "rtl" : "ltr";
 }
 
-function statusLabel(
-  t: ReturnType<typeof useTranslations>,
-  status: ReturnType<typeof useContentDraftAutosave>["status"],
-): string {
-  switch (status) {
-    case "unsaved":
-      return t("unsaved");
-    case "saving":
-      return t("saving");
-    case "saved":
-      return t("saved");
-    case "failed":
-      return t("saveFailed");
-    case "conflict":
-      return t("conflict");
-  }
-}
-
-export function ContentEditor({ content, workspaceId }: ContentEditorProps) {
+export function ContentEditor({ content, workspaceId }: Props) {
   const t = useTranslations("Content");
-  const presentation = contentPresentation(content.contentLanguage);
+  const dir = presentation(content.contentLanguage);
   const save = useCallback((input: AutosaveSaveInput) => saveContentDraftAction(input), []);
   const reload = useCallback(async (): Promise<AutosaveReloadResult> => {
     const result = await getContentDraftAction({ workspaceId, contentId: content.id });
-
-    if (!result.ok) {
-      return { ok: false, code: result.code };
-    }
-
-    return { ok: true, draft: result.content.draft };
+    return result.ok ? { ok: true, draft: result.content.draft } : { ok: false, code: result.code };
   }, [content.id, workspaceId]);
   const autosave = useContentDraftAutosave({
     contentId: content.id,
-    initialDocument: legacyDocument(content.draft.document),
+    initialDocument: initialDocument(content.draft),
     initialRevision: content.draft.revision,
     reload,
     save,
@@ -126,11 +70,17 @@ export function ContentEditor({ content, workspaceId }: ContentEditorProps) {
   const reportDirty = useUnsavedChanges();
   useEffect(() => {
     reportDirty(autosave.isDirty);
-
     return () => reportDirty(false);
   }, [autosave.isDirty, reportDirty]);
-  const StatusIcon = STATUS_ICONS[autosave.status];
-
+  const Icon = icons[autosave.status];
+  const variant =
+    autosave.status === "saved"
+      ? "default"
+      : autosave.status === "failed" || autosave.status === "conflict"
+        ? "destructive"
+        : autosave.status === "saving"
+          ? "secondary"
+          : "outline";
   return (
     <article
       aria-busy={autosave.isSaving || autosave.isReloading}
@@ -143,15 +93,11 @@ export function ContentEditor({ content, workspaceId }: ContentEditorProps) {
           {t("sourceIdeaContext")}
         </h2>
         <dl className="mt-4 grid gap-4 border-b border-border pb-8 sm:grid-cols-3">
-          <div className="min-w-0">
+          <div>
             <dt className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
               {t("sourceIdea")}
             </dt>
-            <dd
-              className="mt-1 break-words font-medium text-foreground"
-              dir={presentation.dir}
-              lang={content.contentLanguage}
-            >
+            <dd className="mt-1 break-words font-medium" dir={dir} lang={content.contentLanguage}>
               {content.sourceIdea.title}
             </dd>
           </div>
@@ -159,23 +105,20 @@ export function ContentEditor({ content, workspaceId }: ContentEditorProps) {
             <dt className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
               {t("format")}
             </dt>
-            <dd className="mt-1 font-medium text-foreground">{formatLabel(t, content.format)}</dd>
+            <dd className="mt-1 font-medium">
+              {content.format === "SHORT_VIDEO" ? t("shortVideo") : t("longVideo")}
+            </dd>
           </div>
           <div>
             <dt className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
               {t("contentLanguage")}
             </dt>
-            <dd
-              className="mt-1 font-medium text-foreground"
-              dir={presentation.dir}
-              lang={content.contentLanguage}
-            >
-              {languageLabel(t, content.contentLanguage)}
+            <dd className="mt-1 font-medium" dir={dir} lang={content.contentLanguage}>
+              {content.contentLanguage === "fa" ? t("persian") : t("english")}
             </dd>
           </div>
         </dl>
       </section>
-
       {autosave.status === "failed" ? (
         <Alert aria-live="assertive" variant="destructive">
           <AlertCircleIcon />
@@ -183,7 +126,6 @@ export function ContentEditor({ content, workspaceId }: ContentEditorProps) {
           <AlertDescription>{t("saveFailedDescription")}</AlertDescription>
         </Alert>
       ) : null}
-
       {autosave.status === "conflict" ? (
         <Alert aria-live="assertive" variant="destructive">
           <AlertCircleIcon />
@@ -236,7 +178,6 @@ export function ContentEditor({ content, workspaceId }: ContentEditorProps) {
           </AlertDescription>
         </Alert>
       ) : null}
-
       <Card>
         <CardHeader>
           <CardTitle>
@@ -247,36 +188,51 @@ export function ContentEditor({ content, workspaceId }: ContentEditorProps) {
           <CardDescription>{t("scriptDescription")}</CardDescription>
         </CardHeader>
         <CardContent>
-          <Field>
-            <FieldLabel htmlFor="content-script-text">{t("scriptLabel")}</FieldLabel>
-            <Textarea
-              aria-describedby="content-script-help"
-              className="min-h-[28rem] resize-y text-base leading-7"
-              dir={presentation.dir}
-              id="content-script-text"
-              lang={content.contentLanguage}
-              maxLength={50_000}
-              onChange={(event) => autosave.onChange(event.target.value)}
-              spellCheck
-              value={autosave.text}
-            />
-            <FieldDescription id="content-script-help">{t("scriptHelp")}</FieldDescription>
-          </Field>
+          <StructuredScriptEditor
+            disabled={autosave.status === "conflict"}
+            document={autosave.document}
+            language={content.contentLanguage}
+            labels={{
+              region: t("scriptLabel"),
+              block: t("scriptBlock"),
+              add: t("addScriptBlock"),
+              moveUp: t("moveBlockUp"),
+              moveDown: t("moveBlockDown"),
+              remove: t("deleteBlock"),
+              deleteTitle: t("deleteBlockTitle"),
+              deleteDescription: t("deleteBlockDescription"),
+              cancel: t("cancel"),
+              confirm: t("confirmDeleteBlock"),
+            }}
+            onChange={autosave.onChange}
+          />
+          <p className="mt-3 text-sm text-muted-foreground" id="content-script-help">
+            {t("scriptHelp")}
+          </p>
         </CardContent>
         <CardFooter className="flex-col items-stretch gap-4 border-t pt-6 sm:flex-row sm:items-center sm:justify-between">
           <div
             aria-atomic="true"
-            aria-live="polite"
             className="flex flex-wrap items-center gap-2 text-sm"
             role="status"
           >
             <span className="text-muted-foreground">{t("saveStatus")}:</span>
-            <Badge variant={statusVariant(autosave.status)}>
-              <StatusIcon
+            <Badge variant={variant}>
+              <Icon
                 aria-hidden="true"
                 className={autosave.status === "saving" ? "motion-safe:animate-spin" : undefined}
               />
-              {statusLabel(t, autosave.status)}
+              {t(
+                autosave.status === "unsaved"
+                  ? "unsaved"
+                  : autosave.status === "saving"
+                    ? "saving"
+                    : autosave.status === "saved"
+                      ? "saved"
+                      : autosave.status === "failed"
+                        ? "saveFailed"
+                        : "conflict",
+              )}
             </Badge>
             <span className="text-muted-foreground">
               {t("revision", { revision: autosave.revision })}
@@ -297,12 +253,4 @@ export function ContentEditor({ content, workspaceId }: ContentEditorProps) {
       </Card>
     </article>
   );
-}
-
-function legacyDocument(document: ContentDetailDto["draft"]["document"]) {
-  if (document.schemaVersion !== 1) {
-    throw new Error("The legacy textarea cannot edit a structured Content Draft.");
-  }
-
-  return document;
 }

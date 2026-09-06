@@ -817,7 +817,26 @@ describe("content generation execution", () => {
       format: "SHORT_VIDEO",
       sourceGenerationAttemptId: result.attempt.id,
     });
-    expect(draft).toMatchObject({ contentId: result.contentId, revision: 1 });
+    expect(draft).toMatchObject({
+      contentId: result.contentId,
+      revision: 1,
+      document: {
+        schemaVersion: 2,
+        script: {
+          blocks: [
+            {
+              id: expect.stringMatching(
+                /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+              ),
+              type: "paragraph",
+              text: "Deterministic English short-video script.",
+              performanceDirections: [],
+              editDirections: [],
+            },
+          ],
+        },
+      },
+    });
     expect(version).toMatchObject({
       contentId: result.contentId,
       versionNumber: 1,
@@ -827,12 +846,20 @@ describe("content generation execution", () => {
     });
     expect(run).toMatchObject({
       status: "COMPLETED",
-      outputSnapshot: draft?.document,
+      outputSnapshot: {
+        schemaVersion: 1,
+        script: { text: "Deterministic English short-video script." },
+      },
       usage: { inputTokens: 12, outputTokens: 34, totalTokens: 46 },
       providerRequestCorrelation: "avalai-content-request-1",
     });
-    expect(version?.document).toEqual(draft?.document);
+    expect(version?.document).toEqual({
+      schemaVersion: 1,
+      script: { text: "Deterministic English short-video script." },
+    });
     expect(run?.outputSnapshot).toEqual(version?.document);
+    expect(version?.document).not.toEqual(draft?.document);
+    expect(await countRows(schema.contentVersions)).toBe(1);
     expect(attempt?.status).toBe("COMPLETED");
     const [sourceIdea] = await database
       .select({ productionQueuePosition: schema.ideas.productionQueuePosition })
@@ -942,6 +969,45 @@ describe("content generation execution", () => {
 
     expect(attempt).toMatchObject({ status: "FAILED", errorCategory: "INVALID_OUTPUT" });
     expect(run).toMatchObject({ status: "FAILED", outputSnapshot: null });
+    expect(await countRows(schema.contents)).toBe(0);
+    expect(await countRows(schema.contentDrafts)).toBe(0);
+    expect(await countRows(schema.contentVersions)).toBe(0);
+  });
+
+  it("rolls back a V1 provider result that exceeds V2 block limits without leaving the queue", async () => {
+    const context = await createContext();
+    await database
+      .update(schema.ideas)
+      .set({ productionQueuePosition: 1 })
+      .where(eq(schema.ideas.id, context.idea.id));
+    const fake = new FakeGenerateContentScriptProvider({
+      output: { schemaVersion: 1, script: { text: Array(1_001).fill("x").join("\n") } },
+    });
+    const service = createContentGenerationApplicationService({
+      database,
+      getAuthenticatedUserId: async () => context.user.id,
+      providerFactory: () => fake,
+    });
+
+    await expect(service.generateContentScript(request(context))).rejects.toMatchObject({
+      code: "AI_OUTPUT_INVALID",
+    });
+
+    const [attempt] = await database
+      .select()
+      .from(schema.contentGenerationAttempts)
+      .where(eq(schema.contentGenerationAttempts.sourceIdeaId, context.idea.id));
+    const [run] = attempt
+      ? await database.select().from(schema.aiRuns).where(eq(schema.aiRuns.id, attempt.aiRunId))
+      : [];
+    const [sourceIdea] = await database
+      .select({ productionQueuePosition: schema.ideas.productionQueuePosition })
+      .from(schema.ideas)
+      .where(eq(schema.ideas.id, context.idea.id));
+
+    expect(attempt).toMatchObject({ status: "FAILED", errorCategory: "INVALID_OUTPUT" });
+    expect(run).toMatchObject({ status: "FAILED", outputSnapshot: null });
+    expect(sourceIdea?.productionQueuePosition).toBe(1);
     expect(await countRows(schema.contents)).toBe(0);
     expect(await countRows(schema.contentDrafts)).toBe(0);
     expect(await countRows(schema.contentVersions)).toBe(0);

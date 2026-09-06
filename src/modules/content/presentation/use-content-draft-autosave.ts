@@ -4,31 +4,27 @@ import { useEffect, useRef, useState } from "react";
 
 import type { ApplicationErrorCode } from "@/lib/errors/app-error";
 import type { SaveContentDraftActionResult } from "../application/content-actions";
-import type { ContentDetailDto, ContentDraftDto } from "../application/content-read-service";
-import type { ContentScriptDocument } from "../domain";
+import type { ContentDraftDto } from "../application/content-read-service";
+import {
+  contentDocumentsEqual,
+  exportContentDocumentV2Recovery,
+  type ContentDocumentV2,
+} from "../domain";
 
 export const CONTENT_DRAFT_AUTOSAVE_DEBOUNCE_MS = 850;
-
 export type ContentDraftAutosaveStatus = "unsaved" | "saving" | "saved" | "failed" | "conflict";
-
-// Ticket 02 preserves the existing V1 textarea contract. Ticket 03 replaces
-// this V1-only client aggregate with the structured-editor aggregate.
-export type AutosaveDocument = ContentScriptDocument;
-
+export type AutosaveDocument = ContentDocumentV2;
 export type AutosaveSaveInput = Readonly<{
   workspaceId: string;
   contentId: string;
   baseRevision: number;
   document: AutosaveDocument;
 }>;
-
 export type AutosaveSaveResult = SaveContentDraftActionResult;
-
 export type AutosaveReloadResult =
   | Readonly<{ ok: true; draft: ContentDraftDto }>
   | Readonly<{ ok: false; code?: ApplicationErrorCode }>;
-
-type ContentDraftAutosaveOptions = Readonly<{
+type Options = Readonly<{
   workspaceId: string;
   contentId: string;
   initialDocument: AutosaveDocument;
@@ -37,9 +33,8 @@ type ContentDraftAutosaveOptions = Readonly<{
   reload: () => Promise<AutosaveReloadResult>;
   debounceMs?: number;
 }>;
-
-type ContentDraftAutosaveResult = Readonly<{
-  text: string;
+type Result = Readonly<{
+  document: AutosaveDocument;
   revision: number;
   status: ContentDraftAutosaveStatus;
   isDirty: boolean;
@@ -49,21 +44,19 @@ type ContentDraftAutosaveResult = Readonly<{
   failureCode: ApplicationErrorCode | null;
   reloadError: boolean;
   copyFeedback: "copied" | "failed" | null;
-  onChange: (text: string) => void;
+  onChange: (document: AutosaveDocument) => void;
   saveNow: () => void;
   reload: () => Promise<void>;
   copyUnsaved: () => Promise<void>;
 }>;
 
-function documentForText(text: string): AutosaveDocument {
-  return { schemaVersion: 1, script: { text } };
+function requireV2(draft: ContentDraftDto): ContentDocumentV2 {
+  if (draft.document.schemaVersion === 2) return draft.document;
+  if (draft.v2Projection) return draft.v2Projection;
+  throw new Error("A legacy Content Draft requires its V2 projection.");
 }
 
-/**
- * Owns the browser-side Draft save protocol. The refs are the authoritative
- * client snapshot so promise continuations always compare against the latest
- * text, even when React has not rendered the most recent keystroke yet.
- */
+/** Serializes whole-document saves; refs ensure responses cannot overwrite newer local editing. */
 export function useContentDraftAutosave({
   workspaceId,
   contentId,
@@ -72,10 +65,9 @@ export function useContentDraftAutosave({
   save,
   reload,
   debounceMs = CONTENT_DRAFT_AUTOSAVE_DEBOUNCE_MS,
-}: ContentDraftAutosaveOptions): ContentDraftAutosaveResult {
-  const initialText = initialDocument.script.text;
-  const [text, setText] = useState(initialText);
-  const [persistedText, setPersistedText] = useState(initialText);
+}: Options): Result {
+  const [document, setDocument] = useState(initialDocument);
+  const [persistedDocument, setPersistedDocument] = useState(initialDocument);
   const [revision, setRevision] = useState(initialRevision);
   const [status, setStatus] = useState<ContentDraftAutosaveStatus>("saved");
   const [isSaving, setIsSaving] = useState(false);
@@ -84,292 +76,204 @@ export function useContentDraftAutosave({
   const [failureCode, setFailureCode] = useState<ApplicationErrorCode | null>(null);
   const [reloadError, setReloadError] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState<"copied" | "failed" | null>(null);
-
-  const mountedRef = useRef(true);
-  const latestTextRef = useRef(initialText);
-  const persistedTextRef = useRef(initialText);
-  const baseRevisionRef = useRef(initialRevision);
+  const mounted = useRef(true);
+  const latest = useRef(initialDocument);
+  const persisted = useRef(initialDocument);
+  const baseRevision = useRef(initialRevision);
   const saveRef = useRef(save);
   const reloadRef = useRef(reload);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const inFlightRef = useRef(false);
-  const blockedRef = useRef(false);
-  const explicitSaveRequiredRef = useRef(false);
-  const reloadingRef = useRef(false);
-  const copyingRef = useRef(false);
-
-  saveRef.current = save;
-  reloadRef.current = reload;
-
-  function clearDebounceTimer(): void {
-    if (timerRef.current !== null) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inFlight = useRef(false);
+  const blocked = useRef(false);
+  const explicit = useRef(false);
+  const reloading = useRef(false);
+  const copying = useRef(false);
+  useEffect(() => {
+    saveRef.current = save;
+    reloadRef.current = reload;
+  }, [reload, save]);
+  const equal = (left: AutosaveDocument, right: AutosaveDocument) =>
+    contentDocumentsEqual(left, right);
+  const clearTimer = () => {
+    if (timer.current) {
+      clearTimeout(timer.current);
+      timer.current = null;
     }
-  }
-
-  function markSaveFailure(code: ApplicationErrorCode): void {
-    if (!mountedRef.current) {
-      return;
-    }
-
-    inFlightRef.current = false;
+  };
+  const fail = (code: ApplicationErrorCode) => {
+    if (!mounted.current) return;
+    inFlight.current = false;
     setIsSaving(false);
-
     if (code === "CONFLICT") {
-      blockedRef.current = true;
-      explicitSaveRequiredRef.current = false;
-      clearDebounceTimer();
+      blocked.current = true;
+      explicit.current = false;
+      clearTimer();
       setFailureCode(null);
       setReloadError(false);
       setStatus("conflict");
       return;
     }
-
-    explicitSaveRequiredRef.current = true;
+    explicit.current = true;
     setFailureCode(code);
     setStatus("failed");
-  }
-
-  function startSave(documentText: string, baseRevision: number): void {
-    if (!mountedRef.current || blockedRef.current || inFlightRef.current) {
-      return;
-    }
-
-    inFlightRef.current = true;
+  };
+  const start = (candidate: AutosaveDocument, base: number) => {
+    if (!mounted.current || blocked.current || inFlight.current) return;
+    inFlight.current = true;
     setIsSaving(true);
     setFailureCode(null);
     setReloadError(false);
     setCopyFeedback(null);
     setStatus("saving");
-
-    const submittedText = documentText;
-    let savePromise: Promise<AutosaveSaveResult>;
-
-    try {
-      savePromise = saveRef.current({
-        workspaceId,
-        contentId,
-        baseRevision,
-        document: documentForText(submittedText),
-      });
-    } catch {
-      markSaveFailure("INTERNAL_ERROR");
-      return;
-    }
-
-    void Promise.resolve(savePromise)
+    Promise.resolve(
+      saveRef.current({ workspaceId, contentId, baseRevision: base, document: candidate }),
+    )
       .then((result) => {
-        if (!mountedRef.current) {
-          return;
-        }
-
-        inFlightRef.current = false;
+        if (!mounted.current) return;
+        inFlight.current = false;
         setIsSaving(false);
-
         if (!result.ok) {
-          markSaveFailure(result.code);
+          fail(result.code);
           return;
         }
-
-        const savedText = legacyDocument(result.draft.document).script.text;
-        baseRevisionRef.current = result.draft.revision;
-        persistedTextRef.current = savedText;
+        const saved = requireV2(result.draft);
+        baseRevision.current = result.draft.revision;
+        persisted.current = saved;
+        setPersistedDocument(saved);
         setRevision(result.draft.revision);
-        setPersistedText(savedText);
         setFailureCode(null);
         setReloadError(false);
-
-        if (latestTextRef.current === submittedText) {
-          latestTextRef.current = savedText;
-          setText(savedText);
+        if (equal(latest.current, candidate)) {
+          latest.current = saved;
+          setDocument(saved);
           setStatus("saved");
           return;
         }
-
-        // The response advanced the base revision, but a newer local value
-        // must win the client queue. Start exactly one follow-up request with
-        // that latest value and the newly authoritative revision.
         setStatus("unsaved");
-        startSave(latestTextRef.current, result.draft.revision);
+        start(latest.current, result.draft.revision);
       })
-      .catch(() => {
-        markSaveFailure("INTERNAL_ERROR");
-      });
-  }
-
-  function scheduleDebouncedSave(): void {
-    clearDebounceTimer();
-
+      .catch(() => fail("INTERNAL_ERROR"));
+  };
+  const schedule = () => {
+    clearTimer();
     if (
-      !mountedRef.current ||
-      blockedRef.current ||
-      explicitSaveRequiredRef.current ||
-      inFlightRef.current ||
-      latestTextRef.current === persistedTextRef.current
-    ) {
+      !mounted.current ||
+      blocked.current ||
+      explicit.current ||
+      inFlight.current ||
+      equal(latest.current, persisted.current)
+    )
       return;
-    }
-
-    timerRef.current = setTimeout(() => {
-      timerRef.current = null;
-
+    timer.current = setTimeout(() => {
+      timer.current = null;
       if (
-        !mountedRef.current ||
-        blockedRef.current ||
-        explicitSaveRequiredRef.current ||
-        inFlightRef.current ||
-        latestTextRef.current === persistedTextRef.current
-      ) {
-        return;
-      }
-
-      startSave(latestTextRef.current, baseRevisionRef.current);
+        !blocked.current &&
+        !explicit.current &&
+        !inFlight.current &&
+        !equal(latest.current, persisted.current)
+      )
+        start(latest.current, baseRevision.current);
     }, debounceMs);
-  }
-
-  function onChange(nextText: string): void {
-    latestTextRef.current = nextText;
-    setText(nextText);
+  };
+  const onChange = (next: AutosaveDocument) => {
+    latest.current = next;
+    setDocument(next);
     setCopyFeedback(null);
-
-    if (blockedRef.current) {
+    if (blocked.current) {
       setStatus("conflict");
       return;
     }
-
-    if (inFlightRef.current) {
+    if (inFlight.current) {
       setStatus("saving");
       return;
     }
-
-    if (nextText === persistedTextRef.current) {
-      explicitSaveRequiredRef.current = false;
-      clearDebounceTimer();
+    if (equal(next, persisted.current)) {
+      explicit.current = false;
+      clearTimer();
       setFailureCode(null);
       setStatus("saved");
       return;
     }
-
-    if (explicitSaveRequiredRef.current) {
+    if (explicit.current) {
       setStatus("unsaved");
       return;
     }
-
     setFailureCode(null);
     setStatus("unsaved");
-    scheduleDebouncedSave();
-  }
-
-  function saveNow(): void {
-    if (!mountedRef.current || blockedRef.current || inFlightRef.current) {
-      return;
-    }
-
-    clearDebounceTimer();
-    explicitSaveRequiredRef.current = false;
-
-    if (latestTextRef.current === persistedTextRef.current) {
+    schedule();
+  };
+  const saveNow = () => {
+    if (!mounted.current || blocked.current || inFlight.current) return;
+    clearTimer();
+    explicit.current = false;
+    if (equal(latest.current, persisted.current)) {
       setFailureCode(null);
       setStatus("saved");
       return;
     }
-
-    startSave(latestTextRef.current, baseRevisionRef.current);
-  }
-
-  async function reloadDraft(): Promise<void> {
-    if (!mountedRef.current || !blockedRef.current || inFlightRef.current || reloadingRef.current) {
-      return;
-    }
-
-    clearDebounceTimer();
-    reloadingRef.current = true;
+    start(latest.current, baseRevision.current);
+  };
+  const reloadDraft = async () => {
+    if (!mounted.current || !blocked.current || inFlight.current || reloading.current) return;
+    clearTimer();
+    reloading.current = true;
     setIsReloading(true);
     setReloadError(false);
-
     let result: AutosaveReloadResult;
-
     try {
       result = await reloadRef.current();
     } catch {
-      result = { ok: false, code: "INTERNAL_ERROR" };
+      result = { ok: false };
     }
-
-    if (!mountedRef.current) {
-      return;
-    }
-
-    reloadingRef.current = false;
+    if (!mounted.current) return;
+    reloading.current = false;
     setIsReloading(false);
-
     if (!result.ok) {
       setReloadError(true);
       setStatus("conflict");
       return;
     }
-
-    const authoritativeText = legacyDocument(result.draft.document).script.text;
-    latestTextRef.current = authoritativeText;
-    persistedTextRef.current = authoritativeText;
-    baseRevisionRef.current = result.draft.revision;
-    blockedRef.current = false;
-    explicitSaveRequiredRef.current = false;
-    setText(authoritativeText);
-    setPersistedText(authoritativeText);
+    const authoritative = requireV2(result.draft);
+    latest.current = authoritative;
+    persisted.current = authoritative;
+    baseRevision.current = result.draft.revision;
+    blocked.current = false;
+    explicit.current = false;
+    setDocument(authoritative);
+    setPersistedDocument(authoritative);
     setRevision(result.draft.revision);
     setFailureCode(null);
     setReloadError(false);
     setCopyFeedback(null);
     setStatus("saved");
-  }
-
-  async function copyUnsaved(): Promise<void> {
-    if (!mountedRef.current || !blockedRef.current || copyingRef.current) {
-      return;
-    }
-
-    copyingRef.current = true;
+  };
+  const copyUnsaved = async () => {
+    if (!mounted.current || !blocked.current || copying.current) return;
+    copying.current = true;
     setIsCopying(true);
     setCopyFeedback(null);
-
     try {
-      if (!navigator.clipboard?.writeText) {
-        throw new Error("Clipboard access is unavailable.");
-      }
-
-      await navigator.clipboard.writeText(latestTextRef.current);
-
-      if (mountedRef.current) {
-        setCopyFeedback("copied");
-      }
+      await navigator.clipboard.writeText(exportContentDocumentV2Recovery(latest.current));
+      if (mounted.current) setCopyFeedback("copied");
     } catch {
-      if (mountedRef.current) {
-        setCopyFeedback("failed");
-      }
+      if (mounted.current) setCopyFeedback("failed");
     } finally {
-      copyingRef.current = false;
-
-      if (mountedRef.current) {
-        setIsCopying(false);
-      }
+      copying.current = false;
+      if (mounted.current) setIsCopying(false);
     }
-  }
-
-  useEffect(() => {
-    mountedRef.current = true;
-
-    return () => {
-      mountedRef.current = false;
-      clearDebounceTimer();
-    };
-  }, []);
-
+  };
+  useEffect(
+    () => () => {
+      mounted.current = false;
+      clearTimer();
+    },
+    [],
+  );
   return {
-    text,
+    document,
     revision,
     status,
-    isDirty: text !== persistedText,
+    isDirty: !equal(document, persistedDocument),
     isSaving,
     isReloading,
     isCopying,
@@ -381,12 +285,4 @@ export function useContentDraftAutosave({
     reload: reloadDraft,
     copyUnsaved,
   };
-}
-
-function legacyDocument(document: ContentDetailDto["draft"]["document"]): AutosaveDocument {
-  if (document.schemaVersion !== 1) {
-    throw new Error("The legacy textarea cannot edit a structured Content Draft.");
-  }
-
-  return document;
 }

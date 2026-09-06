@@ -33,7 +33,10 @@ import {
 import { requireWorkspaceOwner } from "@/modules/workspace/application";
 import { lockWorkspaceForUpdate } from "@/modules/workspace/application";
 import type { GenerateContentScriptSuccess } from "@/modules/ai/domain/generate-content-script";
-import type { CanonicalContentScriptGenerationRequest } from "../domain/content-script-contracts";
+import {
+  materializeContentDocumentV2,
+  type CanonicalContentScriptGenerationRequest,
+} from "../domain/content-script-contracts";
 import { parseCanonicalIdea, type CanonicalIdea } from "@/modules/ideas/domain";
 import {
   clearIdeaProductionQueuePositionInTransaction,
@@ -622,6 +625,19 @@ export async function completeContentGenerationInvocation(
       return { completed: false, pair, contentId: content?.id ?? null };
     }
 
+    // Provider output remains the immutable V1 artifact. Only the mutable Draft
+    // crosses the Phase 5 boundary, and deriving it here keeps every success
+    // artifact (including the queue exit) in this one rollback boundary.
+    let draftDocument;
+    try {
+      draftDocument = materializeContentDocumentV2(result.output);
+    } catch {
+      throw new ApplicationError(
+        "AI_OUTPUT_INVALID",
+        "The AI result cannot be materialized as a valid Content Draft.",
+      );
+    }
+
     const completedAt = clock();
     const contentId = randomUUID();
 
@@ -646,7 +662,7 @@ export async function completeContentGenerationInvocation(
       .insert(contentDrafts)
       .values({
         contentId,
-        document: result.output,
+        document: draftDocument,
         revision: 1,
         createdAt: completedAt,
         updatedAt: completedAt,

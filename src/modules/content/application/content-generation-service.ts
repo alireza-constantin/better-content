@@ -650,7 +650,33 @@ export function createContentGenerationApplicationService(
         providerResult,
         clock,
       );
-    } catch {
+    } catch (error) {
+      if (error instanceof ApplicationError && error.code === "AI_OUTPUT_INVALID") {
+        const failedPair = await failAfterInvocation(
+          userId,
+          parsedInput.workspaceId,
+          runningPair.attempt.id,
+          runningPair.run.id,
+          "INVALID_OUTPUT",
+        );
+
+        if (failedPair.attempt.status === "COMPLETED") {
+          return resolveCurrentPair(userId, failedPair, false);
+        }
+
+        const applicationError = mapFailureToApplicationError(getFailureCategory(failedPair));
+        logOperation(serviceLogger, "warn", "content.generate.failed", {
+          userId,
+          workspaceId: parsedInput.workspaceId,
+          attemptId: failedPair.attempt.id,
+          aiRunId: failedPair.run.id,
+          errorCode: applicationError.code,
+          errorCategory: getFailureCategory(failedPair),
+          transition: "RUNNING->FAILED",
+        });
+        throw applicationError;
+      }
+
       logOperation(serviceLogger, "error", "content.generate.persistence_failed", {
         userId,
         workspaceId: parsedInput.workspaceId,
