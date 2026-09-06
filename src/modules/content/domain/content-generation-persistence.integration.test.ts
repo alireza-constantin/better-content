@@ -311,7 +311,9 @@ describe("Phase 4 Content-generation persistence migration", () => {
       "content_generation_attempts_workspace_ai_run_fk",
       "contents_workspace_source_generation_attempt_fk",
     ]);
-    expect(deferredColumns.rows).toEqual([]);
+    expect(deferredColumns.rows).toEqual([
+      { table_name: "contents", column_name: "accepted_version_id" },
+    ]);
   });
 
   it("rejects cross-workspace Attempt/AI Run and Content/Attempt lineage", async () => {
@@ -616,5 +618,57 @@ describe("Phase 4 Content-generation persistence migration", () => {
       workspaceId: context.workspace.id,
       batchId: context.idea.batchId,
     });
+  });
+});
+
+describe("Phase 5 Ticket 01 Content persistence foundation", () => {
+  it("enforces a same-Content accepted Version pointer while allowing it to be null", async () => {
+    const first = await createContext();
+    const second = await createContext();
+    const firstAttempt = await createAttempt(first);
+    const secondAttempt = await createAttempt(second);
+    const firstContent = await createContent(first, firstAttempt.attempt.id);
+    const secondContent = await createContent(second, secondAttempt.attempt.id);
+    const [accepted] = await database
+      .insert(schema.contentVersions)
+      .values({
+        id: randomUUID(),
+        contentId: firstContent.id,
+        versionNumber: 2,
+        document,
+        source: "CREATOR_ACCEPTED",
+        createdByUserId: first.user.id,
+      })
+      .returning();
+    if (!accepted) throw new Error("Accepted Version creation did not return a row.");
+
+    await database
+      .update(schema.contents)
+      .set({ acceptedVersionId: accepted.id })
+      .where(eq(schema.contents.id, firstContent.id));
+
+    await expect(
+      database
+        .update(schema.contents)
+        .set({ acceptedVersionId: accepted.id })
+        .where(eq(schema.contents.id, secondContent.id)),
+    ).rejects.toThrow();
+  });
+
+  it("permits AI linkage only for AI-generated Version sources", async () => {
+    const context = await createContext();
+    const { attempt } = await createAttempt(context);
+    const content = await createContent(context, attempt.id);
+    await expect(
+      database.insert(schema.contentVersions).values({
+        id: randomUUID(),
+        contentId: content.id,
+        versionNumber: 2,
+        document,
+        source: "CREATOR_ACCEPTED",
+        aiRunId: attempt.aiRunId,
+        createdByUserId: context.user.id,
+      }),
+    ).rejects.toThrow();
   });
 });

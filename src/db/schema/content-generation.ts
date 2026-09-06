@@ -14,7 +14,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 import type {
-  ContentScriptDocument,
+  ContentDocument,
   ContentScriptFormat,
 } from "@/modules/content/domain/content-script-contracts";
 import type { GenerationLanguage } from "@/modules/ideas/domain/idea-generation-contracts";
@@ -158,6 +158,7 @@ export const contents = pgTable(
     contentLanguage: text("content_language").$type<GenerationLanguage>().notNull(),
     format: text("format").$type<ContentScriptFormat>().notNull(),
     sourceGenerationAttemptId: uuid("source_generation_attempt_id").notNull(),
+    acceptedVersionId: uuid("accepted_version_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
@@ -180,7 +181,7 @@ export const contentDrafts = pgTable(
     contentId: uuid("content_id")
       .primaryKey()
       .references(() => contents.id),
-    document: jsonb("document").$type<ContentScriptDocument>().notNull(),
+    document: jsonb("document").$type<ContentDocument>().notNull(),
     revision: integer("revision").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
@@ -199,11 +200,9 @@ export const contentVersions = pgTable(
       .notNull()
       .references(() => contents.id),
     versionNumber: integer("version_number").notNull(),
-    document: jsonb("document").$type<ContentScriptDocument>().notNull(),
+    document: jsonb("document").$type<ContentDocument>().notNull(),
     source: text("source").notNull(),
-    aiRunId: uuid("ai_run_id")
-      .notNull()
-      .references(() => aiRuns.id),
+    aiRunId: uuid("ai_run_id").references(() => aiRuns.id),
     createdByUserId: text("created_by_user_id")
       .notNull()
       .references(() => user.id),
@@ -215,8 +214,19 @@ export const contentVersions = pgTable(
       table.versionNumber,
     ),
     unique("content_versions_ai_run_id_unique").on(table.aiRunId),
+    unique("content_versions_content_id_id_candidate_key").on(table.contentId, table.id),
     check("content_versions_version_number_positive_check", sql`${table.versionNumber} > 0`),
-    check("content_versions_source_check", sql`${table.source} = 'AI_GENERATED'`),
+    check(
+      "content_versions_source_check",
+      sql`${table.source} IN ('AI_GENERATED', 'LEGACY_DRAFT_CHECKPOINT', 'CREATOR_ACCEPTED')`,
+    ),
+    check(
+      "content_versions_source_ai_run_check",
+      sql`(
+      (${table.source} = 'AI_GENERATED' AND ${table.aiRunId} IS NOT NULL)
+      OR (${table.source} IN ('LEGACY_DRAFT_CHECKPOINT', 'CREATOR_ACCEPTED') AND ${table.aiRunId} IS NULL)
+    )`,
+    ),
   ],
 );
 
@@ -302,6 +312,11 @@ export const contentsRelations = relations(contents, ({ one, many }) => ({
     references: [contentDrafts.contentId],
   }),
   versions: many(contentVersions),
+  acceptedVersion: one(contentVersions, {
+    fields: [contents.acceptedVersionId],
+    references: [contentVersions.id],
+    relationName: "acceptedContentVersion",
+  }),
 }));
 
 export const contentDraftsRelations = relations(contentDrafts, ({ one }) => ({
@@ -315,6 +330,11 @@ export const contentVersionsRelations = relations(contentVersions, ({ one }) => 
   content: one(contents, {
     fields: [contentVersions.contentId],
     references: [contents.id],
+  }),
+  acceptedByContent: one(contents, {
+    fields: [contentVersions.id],
+    references: [contents.acceptedVersionId],
+    relationName: "acceptedContentVersion",
   }),
   aiRun: one(aiRuns, {
     fields: [contentVersions.aiRunId],

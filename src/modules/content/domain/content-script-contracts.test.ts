@@ -8,6 +8,10 @@ import {
   contentScriptDocumentSchema,
   contentScriptFormatSchema,
   contentVersionSourceSchema,
+  canonicalizeContentDocumentV2,
+  contentDocumentsEqual,
+  contentDocumentV2Schema,
+  materializeContentDocumentV2,
   fingerprintContentScriptGenerationRequest,
   generationLanguageSchema,
   parseCanonicalContentScriptGenerationRequest,
@@ -207,8 +211,12 @@ describe("canonical Content Script generation requests", () => {
 });
 
 describe("Phase 4 shared vocabulary", () => {
-  it("uses the approved Content version source and application rate-limit sources only", () => {
+  it("uses the approved Content version sources and application rate-limit sources only", () => {
     expect(contentVersionSourceSchema.parse("AI_GENERATED")).toBe("AI_GENERATED");
+    expect(contentVersionSourceSchema.parse("LEGACY_DRAFT_CHECKPOINT")).toBe(
+      "LEGACY_DRAFT_CHECKPOINT",
+    );
+    expect(contentVersionSourceSchema.parse("CREATOR_ACCEPTED")).toBe("CREATOR_ACCEPTED");
     expect(contentGenerationRateLimitSourceSchema.options).toEqual(["WORKSPACE", "PROVIDER"]);
     expect(() => contentVersionSourceSchema.parse("ACCEPTED_SNAPSHOT")).toThrow();
     expect(() => contentGenerationRateLimitSourceSchema.parse("workspace")).toThrow();
@@ -231,5 +239,142 @@ describe("Phase 4 shared vocabulary", () => {
     ]);
     expect(() => contentGenerationAttemptLifecycleSchema.parse("CANCELLED")).toThrow();
     expect(() => contentScriptGenerationFailureCategorySchema.parse("REFUSED")).toThrow();
+  });
+});
+
+describe("Content document V2", () => {
+  const blockId = "11111111-1111-4111-8111-111111111111";
+  const directionId = "22222222-2222-4222-8222-222222222222";
+  const v2 = (overrides: Record<string, unknown> = {}) => ({
+    schemaVersion: 2,
+    script: {
+      blocks: [
+        {
+          id: blockId,
+          type: "paragraph",
+          text: "Script",
+          performanceDirections: [],
+          editDirections: [],
+        },
+      ],
+    },
+    ...overrides,
+  });
+
+  it("strictly validates V2 blocks, embedded direction unions, and document-wide identities", () => {
+    expect(contentDocumentV2Schema.parse(v2())).toEqual(v2());
+    expect(() => contentDocumentV2Schema.parse(v2({ extra: true }))).toThrow();
+    expect(() =>
+      contentDocumentV2Schema.parse(
+        v2({
+          script: {
+            blocks: [
+              {
+                id: blockId,
+                type: "paragraph",
+                text: "line\nbreak",
+                performanceDirections: [],
+                editDirections: [],
+              },
+            ],
+          },
+        }),
+      ),
+    ).toThrow();
+    expect(() =>
+      contentDocumentV2Schema.parse(
+        v2({
+          script: {
+            blocks: [
+              {
+                id: blockId,
+                type: "paragraph",
+                text: "A",
+                performanceDirections: [{ id: directionId, type: "DELIVERY" }],
+                editDirections: [],
+              },
+            ],
+          },
+        }),
+      ),
+    ).toThrow();
+    expect(() =>
+      contentDocumentV2Schema.parse(
+        v2({
+          script: {
+            blocks: [
+              {
+                id: blockId,
+                type: "paragraph",
+                text: "A",
+                performanceDirections: [{ id: directionId, type: "PAUSE", duration: "short" }],
+                editDirections: [{ id: directionId, type: "CUT", style: "hard" }],
+              },
+            ],
+          },
+        }),
+      ),
+    ).toThrow();
+  });
+
+  it("canonicalizes only redundant empty blocks and preserves semantic whitespace", () => {
+    const canonical = canonicalizeContentDocumentV2(
+      v2({
+        script: {
+          blocks: [
+            {
+              id: blockId,
+              type: "paragraph",
+              text: "  ",
+              performanceDirections: [],
+              editDirections: [],
+            },
+            {
+              id: "33333333-3333-4333-8333-333333333333",
+              type: "paragraph",
+              text: " ",
+              performanceDirections: [{ id: directionId, type: "PAUSE", duration: "long" }],
+              editDirections: [],
+            },
+          ],
+        },
+      }),
+    );
+    expect(canonical.script.blocks).toEqual([
+      {
+        id: "33333333-3333-4333-8333-333333333333",
+        type: "paragraph",
+        text: " ",
+        performanceDirections: [{ id: directionId, type: "PAUSE", duration: "long" }],
+        editDirections: [],
+      },
+    ]);
+  });
+
+  it("materializes V1 by LF segmentation and compares canonical V2 documents", () => {
+    const materialized = materializeContentDocumentV2({
+      schemaVersion: 1,
+      script: { text: "first\n \t\nsecond" },
+    });
+    expect(materialized.script.blocks.map((block) => block.text)).toEqual(["first", "second"]);
+    expect(contentDocumentsEqual(v2(), v2())).toBe(true);
+    expect(
+      contentDocumentsEqual(
+        v2(),
+        v2({
+          script: {
+            blocks: [
+              {
+                id: blockId,
+                type: "paragraph",
+                text: "Other",
+                performanceDirections: [],
+                editDirections: [],
+              },
+            ],
+          },
+        }),
+      ),
+    ).toBe(false);
   });
 });
