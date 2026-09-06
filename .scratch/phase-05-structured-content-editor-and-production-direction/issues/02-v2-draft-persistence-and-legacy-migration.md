@@ -4,13 +4,13 @@
 
 **Blocked by:** 01 — Establish the V2 Content document and persistence foundation.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Extend the authorized Draft save/read application boundary to support whole validated V2 documents, existing revision conflicts, and V1-or-V2 reads.
-- [ ] Preserve one-in-flight/coalesce-latest autosave semantics at the application contract boundary without patch, operation-log, CRDT, merge, or offline-queue behavior.
-- [ ] On the first meaningful V2 save of a V1 Draft, atomically create one exact `LEGACY_DRAFT_CHECKPOINT`, replace the Draft with canonical V2, and advance revision.
-- [ ] Return stable no-write validation failure when a legacy projection exceeds structural limits; preserve complete local conflict recovery and readable export contracts.
-- [ ] Prove authorization, migration atomicity, rollback, conflicts, and no-duplicate-checkpoint behavior through PostgreSQL integration tests.
+- [x] Extend the authorized Draft save/read application boundary to support whole validated V2 documents, existing revision conflicts, and V1-or-V2 reads.
+- [x] Preserve one-in-flight/coalesce-latest autosave semantics at the application contract boundary without patch, operation-log, CRDT, merge, or offline-queue behavior.
+- [x] On the first meaningful V2 save of a V1 Draft, atomically create one exact `LEGACY_DRAFT_CHECKPOINT`, replace the Draft with canonical V2, and advance revision.
+- [x] Return stable no-write validation failure when a legacy projection exceeds structural limits; preserve complete local conflict recovery and readable export contracts.
+- [x] Prove authorization, migration atomicity, rollback, conflicts, and no-duplicate-checkpoint behavior through PostgreSQL integration tests.
 
 ## Required invariants
 

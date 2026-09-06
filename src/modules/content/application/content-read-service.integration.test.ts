@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { and, count, eq } from "drizzle-orm";
+import { and, asc, count, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Pool } from "pg";
@@ -331,6 +331,23 @@ async function getAttemptPair(attemptId: string) {
   return pair;
 }
 
+function structuredDocument(text = "Structured script") {
+  return {
+    schemaVersion: 2 as const,
+    script: {
+      blocks: [
+        {
+          id: randomUUID(),
+          type: "paragraph" as const,
+          text,
+          performanceDirections: [],
+          editDirections: [],
+        },
+      ],
+    },
+  };
+}
+
 beforeAll(async () => {
   await migrate(database, { migrationsFolder: "drizzle" });
 });
@@ -346,6 +363,168 @@ afterAll(async () => {
 });
 
 describe("Content read and Draft application services", () => {
+  it("projects a legacy V1 Draft without writes, then checkpoints its exact value on first V2 save", async () => {
+    const context = await createContext();
+    const generated = await createGeneration(
+      context,
+      new FakeGenerateContentScriptProvider(),
+      () => new Date("2026-09-01T10:00:00.000Z"),
+    ).generateContentScript(request(context));
+    if (!generated.contentId) throw new Error("Test Content was not created.");
+
+    const exactLegacy = { schemaVersion: 1 as const, script: { text: "  first\n\t\nsecond  " } };
+    await database
+      .update(schema.contentDrafts)
+      .set({ document: exactLegacy })
+      .where(eq(schema.contentDrafts.contentId, generated.contentId));
+
+    const before = await createReads(context).getContentDetail({
+      workspaceId: context.workspace.id,
+      contentId: generated.contentId,
+    });
+    expect(before.draft.document).toEqual(exactLegacy);
+    expect(before.draft.v2Projection?.script.blocks.map((block) => block.text)).toEqual([
+      "  first",
+      "second  ",
+    ]);
+    expect(await countRows(schema.contentVersions)).toBe(1);
+
+    const saved = await createDrafts(
+      context,
+      () => new Date("2026-09-01T10:01:00.000Z"),
+    ).saveContentDraft({
+      workspaceId: context.workspace.id,
+      contentId: generated.contentId,
+      baseRevision: 1,
+      document: structuredDocument("The structured replacement"),
+    });
+
+    expect(saved).toMatchObject({ document: { schemaVersion: 2 }, revision: 2 });
+    const [checkpoint] = await database
+      .select()
+      .from(schema.contentVersions)
+      .where(
+        and(
+          eq(schema.contentVersions.contentId, generated.contentId),
+          eq(schema.contentVersions.source, "LEGACY_DRAFT_CHECKPOINT"),
+        ),
+      );
+    expect(checkpoint).toMatchObject({ versionNumber: 2, document: exactLegacy, aiRunId: null });
+  });
+
+  it("uses canonical whole-document V2 saves without further checkpoints", async () => {
+    const context = await createContext();
+    const generated = await createGeneration(
+      context,
+      new FakeGenerateContentScriptProvider(),
+      () => new Date("2026-09-01T10:00:00.000Z"),
+    ).generateContentScript(request(context));
+    if (!generated.contentId) throw new Error("Test Content was not created.");
+    const service = createDrafts(context, () => new Date("2026-09-01T10:01:00.000Z"));
+    const migrated = await service.saveContentDraft({
+      workspaceId: context.workspace.id,
+      contentId: generated.contentId,
+      baseRevision: 1,
+      document: structuredDocument(),
+    });
+    const saved = await service.saveContentDraft({
+      workspaceId: context.workspace.id,
+      contentId: generated.contentId,
+      baseRevision: migrated.revision,
+      document: structuredDocument("Next V2 revision"),
+    });
+
+    expect(saved).toMatchObject({ document: { schemaVersion: 2 }, revision: 3 });
+    const checkpoints = await database
+      .select()
+      .from(schema.contentVersions)
+      .where(eq(schema.contentVersions.source, "LEGACY_DRAFT_CHECKPOINT"));
+    expect(checkpoints).toHaveLength(1);
+  });
+
+  it("rolls back a legacy V2 migration on validation or stale-revision failure", async () => {
+    const context = await createContext();
+    const generated = await createGeneration(
+      context,
+      new FakeGenerateContentScriptProvider(),
+      () => new Date("2026-09-01T10:00:00.000Z"),
+    ).generateContentScript(request(context));
+    if (!generated.contentId) throw new Error("Test Content was not created.");
+    const service = createDrafts(context, () => new Date("2026-09-01T10:01:00.000Z"));
+    const invalid = {
+      schemaVersion: 2,
+      script: { blocks: Array.from({ length: 1001 }, () => structuredDocument().script.blocks[0]) },
+    };
+
+    await expect(
+      service.saveContentDraft({
+        workspaceId: context.workspace.id,
+        contentId: generated.contentId,
+        baseRevision: 1,
+        document: invalid,
+      }),
+    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+    await expect(
+      service.saveContentDraft({
+        workspaceId: context.workspace.id,
+        contentId: generated.contentId,
+        baseRevision: 2,
+        document: structuredDocument(),
+      }),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+
+    const [draft] = await database
+      .select()
+      .from(schema.contentDrafts)
+      .where(eq(schema.contentDrafts.contentId, generated.contentId));
+    expect(draft).toMatchObject({ document: { schemaVersion: 1 }, revision: 1 });
+    expect(await countRows(schema.contentVersions)).toBe(1);
+  });
+
+  it("serializes simultaneous legacy migrations into one checkpoint and one Version number", async () => {
+    const context = await createContext();
+    const generated = await createGeneration(
+      context,
+      new FakeGenerateContentScriptProvider(),
+      () => new Date("2026-09-01T10:00:00.000Z"),
+    ).generateContentScript(request(context));
+    if (!generated.contentId) throw new Error("Test Content was not created.");
+    const service = createDrafts(context, () => new Date("2026-09-01T10:01:00.000Z"));
+
+    const results = await Promise.allSettled([
+      service.saveContentDraft({
+        workspaceId: context.workspace.id,
+        contentId: generated.contentId,
+        baseRevision: 1,
+        document: structuredDocument("first candidate"),
+      }),
+      service.saveContentDraft({
+        workspaceId: context.workspace.id,
+        contentId: generated.contentId,
+        baseRevision: 1,
+        document: structuredDocument("second candidate"),
+      }),
+    ]);
+
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter((result) => result.status === "rejected")).toHaveLength(1);
+    expect(results.find((result) => result.status === "rejected")).toMatchObject({
+      reason: { code: "CONFLICT" },
+    });
+    const versions = await database
+      .select({
+        versionNumber: schema.contentVersions.versionNumber,
+        source: schema.contentVersions.source,
+      })
+      .from(schema.contentVersions)
+      .where(eq(schema.contentVersions.contentId, generated.contentId))
+      .orderBy(asc(schema.contentVersions.versionNumber));
+    expect(versions).toEqual([
+      { versionNumber: 1, source: "AI_GENERATED" },
+      { versionNumber: 2, source: "LEGACY_DRAFT_CHECKPOINT" },
+    ]);
+  });
+
   it("saves an exact-revision Draft with canonical human text and advances once", async () => {
     const context = await createContext();
     const generated = await createGeneration(
@@ -499,12 +678,17 @@ describe("Content read and Draft application services", () => {
       }),
     ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
 
-    await expect(
-      createReads(context).getContentDetail({
-        workspaceId: context.workspace.id,
-        contentId: generated.contentId,
-      }),
-    ).resolves.toEqual(beforeInvalidSave);
+    const afterInvalidSave = await createReads(context).getContentDetail({
+      workspaceId: context.workspace.id,
+      contentId: generated.contentId,
+    });
+    expect({
+      ...afterInvalidSave,
+      draft: { ...afterInvalidSave.draft, v2Projection: undefined },
+    }).toEqual({
+      ...beforeInvalidSave,
+      draft: { ...beforeInvalidSave.draft, v2Projection: undefined },
+    });
   });
 
   it("requires baseRevision and rejects client-controlled Draft metadata", async () => {
@@ -648,7 +832,7 @@ describe("Content read and Draft application services", () => {
     });
     expect(detail.draft.revision).toBe(2);
     expect(["first winner candidate", "second winner candidate"]).toContain(
-      detail.draft.document.script.text,
+      detail.draft.document.schemaVersion === 1 ? detail.draft.document.script.text : "",
     );
   });
 
@@ -986,7 +1170,7 @@ describe("Content read and Draft application services", () => {
       workspaceId: context.workspace.id,
       contentId: generated.contentId,
     });
-    expect(detail).toEqual({
+    expect(detail).toMatchObject({
       id: generated.contentId,
       sourceIdea: { id: context.idea.id, title: "A useful idea" },
       contentLanguage: "en",
@@ -1000,12 +1184,18 @@ describe("Content read and Draft application services", () => {
         updatedAt: new Date("2026-09-01T10:00:00.000Z"),
       },
     });
+    expect(detail.draft.v2Projection?.script.blocks.map((block) => block.text)).toEqual([
+      "Deterministic English short-video script.",
+    ]);
 
     const result = await reads.getContentGenerationAttemptResult({
       workspaceId: context.workspace.id,
       attemptId: generated.attempt.id,
     });
-    expect(result).toEqual(detail);
+    expect({ ...result, draft: { ...result?.draft, v2Projection: undefined } }).toEqual({
+      ...detail,
+      draft: { ...detail.draft, v2Projection: undefined },
+    });
     expect(JSON.stringify(detail)).not.toContain("aiRunId");
     expect(JSON.stringify(detail)).not.toContain("contentDnaVersionId");
     expect(JSON.stringify(detail)).not.toContain("requestFingerprint");

@@ -335,6 +335,81 @@ export function materializeContentDocumentV2(document: ContentDocumentV1): Conte
   });
 }
 
+/**
+ * A deliberately presentation-neutral, deterministic representation for
+ * recovering unsaved V2 work after an optimistic-concurrency conflict. It is
+ * not a storage or import format: identifiers and persistence metadata are
+ * intentionally omitted.
+ */
+export function exportContentDocumentV2Recovery(input: unknown): string {
+  const document = canonicalizeContentDocumentV2(input);
+  const lines: string[] = ["Script"];
+
+  for (const block of document.script.blocks) {
+    lines.push(block.text);
+
+    for (const direction of block.performanceDirections) {
+      lines.push(`Performance direction: ${describePerformanceDirection(direction)}`);
+    }
+    for (const direction of block.editDirections) {
+      lines.push(`Edit direction: ${describeEditDirection(direction)}`);
+    }
+  }
+
+  return lines.join("\n");
+}
+
+function appendNuance(summary: string, nuance: string | undefined): string {
+  return nuance === undefined ? summary : `${summary} — ${nuance}`;
+}
+
+function describePerformanceDirection(direction: PerformanceDirection): string {
+  switch (direction.type) {
+    case "PAUSE":
+      return appendNuance(`Pause (${direction.duration})`, direction.nuance);
+    case "EMPHASIS":
+      return appendNuance(`Emphasis (${direction.strength})`, direction.nuance);
+    case "DELIVERY":
+      return appendNuance(
+        `Delivery (${[direction.tone, direction.pace].filter(Boolean).join(", ")})`,
+        direction.nuance,
+      );
+    case "GESTURE":
+      return appendNuance(`Gesture (${direction.kind})`, direction.nuance);
+    case "POSITION":
+      return appendNuance(`Position (${direction.action})`, direction.nuance);
+    case "GAZE":
+      return appendNuance(`Gaze (${direction.target})`, direction.nuance);
+    case "PERFORMANCE_NOTE":
+      return direction.text;
+  }
+}
+
+function describeEditDirection(direction: EditDirection): string {
+  switch (direction.type) {
+    case "TEXT_OVERLAY":
+      return appendNuance(
+        `Text overlay (${direction.placement}): ${direction.text}`,
+        direction.nuance,
+      );
+    case "ZOOM":
+      return appendNuance(`Zoom (${direction.mode}, ${direction.intensity})`, direction.nuance);
+    case "CUT":
+      return appendNuance(`Cut (${direction.style})`, direction.nuance);
+    case "BROLL_CUE":
+      return appendNuance(`B-roll cue: ${direction.description}`, direction.nuance);
+    case "SOUND_CUE":
+      return appendNuance(
+        `Sound cue (${direction.kind}): ${direction.description}`,
+        direction.nuance,
+      );
+    case "CAPTION_EMPHASIS":
+      return appendNuance(`Caption emphasis (${direction.style})`, direction.nuance);
+    case "EDIT_NOTE":
+      return direction.text;
+  }
+}
+
 export function contentDocumentsEqual(left: unknown, right: unknown): boolean {
   const canonical = (value: unknown) => {
     const document = parseContentDocument(value);

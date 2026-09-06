@@ -117,7 +117,7 @@ export function ContentEditor({ content, workspaceId }: ContentEditorProps) {
   }, [content.id, workspaceId]);
   const autosave = useContentDraftAutosave({
     contentId: content.id,
-    initialDocument: content.draft.document,
+    initialDocument: legacyDocument(content.draft.document),
     initialRevision: content.draft.revision,
     reload,
     save,
@@ -297,4 +297,12 @@ export function ContentEditor({ content, workspaceId }: ContentEditorProps) {
       </Card>
     </article>
   );
+}
+
+function legacyDocument(document: ContentDetailDto["draft"]["document"]) {
+  if (document.schemaVersion !== 1) {
+    throw new Error("The legacy textarea cannot edit a structured Content Draft.");
+  }
+
+  return document;
 }

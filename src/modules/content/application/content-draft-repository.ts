@@ -1,10 +1,10 @@
 import "server-only";
 
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 
 import { db } from "@/db";
-import { contentDrafts, contents } from "@/db/schema";
-import type { ContentScriptDocument } from "../domain";
+import { contentDrafts, contentVersions, contents } from "@/db/schema";
+import type { ContentDocument } from "../domain";
 
 export type ContentDraftWriter = Pick<typeof db, "select" | "update">;
 
@@ -12,7 +12,7 @@ export type ContentDraftWriteInput = Readonly<{
   workspaceId: string;
   contentId: string;
   baseRevision: number;
-  document: ContentScriptDocument;
+  document: ContentDocument;
   updatedAt: Date;
 }>;
 
@@ -52,6 +52,77 @@ export async function updateContentDraftIfRevisionMatches(
     .returning();
 
   return draft;
+}
+
+export type LockedContentDraftWriteTarget = Readonly<{
+  draft: typeof contentDrafts.$inferSelect;
+}>;
+
+/** Locks the Content row (the per-Content Version allocation mutex) and its Draft. */
+export async function lockContentDraftWriteTarget(
+  database: Pick<typeof db, "execute" | "select">,
+  workspaceId: string,
+  contentId: string,
+): Promise<LockedContentDraftWriteTarget | undefined> {
+  await database.execute(sql`
+    select ${contents.id}
+    from ${contents}
+    inner join ${contentDrafts} on ${eq(contentDrafts.contentId, contents.id)}
+    where ${and(eq(contents.workspaceId, workspaceId), eq(contents.id, contentId))}
+    for update of ${contents}, ${contentDrafts}
+  `);
+
+  const [target] = await database
+    .select({ draft: contentDrafts })
+    .from(contents)
+    .innerJoin(contentDrafts, eq(contentDrafts.contentId, contents.id))
+    .where(and(eq(contents.workspaceId, workspaceId), eq(contents.id, contentId)));
+
+  return target;
+}
+
+export async function createLegacyDraftCheckpoint(
+  database: Pick<typeof db, "select" | "insert">,
+  input: Readonly<{
+    contentId: string;
+    document: ContentDocument;
+    createdByUserId: string;
+  }>,
+): Promise<void> {
+  const [lastVersion] = await database
+    .select({ versionNumber: contentVersions.versionNumber })
+    .from(contentVersions)
+    .where(eq(contentVersions.contentId, input.contentId))
+    .orderBy(desc(contentVersions.versionNumber))
+    .limit(1);
+
+  await database.insert(contentVersions).values({
+    contentId: input.contentId,
+    versionNumber: (lastVersion?.versionNumber ?? 0) + 1,
+    // This is the stored V1 JSONB value, never a reconstructed V2 projection.
+    document: input.document,
+    source: "LEGACY_DRAFT_CHECKPOINT",
+    aiRunId: null,
+    createdByUserId: input.createdByUserId,
+  });
+}
+
+export async function hasLegacyDraftCheckpoint(
+  database: Pick<typeof db, "select">,
+  contentId: string,
+): Promise<boolean> {
+  const [checkpoint] = await database
+    .select({ id: contentVersions.id })
+    .from(contentVersions)
+    .where(
+      and(
+        eq(contentVersions.contentId, contentId),
+        eq(contentVersions.source, "LEGACY_DRAFT_CHECKPOINT"),
+      ),
+    )
+    .limit(1);
+
+  return checkpoint !== undefined;
 }
 
 /**

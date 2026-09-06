@@ -11,6 +11,7 @@ import {
   canonicalizeContentDocumentV2,
   contentDocumentsEqual,
   contentDocumentV2Schema,
+  exportContentDocumentV2Recovery,
   materializeContentDocumentV2,
   fingerprintContentScriptGenerationRequest,
   generationLanguageSchema,
@@ -376,5 +377,36 @@ describe("Content document V2", () => {
         }),
       ),
     ).toBe(false);
+  });
+
+  it("exports V2 conflict recovery in document order without persistence metadata", () => {
+    const document = v2({
+      script: {
+        blocks: [
+          {
+            id: blockId,
+            type: "paragraph",
+            text: "Opening line",
+            performanceDirections: [
+              { id: directionId, type: "PAUSE", duration: "short", nuance: "Let it land" },
+            ],
+            editDirections: [
+              {
+                id: "33333333-3333-4333-8333-333333333333",
+                type: "TEXT_OVERLAY",
+                text: "Key point",
+                placement: "top",
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    expect(exportContentDocumentV2Recovery(document)).toBe(
+      "Script\nOpening line\nPerformance direction: Pause (short) — Let it land\nEdit direction: Text overlay (top): Key point",
+    );
+    expect(exportContentDocumentV2Recovery(document)).not.toContain(blockId);
+    expect(exportContentDocumentV2Recovery(document)).not.toContain(directionId);
   });
 });

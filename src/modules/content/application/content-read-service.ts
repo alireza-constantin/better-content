@@ -7,10 +7,12 @@ import { getServerSession } from "@/lib/auth/server";
 import { ApplicationError, type RateLimitSource } from "@/lib/errors/app-error";
 import { logger } from "@/lib/logging/server";
 import {
-  contentScriptDocumentSchema,
+  contentDocumentSchema,
   contentScriptFormatSchema,
   generationLanguageSchema,
-  type ContentScriptDocument,
+  materializeContentDocumentV2,
+  type ContentDocument,
+  type ContentDocumentV2,
   type ContentScriptFormat,
   type GenerationLanguage,
 } from "../domain";
@@ -60,7 +62,10 @@ export type ContentListItemDto = Readonly<{
 }>;
 
 export type ContentDraftDto = Readonly<{
-  document: ContentScriptDocument;
+  /** The authoritative stored document; V1 remains V1 until a V2 save. */
+  document: ContentDocument;
+  /** A read-only, in-memory V2 view for a legacy V1 Draft, if applicable. */
+  v2Projection?: ContentDocumentV2;
   revision: number;
   updatedAt: Date;
 }>;
@@ -163,8 +168,8 @@ function parseStoredContentFormat(value: string): ContentScriptFormat {
   return result.data;
 }
 
-function parseStoredDraftDocument(value: unknown): ContentScriptDocument {
-  const result = contentScriptDocumentSchema.safeParse(value);
+function parseStoredDraftDocument(value: unknown): ContentDocument {
+  const result = contentDocumentSchema.safeParse(value);
 
   if (!result.success) {
     throw new ApplicationError(
@@ -174,6 +179,25 @@ function parseStoredDraftDocument(value: unknown): ContentScriptDocument {
   }
 
   return result.data;
+}
+
+function toDraftDto(record: ContentDetailRecord["draft"]): ContentDraftDto {
+  const document = parseStoredDraftDocument(record.document);
+
+  try {
+    return {
+      document,
+      ...(document.schemaVersion === 1
+        ? { v2Projection: materializeContentDocumentV2(document) }
+        : {}),
+      revision: record.revision,
+      updatedAt: record.updatedAt,
+    };
+  } catch {
+    // An over-limit legacy projection is a safe, nondestructive validation
+    // result. The stored V1 document has not been touched.
+    throw new ApplicationError("VALIDATION_ERROR", "The legacy Content Draft cannot be projected.");
+  }
 }
 
 function toContentListItem(record: ContentListRecord): ContentListItemDto {
@@ -195,11 +219,7 @@ function toContentDetail(record: ContentDetailRecord): ContentDetailDto {
     },
     contentLanguage: parseStoredContentLanguage(record.content.contentLanguage),
     format: parseStoredContentFormat(record.content.format),
-    draft: {
-      document: parseStoredDraftDocument(record.draft.document),
-      revision: record.draft.revision,
-      updatedAt: record.draft.updatedAt,
-    },
+    draft: toDraftDto(record.draft),
   };
 }
 

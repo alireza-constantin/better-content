@@ -5,12 +5,15 @@ import { useEffect, useRef, useState } from "react";
 import type { ApplicationErrorCode } from "@/lib/errors/app-error";
 import type { SaveContentDraftActionResult } from "../application/content-actions";
 import type { ContentDetailDto, ContentDraftDto } from "../application/content-read-service";
+import type { ContentScriptDocument } from "../domain";
 
 export const CONTENT_DRAFT_AUTOSAVE_DEBOUNCE_MS = 850;
 
 export type ContentDraftAutosaveStatus = "unsaved" | "saving" | "saved" | "failed" | "conflict";
 
-export type AutosaveDocument = ContentDetailDto["draft"]["document"];
+// Ticket 02 preserves the existing V1 textarea contract. Ticket 03 replaces
+// this V1-only client aggregate with the structured-editor aggregate.
+export type AutosaveDocument = ContentScriptDocument;
 
 export type AutosaveSaveInput = Readonly<{
   workspaceId: string;
@@ -169,7 +172,7 @@ export function useContentDraftAutosave({
           return;
         }
 
-        const savedText = result.draft.document.script.text;
+        const savedText = legacyDocument(result.draft.document).script.text;
         baseRevisionRef.current = result.draft.revision;
         persistedTextRef.current = savedText;
         setRevision(result.draft.revision);
@@ -306,7 +309,7 @@ export function useContentDraftAutosave({
       return;
     }
 
-    const authoritativeText = result.draft.document.script.text;
+    const authoritativeText = legacyDocument(result.draft.document).script.text;
     latestTextRef.current = authoritativeText;
     persistedTextRef.current = authoritativeText;
     baseRevisionRef.current = result.draft.revision;
@@ -378,4 +381,12 @@ export function useContentDraftAutosave({
     reload: reloadDraft,
     copyUnsaved,
   };
+}
+
+function legacyDocument(document: ContentDetailDto["draft"]["document"]): AutosaveDocument {
+  if (document.schemaVersion !== 1) {
+    throw new Error("The legacy textarea cannot edit a structured Content Draft.");
+  }
+
+  return document;
 }

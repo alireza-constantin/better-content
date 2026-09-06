@@ -8,10 +8,17 @@ import { getServerSession } from "@/lib/auth/server";
 import { ApplicationError } from "@/lib/errors/app-error";
 import { logger } from "@/lib/logging/server";
 import { requireWorkspaceOwner } from "@/modules/workspace/application";
-import { contentScriptDocumentSchema, parseHumanContentScriptDraft } from "../domain";
+import {
+  contentDocumentSchema,
+  contentDocumentV2Schema,
+  canonicalizeContentDocumentV2,
+  parseHumanContentScriptDraft,
+} from "../domain";
 import type { ContentDraftDto } from "./content-read-service";
 import {
-  findContentDraftWriteTarget,
+  createLegacyDraftCheckpoint,
+  hasLegacyDraftCheckpoint,
+  lockContentDraftWriteTarget,
   updateContentDraftIfRevisionMatches,
 } from "./content-draft-repository";
 
@@ -56,18 +63,19 @@ function parseSaveInput(input: unknown): SaveContentDraftInput {
   return result.data;
 }
 
-function parseHumanDraft(document: unknown) {
+function parseSubmittedDraft(document: unknown) {
   try {
-    // The canonicalizer is the only Draft document semantic boundary. The
-    // schema above only validates the outer save input and required fields.
-    return parseHumanContentScriptDraft(document);
+    const parsed = contentDocumentSchema.parse(document);
+    return parsed.schemaVersion === 1
+      ? parseHumanContentScriptDraft(parsed)
+      : canonicalizeContentDocumentV2(contentDocumentV2Schema.parse(parsed));
   } catch {
     throw new ApplicationError("VALIDATION_ERROR", "The Content Draft document is invalid.");
   }
 }
 
 function toDraftDto(draft: ContentDraft): ContentDraftDto {
-  const document = contentScriptDocumentSchema.safeParse(draft.document);
+  const document = contentDocumentSchema.safeParse(draft.document);
 
   if (!document.success || !Number.isInteger(draft.revision) || draft.revision <= 0) {
     throw new ApplicationError("INTERNAL_ERROR", "The Content Draft invariant is invalid.");
@@ -127,9 +135,51 @@ export function createContentDraftApplicationService(
       // Authorize before document data can reach any authoritative read/write
       // result. Recheck inside the short transaction for current owner policy.
       await requireWorkspaceOwner(userId, parsedInput.workspaceId, database);
-      const document = parseHumanDraft(parsedInput.document);
+      const document = parseSubmittedDraft(parsedInput.document);
       const saved = await database.transaction(async (transaction) => {
         await requireWorkspaceOwner(userId, parsedInput.workspaceId, transaction);
+
+        const target = await lockContentDraftWriteTarget(
+          transaction,
+          parsedInput.workspaceId,
+          parsedInput.contentId,
+        );
+
+        if (!target) {
+          throw new ApplicationError("NOT_FOUND", "The requested Content was not found.");
+        }
+
+        if (target.draft.revision !== parsedInput.baseRevision) {
+          throw new ApplicationError(
+            "CONFLICT",
+            "The Content Draft has changed since it was loaded.",
+          );
+        }
+
+        const storedDocument = contentDocumentSchema.safeParse(target.draft.document);
+        if (!storedDocument.success) {
+          throw new ApplicationError("INTERNAL_ERROR", "The Content Draft invariant is invalid.");
+        }
+
+        if (storedDocument.data.schemaVersion === 1 && document.schemaVersion === 2) {
+          if (await hasLegacyDraftCheckpoint(transaction, parsedInput.contentId)) {
+            throw new ApplicationError(
+              "INTERNAL_ERROR",
+              "The Content Draft migration invariant is invalid.",
+            );
+          }
+
+          await createLegacyDraftCheckpoint(transaction, {
+            contentId: parsedInput.contentId,
+            document: storedDocument.data,
+            createdByUserId: userId,
+          });
+        } else if (storedDocument.data.schemaVersion === 2 && document.schemaVersion !== 2) {
+          throw new ApplicationError(
+            "VALIDATION_ERROR",
+            "A structured Content Draft requires a structured document.",
+          );
+        }
 
         const updated = await updateContentDraftIfRevisionMatches(transaction, {
           workspaceId: parsedInput.workspaceId,
@@ -141,16 +191,6 @@ export function createContentDraftApplicationService(
 
         if (updated) {
           return toDraftDto(updated);
-        }
-
-        const target = await findContentDraftWriteTarget(
-          transaction,
-          parsedInput.workspaceId,
-          parsedInput.contentId,
-        );
-
-        if (!target) {
-          throw new ApplicationError("NOT_FOUND", "The requested Content was not found.");
         }
 
         throw new ApplicationError(
