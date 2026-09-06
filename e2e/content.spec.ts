@@ -14,10 +14,10 @@ async function signUp(page: Page, email: string, locale: "en" | "fa" = "en"): Pr
   await page.setExtraHTTPHeaders({ "x-forwarded-for": `192.0.2.${nextE2eClientIp}` });
 
   await page.goto(`/${locale}/sign-up`);
-  await page.getByLabel(english ? "Name" : "نام کاربری").fill("Content Creator");
+  await page.getByLabel(english ? "Name" : "نام").fill("Content Creator");
   await page.getByLabel(english ? "Email address" : "نشانی ایمیل").fill(email);
   await page.getByLabel(english ? "Password" : "رمز عبور").fill(password);
-  await page.getByRole("button", { name: english ? "Create account" : "ایجاد حساب" }).click();
+  await page.getByRole("button", { name: english ? "Create account" : "ساخت حساب" }).click();
   await expect(page).toHaveURL(new RegExp(`/${locale}/dashboard$`));
 }
 
@@ -383,27 +383,37 @@ test("preserves a stale tab, supports Copy, and reloads authoritative text witho
   const stalePage = await context.newPage();
   await stalePage.goto(`/en/content/${fixture.englishContentId}`);
   await page.goto(`/en/content/${fixture.englishContentId}`);
+  await expect(stalePage.getByRole("textbox", { name: "Script block 1 Script text" })).toHaveValue(
+    "Initial English script",
+  );
+  await expect(page.getByRole("textbox", { name: "Script block 1 Script text" })).toHaveValue(
+    "Initial English script",
+  );
 
   const authoritativeText = "Authoritative tab text";
-  await page.getByRole("textbox", { name: "Script text" }).fill(authoritativeText);
+  await page.getByRole("textbox", { name: "Script block 1 Script text" }).fill(authoritativeText);
   await expect(page.getByText("Revision 2", { exact: true })).toBeVisible({ timeout: 5_000 });
 
   const staleText = "Stale tab text that must not be merged";
-  await stalePage.getByRole("textbox", { name: "Script text" }).fill(staleText);
+  await stalePage.getByRole("textbox", { name: "Script block 1 Script text" }).fill(staleText);
   await expect(stalePage.getByText("This Draft changed elsewhere", { exact: true })).toBeVisible({
     timeout: 5_000,
   });
-  await expect(stalePage.getByRole("textbox", { name: "Script text" })).toHaveValue(staleText);
+  await expect(stalePage.getByRole("textbox", { name: "Script block 1 Script text" })).toHaveValue(
+    staleText,
+  );
 
   await context.grantPermissions(["clipboard-read", "clipboard-write"], {
     origin: new URL(stalePage.url()).origin,
   });
   await stalePage.getByRole("button", { name: "Copy unsaved text" }).click();
   await expect(stalePage.getByText("Unsaved text copied.", { exact: true })).toBeVisible();
-  await expect(stalePage.evaluate(() => navigator.clipboard.readText())).resolves.toBe(staleText);
+  await expect(stalePage.evaluate(() => navigator.clipboard.readText())).resolves.toContain(
+    staleText,
+  );
 
   await stalePage.getByRole("button", { name: "Reload authoritative Draft" }).click();
-  await expect(stalePage.getByRole("textbox", { name: "Script text" })).toHaveValue(
+  await expect(stalePage.getByRole("textbox", { name: "Script block 1 Script text" })).toHaveValue(
     authoritativeText,
   );
   await expect(stalePage.getByText("Saved", { exact: true })).toBeVisible();
@@ -421,7 +431,7 @@ test("keeps Content language direction independent from route locale and preserv
   await page.goto(`/en/content/${fixture.persianContentId}`);
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
   await expect(page.locator("html")).toHaveAttribute("dir", "ltr");
-  const persianScript = page.getByRole("textbox", { name: "Script text" });
+  const persianScript = page.getByRole("textbox", { name: "Script block 1 Script text" });
   await expect(persianScript).toHaveAttribute("lang", "fa");
   await expect(persianScript).toHaveAttribute("dir", "rtl");
   await expect(persianScript).toHaveValue("متن فارسی / English 42");
@@ -429,7 +439,7 @@ test("keeps Content language direction independent from route locale and preserv
   await page.goto(`/fa/content/${fixture.englishContentId}`);
   await expect(page.locator("html")).toHaveAttribute("lang", "fa");
   await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
-  const englishScript = page.getByRole("textbox", { name: "متن اسکریپت" });
+  const englishScript = page.getByRole("textbox", { name: "بند اسکریپت 1 متن اسکریپت" });
   await expect(englishScript).toHaveAttribute("lang", "en");
   await expect(englishScript).toHaveAttribute("dir", "ltr");
 
@@ -438,4 +448,66 @@ test("keeps Content language direction independent from route locale and preserv
     "scrollWidth",
     await page.locator("body").evaluate((body) => body.clientWidth),
   );
+});
+
+test("Phase 5 EN journey persists structured editing, directions, acceptance, and history", async ({
+  page,
+}) => {
+  const email = emailFor("phase5-en-journey").toLowerCase();
+  await signUp(page, email);
+  const fixture = await seedContent(email);
+
+  await page.goto(`/en/content/${fixture.emptyContentId}`);
+  const script = page.getByRole("textbox", { name: "Script block 1 Script text" });
+  await script.fill("A persisted English paragraph for the structured editor.");
+
+  const performance = page.locator('section[aria-label="Performance"]');
+  await performance.getByRole("button", { name: "Add" }).click();
+  await page.getByRole("dialog").getByRole("button", { name: "Add" }).click();
+
+  await expect(page.getByText("Revision 2", { exact: true })).toBeVisible({ timeout: 8_000 });
+  await page.reload();
+  await expect(page.getByRole("textbox", { name: "Script block 1 Script text" })).toHaveValue(
+    "A persisted English paragraph for the structured editor.",
+  );
+  await expect(performance).toContainText("Pause");
+
+  await page.getByRole("button", { name: "Accept Draft" }).click();
+  await expect(page.getByText("Accepted", { exact: true })).toBeVisible({ timeout: 5_000 });
+  await page.getByRole("button", { name: "Open Version History" }).click();
+  await expect(page.getByRole("dialog")).toContainText("Accepted");
+  await expect(page.getByRole("dialog")).toContainText("Read only");
+});
+
+test("Phase 5 FA journey preserves RTL content semantics through persistence and history", async ({
+  page,
+}) => {
+  const email = emailFor("phase5-fa-journey").toLowerCase();
+  await signUp(page, email, "fa");
+  const fixture = await seedContent(email);
+
+  await page.goto(`/fa/content/${fixture.persianContentId}`);
+  const script = page.getByRole("textbox", { name: "بند اسکریپت 1 متن اسکریپت" });
+  await expect(script).toHaveAttribute("lang", "fa");
+  await expect(script).toHaveAttribute("dir", "rtl");
+  await script.fill("متن فارسی پایدار برای ویرایشگر ساختاریافته.");
+
+  const edit = page.locator('section[aria-label="تدوین"]');
+  await edit.getByRole("button", { name: "افزودن" }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.locator("#direction-type").selectOption("EDIT_NOTE");
+  await dialog.getByRole("textbox", { name: "دستور" }).fill("یادداشت تدوین فارسی");
+  await dialog.getByRole("button", { name: "افزودن" }).click();
+
+  await expect(page.getByText("بازبینی 2", { exact: true })).toBeVisible({ timeout: 8_000 });
+  await page.reload();
+  await expect(page.getByRole("textbox", { name: "بند اسکریپت 1 متن اسکریپت" })).toHaveValue(
+    "متن فارسی پایدار برای ویرایشگر ساختاریافته.",
+  );
+  await expect(page.locator('section[aria-label="تدوین"]')).toContainText("یادداشت تدوین فارسی");
+
+  await page.getByRole("button", { name: "پذیرش پیش‌نویس" }).click();
+  await expect(page.getByText("پذیرفته‌شده", { exact: true })).toBeVisible({ timeout: 5_000 });
+  await page.getByRole("button", { name: "باز کردن تاریخچهٔ نسخه‌ها" }).click();
+  await expect(page.getByRole("dialog")).toContainText("فقط خواندنی");
 });

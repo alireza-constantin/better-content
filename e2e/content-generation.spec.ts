@@ -45,6 +45,7 @@ async function generateAndAcceptFirstIdea(page: Page): Promise<void> {
   await page.locator("article").first().getByRole("button", { name: "Accept" }).click();
   await page.goto("/en/content");
   await expect(page.getByRole("heading", { name: "Production Queue" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Generate next Content for/ })).toBeVisible();
 }
 
 async function generateAndAcceptIdeas(page: Page, count: number): Promise<void> {
@@ -190,7 +191,7 @@ test("queued Idea synchronously generates Content and lands in the real localize
 
   await expect(page).toHaveURL(/\/en\/content\/[0-9a-f-]{36}$/);
   await expect(page.getByRole("heading", { name: "Script editor" })).toBeVisible();
-  await expect(page.getByLabel("Script text")).toHaveValue(
+  await expect(page.getByRole("textbox", { name: "Script block 1 Script text" })).toHaveValue(
     "Deterministic English long-video script.",
   );
   expect(await readContentCount(email)).toBe(1);

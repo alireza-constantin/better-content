@@ -519,9 +519,7 @@ describe("Content read and Draft application services", () => {
       .from(schema.contentVersions)
       .where(eq(schema.contentVersions.contentId, generated.contentId))
       .orderBy(asc(schema.contentVersions.versionNumber));
-    expect(versions).toEqual([
-      { versionNumber: 1, source: "AI_GENERATED" },
-    ]);
+    expect(versions).toEqual([{ versionNumber: 1, source: "AI_GENERATED" }]);
   });
 
   it("saves an exact-revision Draft with canonical human text and advances once", async () => {
@@ -906,7 +904,7 @@ describe("Content read and Draft application services", () => {
         workspaceId: local.workspace.id,
         contentId: foreignContent.contentId,
         baseRevision: 1,
-      document: structuredDocument("foreign overwrite"),
+        document: structuredDocument("foreign overwrite"),
       }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
     await expect(
@@ -914,7 +912,7 @@ describe("Content read and Draft application services", () => {
         workspaceId: foreign.workspace.id,
         contentId: localContent.contentId,
         baseRevision: 1,
-      document: structuredDocument("forged workspace"),
+        document: structuredDocument("forged workspace"),
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
 
@@ -1183,9 +1181,7 @@ describe("Content read and Draft application services", () => {
       detail.draft.document.schemaVersion === 2
         ? detail.draft.document.script.blocks.map((block) => block.text)
         : undefined,
-    ).toEqual([
-      "Deterministic English short-video script.",
-    ]);
+    ).toEqual(["Deterministic English short-video script."]);
 
     const result = await reads.getContentGenerationAttemptResult({
       workspaceId: context.workspace.id,
