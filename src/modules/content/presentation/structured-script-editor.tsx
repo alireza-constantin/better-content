@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import type { ContentDocumentV2 } from "../domain";
+import { BlockProductionDirections } from "./block-production-directions";
 import {
   addBlock,
   deleteBlock,
@@ -207,6 +208,13 @@ export function StructuredScriptEditor({
                 </Button>
               </div>
             </div>
+            <BlockProductionDirections
+              block={block}
+              disabled={disabled}
+              document={document}
+              language={language}
+              onChange={onChange}
+            />
           </li>
         ))}
       </ol>

@@ -8,6 +8,7 @@ import {
 
 import {
   getContentDetail,
+  acceptContent,
   getContentByIdea,
   getContentDraft,
   getContentGenerationAttemptDetail,
@@ -21,6 +22,7 @@ import {
   generateContentScript,
   saveContentDraft,
 } from "./content-application";
+import type { ContentAcceptanceResultDto } from "./content-acceptance-service";
 import type {
   ContentGenerationAttemptDto,
   ContentGenerationResult,
@@ -53,6 +55,8 @@ export type GetContentByIdeaActionResult =
 export type GetContentDraftActionResult = GetContentDetailActionResult;
 export type SaveContentDraftActionResult =
   Readonly<{ ok: true; draft: ContentDraftDto }> | ContentActionFailure;
+export type AcceptContentActionResult =
+  Readonly<{ ok: true; result: ContentAcceptanceResultDto }> | ContentActionFailure;
 export type GetIdeaContentGenerationHistoryActionResult =
   Readonly<{ ok: true; history: IdeaContentGenerationHistoryDto }> | ContentActionFailure;
 export type GetContentGenerationAttemptDetailActionResult =
@@ -199,6 +203,14 @@ export async function saveContentDraftAction(
 ): Promise<SaveContentDraftActionResult> {
   try {
     return { ok: true, draft: await saveContentDraft(input) };
+  } catch (error) {
+    return failureFrom(error);
+  }
+}
+
+export async function acceptContentAction(input: unknown): Promise<AcceptContentActionResult> {
+  try {
+    return { ok: true, result: await acceptContent(input) };
   } catch (error) {
     return failureFrom(error);
   }

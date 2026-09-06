@@ -11,6 +11,7 @@ import {
   canonicalizeContentDocumentV2,
   contentDocumentsEqual,
   contentDocumentV2Schema,
+  deriveContentAcceptanceState,
   exportContentDocumentV2Recovery,
   materializeContentDocumentV2,
   fingerprintContentScriptGenerationRequest,
@@ -377,6 +378,76 @@ describe("Content document V2", () => {
         }),
       ),
     ).toBe(false);
+  });
+
+  it("uses structural equality rather than JSON property insertion order", () => {
+    const left = v2({
+      script: {
+        blocks: [
+          {
+            id: blockId,
+            type: "paragraph",
+            text: "Same",
+            performanceDirections: [{ id: directionId, type: "PAUSE", duration: "short" }],
+            editDirections: [],
+          },
+        ],
+      },
+    });
+    const right = {
+      schemaVersion: 2 as const,
+      script: {
+        blocks: [
+          {
+            editDirections: [],
+            performanceDirections: [
+              { duration: "short" as const, type: "PAUSE" as const, id: directionId },
+            ],
+            text: "Same",
+            type: "paragraph" as const,
+            id: blockId,
+          },
+        ],
+      },
+    };
+
+    expect(contentDocumentsEqual(left, right)).toBe(true);
+  });
+
+  it("derives acceptance without persisting another Content status", () => {
+    expect(
+      deriveContentAcceptanceState({
+        acceptedVersionId: null,
+        acceptedDocument: null,
+        draftDocument: v2(),
+      }),
+    ).toBe("NOT_ACCEPTED");
+    expect(
+      deriveContentAcceptanceState({
+        acceptedVersionId: "accepted",
+        acceptedDocument: v2(),
+        draftDocument: v2(),
+      }),
+    ).toBe("ACCEPTED");
+    expect(
+      deriveContentAcceptanceState({
+        acceptedVersionId: "accepted",
+        acceptedDocument: v2(),
+        draftDocument: v2({
+          script: {
+            blocks: [
+              {
+                id: blockId,
+                type: "paragraph",
+                text: "Changed",
+                performanceDirections: [],
+                editDirections: [],
+              },
+            ],
+          },
+        }),
+      }),
+    ).toBe("UNACCEPTED_CHANGES");
   });
 
   it("exports V2 conflict recovery in document order without persistence metadata", () => {

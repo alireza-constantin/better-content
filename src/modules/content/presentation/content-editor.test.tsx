@@ -6,6 +6,7 @@ import en from "../../../../messages/en.json";
 import { UnsavedChangesProvider } from "@/components/navigation/unsaved-changes-provider";
 import type { ContentDetailDto } from "../application/content-read-service";
 vi.mock("../application/content-actions", () => ({
+  acceptContentAction: vi.fn(),
   getContentDraftAction: vi.fn(),
   saveContentDraftAction: vi.fn(),
 }));
@@ -15,6 +16,18 @@ const content = (language: "en" | "fa" = "en"): ContentDetailDto => ({
   sourceIdea: { id: "i", title: "Idea" },
   contentLanguage: language,
   format: "SHORT_VIDEO",
+  acceptedVersionId: null,
+  versions: [
+    {
+      id: "version-1",
+      versionNumber: 1,
+      document: { schemaVersion: 1, script: { text: "First\nSecond" } },
+      source: "AI_GENERATED",
+      createdAt: new Date("2026-09-01T10:00:00.000Z"),
+      createdByName: "Creator",
+      isCurrentAccepted: false,
+    },
+  ],
   draft: {
     document: { schemaVersion: 1, script: { text: "First\nSecond" } },
     v2Projection: {
@@ -76,5 +89,23 @@ describe("ContentEditor", () => {
     fireEvent.keyDown(next, { key: "Backspace" });
     expect(screen.getAllByRole("textbox")).toHaveLength(2);
     expect((screen.getAllByRole("textbox")[0] as HTMLTextAreaElement).value).toBe("First");
+  });
+
+  it("gates acceptance while the visible Draft is dirty", () => {
+    render(
+      <NextIntlClientProvider locale="en" messages={en}>
+        <UnsavedChangesProvider>
+          <ContentEditor content={content()} workspaceId="w" />
+        </UnsavedChangesProvider>
+      </NextIntlClientProvider>,
+    );
+
+    const accept = screen.getByRole("button", { name: "Accept Draft" });
+    expect(accept.hasAttribute("disabled")).toBe(false);
+
+    fireEvent.change(screen.getAllByRole("textbox")[0], { target: { value: "Changed" } });
+
+    expect(accept.hasAttribute("disabled")).toBe(true);
+    expect(screen.getByText("Save the current Draft before accepting.")).toBeTruthy();
   });
 });

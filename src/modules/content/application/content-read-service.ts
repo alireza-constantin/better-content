@@ -9,10 +9,12 @@ import { logger } from "@/lib/logging/server";
 import {
   contentDocumentSchema,
   contentScriptFormatSchema,
+  contentVersionSourceSchema,
   generationLanguageSchema,
   materializeContentDocumentV2,
   type ContentDocument,
   type ContentDocumentV2,
+  type ContentVersionSource,
   type ContentScriptFormat,
   type GenerationLanguage,
 } from "../domain";
@@ -30,12 +32,14 @@ import {
   findIdeaContentUsage,
   findResultingContentDetail,
   findSourceIdea,
+  listContentVersions,
   listContent as listContentRecords,
   listContentForIdea,
   listContentGenerationAttemptsForIdea,
   type ContentDetailRecord,
   type ContentGenerationAttemptReadRecord,
   type ContentListRecord,
+  type ContentVersionReadRecord,
 } from "./content-read-repository";
 import { requireWorkspaceMembership } from "@/modules/workspace/application";
 import { decisionStateSchema, type DecisionState } from "@/modules/ideas/domain";
@@ -70,12 +74,24 @@ export type ContentDraftDto = Readonly<{
   updatedAt: Date;
 }>;
 
+export type ContentVersionDto = Readonly<{
+  id: string;
+  versionNumber: number;
+  document: ContentDocument;
+  source: ContentVersionSource;
+  createdAt: Date;
+  createdByName: string | null;
+  isCurrentAccepted: boolean;
+}>;
+
 export type ContentDetailDto = Readonly<{
   id: string;
   sourceIdea: ContentSourceIdeaDto;
   contentLanguage: GenerationLanguage;
   format: ContentScriptFormat;
   draft: ContentDraftDto;
+  acceptedVersionId: string | null;
+  versions: readonly ContentVersionDto[];
 }>;
 
 export type ContentGenerationAttemptHistoryDto = Readonly<{
@@ -210,7 +226,49 @@ function toContentListItem(record: ContentListRecord): ContentListItemDto {
   };
 }
 
-function toContentDetail(record: ContentDetailRecord): ContentDetailDto {
+function toContentVersion(
+  record: ContentVersionReadRecord,
+  acceptedVersionId: string | null,
+): ContentVersionDto {
+  const source = contentVersionSourceSchema.safeParse(record.version.source);
+  const document = contentDocumentSchema.safeParse(record.version.document);
+
+  if (
+    !source.success ||
+    !document.success ||
+    !Number.isInteger(record.version.versionNumber) ||
+    record.version.versionNumber <= 0
+  ) {
+    throw new ApplicationError("INTERNAL_ERROR", "The Content Version invariant is invalid.");
+  }
+
+  return {
+    id: record.version.id,
+    versionNumber: record.version.versionNumber,
+    document: document.data,
+    source: source.data,
+    createdAt: record.version.createdAt,
+    createdByName: record.createdByName,
+    isCurrentAccepted: record.version.id === acceptedVersionId,
+  };
+}
+
+function toContentDetail(
+  record: ContentDetailRecord,
+  versionRecords?: readonly ContentVersionReadRecord[],
+): ContentDetailDto {
+  // Content-by-Idea uses the lightweight detail shape; the editor detail path
+  // supplies the version records and therefore validates the accepted pointer.
+  const versions = (versionRecords ?? []).map((version) =>
+    toContentVersion(version, record.content.acceptedVersionId),
+  );
+  if (record.content.acceptedVersionId && versionRecords) {
+    const accepted = versions.find((version) => version.isCurrentAccepted);
+    if (!accepted || accepted.source !== "CREATOR_ACCEPTED") {
+      throw new ApplicationError("INTERNAL_ERROR", "The accepted Content pointer is invalid.");
+    }
+  }
+
   return {
     id: record.content.id,
     sourceIdea: {
@@ -220,6 +278,8 @@ function toContentDetail(record: ContentDetailRecord): ContentDetailDto {
     contentLanguage: parseStoredContentLanguage(record.content.contentLanguage),
     format: parseStoredContentFormat(record.content.format),
     draft: toDraftDto(record.draft),
+    acceptedVersionId: record.content.acceptedVersionId,
+    versions,
   };
 }
 
@@ -413,7 +473,7 @@ export function createContentReadApplicationService(
           language,
           status: status.data,
         },
-        content: contentRecords.map(toContentDetail),
+        content: contentRecords.map((record) => toContentDetail(record)),
         history: {
           sourceIdea: { id: sourceIdea.id, title: sourceIdea.title },
           isUsed,
@@ -444,7 +504,13 @@ export function createContentReadApplicationService(
         entityId: parsedInput.contentId,
       });
 
-      return toContentDetail(record);
+      const versions = await listContentVersions(
+        database,
+        parsedInput.workspaceId,
+        parsedInput.contentId,
+      );
+
+      return toContentDetail(record, versions);
     },
 
     async getIdeaContentGenerationHistory(
@@ -564,7 +630,13 @@ export function createContentReadApplicationService(
         entityId: parsedInput.attemptId,
       });
 
-      return toContentDetail(result);
+      const versions = await listContentVersions(
+        database,
+        parsedInput.workspaceId,
+        result.content.id,
+      );
+
+      return toContentDetail(result, versions);
     },
 
     async getIdeaContentUsage(input: unknown): Promise<IdeaContentUsageDto> {

@@ -7,9 +7,11 @@ import {
   contentDna,
   contentDrafts,
   contentGenerationAttempts,
+  contentVersions,
   contents,
   ideaGenerationBatches,
   ideas,
+  user,
 } from "@/db/schema";
 
 export type ContentReadDatabase = Pick<typeof db, "select">;
@@ -49,6 +51,11 @@ export type ContentGenerationAttemptReadRecord = Readonly<{
     title: string;
   }>;
   resultingContentId: string | null;
+}>;
+
+export type ContentVersionReadRecord = Readonly<{
+  version: typeof contentVersions.$inferSelect;
+  createdByName: string;
 }>;
 
 export async function findSourceIdea(
@@ -183,6 +190,25 @@ export async function findContentDetail(
     .where(and(eq(contents.workspaceId, workspaceId), eq(contents.id, contentId)));
 
   return record;
+}
+
+export async function listContentVersions(
+  database: ContentReadDatabase,
+  workspaceId: string,
+  contentId: string,
+): Promise<readonly ContentVersionReadRecord[]> {
+  const records = await database
+    .select({ version: contentVersions, createdByName: user.name })
+    .from(contentVersions)
+    .innerJoin(
+      contents,
+      and(eq(contents.id, contentVersions.contentId), eq(contents.workspaceId, workspaceId)),
+    )
+    .innerJoin(user, eq(user.id, contentVersions.createdByUserId))
+    .where(eq(contentVersions.contentId, contentId))
+    .orderBy(desc(contentVersions.versionNumber), desc(contentVersions.createdAt));
+
+  return records;
 }
 
 export async function listContentGenerationAttemptsForIdea(

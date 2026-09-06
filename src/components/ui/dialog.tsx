@@ -9,6 +9,10 @@ function Dialog({ ...props }: React.ComponentProps<typeof DialogPrimitive.Root>)
   return <DialogPrimitive.Root {...props} />;
 }
 
+function DialogTrigger({ ...props }: React.ComponentProps<typeof DialogPrimitive.Trigger>) {
+  return <DialogPrimitive.Trigger {...props} />;
+}
+
 function DialogPortal({ ...props }: React.ComponentProps<typeof DialogPrimitive.Portal>) {
   return <DialogPrimitive.Portal {...props} />;
 }
@@ -101,5 +105,6 @@ export {
   DialogHeader,
   DialogPortal,
   DialogTitle,
+  DialogTrigger,
   DialogViewport,
 };

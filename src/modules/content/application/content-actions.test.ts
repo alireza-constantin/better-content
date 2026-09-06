@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApplicationError } from "@/lib/errors/app-error";
 
 const mocks = vi.hoisted(() => ({
+  acceptContent: vi.fn(),
   generateContentScript: vi.fn(),
   getContentDraft: vi.fn(),
   saveContentDraft: vi.fn(),
@@ -10,6 +11,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("./content-application", () => ({
+  acceptContent: mocks.acceptContent,
   getContentDetail: vi.fn(),
   getContentDraft: mocks.getContentDraft,
   getContentGenerationAttemptDetail: vi.fn(),
@@ -26,6 +28,7 @@ import {
   generateContentScriptAction,
   getContentDraftAction,
   retryContentGenerationAttemptAction,
+  acceptContentAction,
   saveContentDraftAction,
 } from "./content-actions";
 
@@ -40,6 +43,30 @@ afterEach(() => {
 });
 
 describe("Content Draft browser actions", () => {
+  it("returns the safe acceptance result and maps stale conflicts", async () => {
+    const result = {
+      draft,
+      acceptedVersion: {
+        id: "version-id",
+        versionNumber: 2,
+        document: { schemaVersion: 2 as const, script: { blocks: [] } },
+        source: "CREATOR_ACCEPTED" as const,
+        createdAt: new Date("2026-09-01T10:02:00.000Z"),
+        createdByName: null,
+        isCurrentAccepted: true,
+      },
+    };
+    mocks.acceptContent.mockResolvedValue(result);
+
+    await expect(acceptContentAction({ expectedDraftRevision: 2 })).resolves.toEqual({
+      ok: true,
+      result,
+    });
+
+    mocks.acceptContent.mockRejectedValue(new ApplicationError("CONFLICT", "private details"));
+    await expect(acceptContentAction({})).resolves.toEqual({ ok: false, code: "CONFLICT" });
+  });
+
   it("returns the safe Draft DTO on save success", async () => {
     mocks.saveContentDraft.mockResolvedValue(draft);
 

@@ -81,14 +81,55 @@ export type ContentScriptDocument = z.infer<typeof contentScriptDocumentSchema>;
 export type ContentDocumentV1 = ContentScriptDocument;
 
 const directionIdSchema = z.uuid();
-const nuanceSchema = z.string().max(280).optional();
+export const productionDirectionLimits = {
+  perBlockCategory: 12,
+  perDocument: 300,
+  nuance: 280,
+  note: 500,
+  overlay: 280,
+  soundCue: 280,
+} as const;
+export const performanceDirectionTypes = [
+  "PAUSE",
+  "EMPHASIS",
+  "DELIVERY",
+  "GESTURE",
+  "POSITION",
+  "GAZE",
+  "PERFORMANCE_NOTE",
+] as const;
+export const editDirectionTypes = [
+  "TEXT_OVERLAY",
+  "ZOOM",
+  "CUT",
+  "BROLL_CUE",
+  "SOUND_CUE",
+  "CAPTION_EMPHASIS",
+  "EDIT_NOTE",
+] as const;
+export const productionDirectionValues = {
+  duration: ["short", "medium", "long"],
+  strength: ["subtle", "clear", "strong"],
+  tone: ["calm", "warm", "serious", "energetic", "playful"],
+  pace: ["slower", "faster"],
+  gesture: ["hand", "point", "show_object"],
+  position: ["sit", "stand", "walk"],
+  gaze: ["camera", "away"],
+  placement: ["top", "center", "bottom"],
+  zoomMode: ["in", "out"],
+  zoomIntensity: ["subtle", "normal", "strong"],
+  cut: ["hard", "jump"],
+  soundKind: ["music", "sound_effect"],
+  caption: ["highlight", "animate"],
+} as const;
+const nuanceSchema = z.string().max(productionDirectionLimits.nuance).optional();
 
 const performanceDirectionSchema = z.discriminatedUnion("type", [
   z
     .object({
       id: directionIdSchema,
       type: z.literal("PAUSE"),
-      duration: z.enum(["short", "medium", "long"]),
+      duration: z.enum(productionDirectionValues.duration),
       nuance: nuanceSchema,
     })
     .strict(),
@@ -96,7 +137,7 @@ const performanceDirectionSchema = z.discriminatedUnion("type", [
     .object({
       id: directionIdSchema,
       type: z.literal("EMPHASIS"),
-      strength: z.enum(["subtle", "clear", "strong"]),
+      strength: z.enum(productionDirectionValues.strength),
       nuance: nuanceSchema,
     })
     .strict(),
@@ -104,8 +145,8 @@ const performanceDirectionSchema = z.discriminatedUnion("type", [
     .object({
       id: directionIdSchema,
       type: z.literal("DELIVERY"),
-      tone: z.enum(["calm", "warm", "serious", "energetic", "playful"]).optional(),
-      pace: z.enum(["slower", "faster"]).optional(),
+      tone: z.enum(productionDirectionValues.tone).optional(),
+      pace: z.enum(productionDirectionValues.pace).optional(),
       nuance: nuanceSchema,
     })
     .strict()
@@ -114,7 +155,7 @@ const performanceDirectionSchema = z.discriminatedUnion("type", [
     .object({
       id: directionIdSchema,
       type: z.literal("GESTURE"),
-      kind: z.enum(["hand", "point", "show_object"]),
+      kind: z.enum(productionDirectionValues.gesture),
       nuance: nuanceSchema,
     })
     .strict(),
@@ -122,7 +163,7 @@ const performanceDirectionSchema = z.discriminatedUnion("type", [
     .object({
       id: directionIdSchema,
       type: z.literal("POSITION"),
-      action: z.enum(["sit", "stand", "walk"]),
+      action: z.enum(productionDirectionValues.position),
       nuance: nuanceSchema,
     })
     .strict(),
@@ -130,7 +171,7 @@ const performanceDirectionSchema = z.discriminatedUnion("type", [
     .object({
       id: directionIdSchema,
       type: z.literal("GAZE"),
-      target: z.enum(["camera", "away"]),
+      target: z.enum(productionDirectionValues.gaze),
       nuance: nuanceSchema,
     })
     .strict(),
@@ -138,7 +179,7 @@ const performanceDirectionSchema = z.discriminatedUnion("type", [
     .object({
       id: directionIdSchema,
       type: z.literal("PERFORMANCE_NOTE"),
-      text: z.string().max(500),
+      text: z.string().max(productionDirectionLimits.note),
     })
     .strict(),
 ]);
@@ -149,8 +190,8 @@ const editDirectionSchema = z.discriminatedUnion("type", [
     .object({
       id: directionIdSchema,
       type: z.literal("TEXT_OVERLAY"),
-      text: z.string().max(280),
-      placement: z.enum(["top", "center", "bottom"]),
+      text: z.string().max(productionDirectionLimits.overlay),
+      placement: z.enum(productionDirectionValues.placement),
       nuance: nuanceSchema,
     })
     .strict(),
@@ -158,8 +199,8 @@ const editDirectionSchema = z.discriminatedUnion("type", [
     .object({
       id: directionIdSchema,
       type: z.literal("ZOOM"),
-      mode: z.enum(["in", "out"]),
-      intensity: z.enum(["subtle", "normal", "strong"]),
+      mode: z.enum(productionDirectionValues.zoomMode),
+      intensity: z.enum(productionDirectionValues.zoomIntensity),
       nuance: nuanceSchema,
     })
     .strict(),
@@ -167,7 +208,7 @@ const editDirectionSchema = z.discriminatedUnion("type", [
     .object({
       id: directionIdSchema,
       type: z.literal("CUT"),
-      style: z.enum(["hard", "jump"]),
+      style: z.enum(productionDirectionValues.cut),
       nuance: nuanceSchema,
     })
     .strict(),
@@ -175,7 +216,7 @@ const editDirectionSchema = z.discriminatedUnion("type", [
     .object({
       id: directionIdSchema,
       type: z.literal("BROLL_CUE"),
-      description: z.string().max(500),
+      description: z.string().max(productionDirectionLimits.note),
       nuance: nuanceSchema,
     })
     .strict(),
@@ -183,8 +224,8 @@ const editDirectionSchema = z.discriminatedUnion("type", [
     .object({
       id: directionIdSchema,
       type: z.literal("SOUND_CUE"),
-      kind: z.enum(["music", "sound_effect"]),
-      description: z.string().max(280),
+      kind: z.enum(productionDirectionValues.soundKind),
+      description: z.string().max(productionDirectionLimits.soundCue),
       nuance: nuanceSchema,
     })
     .strict(),
@@ -192,12 +233,16 @@ const editDirectionSchema = z.discriminatedUnion("type", [
     .object({
       id: directionIdSchema,
       type: z.literal("CAPTION_EMPHASIS"),
-      style: z.enum(["highlight", "animate"]),
+      style: z.enum(productionDirectionValues.caption),
       nuance: nuanceSchema,
     })
     .strict(),
   z
-    .object({ id: directionIdSchema, type: z.literal("EDIT_NOTE"), text: z.string().max(500) })
+    .object({
+      id: directionIdSchema,
+      type: z.literal("EDIT_NOTE"),
+      text: z.string().max(productionDirectionLimits.note),
+    })
     .strict(),
 ]);
 export type EditDirection = z.infer<typeof editDirectionSchema>;
@@ -214,8 +259,12 @@ export const contentDocumentV2Schema = z
                 id: z.uuid(),
                 type: z.literal("paragraph"),
                 text: z.string().refine((value) => !/[\r\n]/.test(value)),
-                performanceDirections: z.array(performanceDirectionSchema).max(12),
-                editDirections: z.array(editDirectionSchema).max(12),
+                performanceDirections: z
+                  .array(performanceDirectionSchema)
+                  .max(productionDirectionLimits.perBlockCategory),
+                editDirections: z
+                  .array(editDirectionSchema)
+                  .max(productionDirectionLimits.perBlockCategory),
               })
               .strict(),
           )
@@ -263,10 +312,10 @@ export const contentDocumentV2Schema = z
         path: ["script", "blocks"],
         message: "Script must not exceed 50,000 characters.",
       });
-    if (directionCount > 300)
+    if (directionCount > productionDirectionLimits.perDocument)
       context.addIssue({
         code: "too_big",
-        maximum: 300,
+        maximum: productionDirectionLimits.perDocument,
         inclusive: true,
         origin: "array",
         path: ["script", "blocks"],
@@ -280,6 +329,13 @@ export const contentDocumentSchema = z.union([
   contentDocumentV2Schema,
 ]);
 export type ContentDocument = z.infer<typeof contentDocumentSchema>;
+
+export const contentAcceptanceStateSchema = z.enum([
+  "NOT_ACCEPTED",
+  "ACCEPTED",
+  "UNACCEPTED_CHANGES",
+]);
+export type ContentAcceptanceState = z.infer<typeof contentAcceptanceStateSchema>;
 
 export function canonicalizeContentDocumentV2(input: unknown): ContentDocumentV2 {
   const document = contentDocumentV2Schema.parse(input);
@@ -409,11 +465,46 @@ function describeEditDirection(direction: EditDirection): string {
 }
 
 export function contentDocumentsEqual(left: unknown, right: unknown): boolean {
-  const canonical = (value: unknown) => {
-    const document = parseContentDocument(value);
-    return document.schemaVersion === 2 ? document : parseHumanContentScriptDraft(document);
+  const leftDocument = parseContentDocument(left);
+  const rightDocument = parseContentDocument(right);
+
+  if (leftDocument.schemaVersion !== rightDocument.schemaVersion) return false;
+
+  // Compare validated canonical values structurally. JSON serialization is not
+  // a document-equality contract because equivalent object values can arrive
+  // with different property insertion order.
+  const equal = (a: unknown, b: unknown): boolean => {
+    if (Object.is(a, b)) return true;
+    if (typeof a !== "object" || a === null || typeof b !== "object" || b === null) return false;
+    if (Array.isArray(a) || Array.isArray(b)) {
+      if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+      return a.every((value, index) => equal(value, b[index]));
+    }
+
+    const aRecord = a as Record<string, unknown>;
+    const bRecord = b as Record<string, unknown>;
+    const aKeys = Object.keys(aRecord);
+    const bKeys = Object.keys(bRecord);
+    return (
+      aKeys.length === bKeys.length &&
+      aKeys.every((key) => Object.hasOwn(bRecord, key) && equal(aRecord[key], bRecord[key]))
+    );
   };
-  return JSON.stringify(canonical(left)) === JSON.stringify(canonical(right));
+
+  return equal(leftDocument, rightDocument);
+}
+
+export function deriveContentAcceptanceState(
+  input: Readonly<{
+    acceptedVersionId: string | null | undefined;
+    draftDocument: unknown;
+    acceptedDocument: unknown;
+  }>,
+): ContentAcceptanceState {
+  if (!input.acceptedVersionId || input.acceptedDocument == null) return "NOT_ACCEPTED";
+  return contentDocumentsEqual(input.draftDocument, input.acceptedDocument)
+    ? "ACCEPTED"
+    : "UNACCEPTED_CHANGES";
 }
 
 function normalizeLineEndings(value: string): string {

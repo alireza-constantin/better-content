@@ -11,7 +11,7 @@ import {
   SaveIcon,
 } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { useUnsavedChanges } from "@/components/navigation/unsaved-changes-provider";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -25,8 +25,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { getContentDraftAction, saveContentDraftAction } from "../application/content-actions";
+import {
+  acceptContentAction,
+  getContentDraftAction,
+  saveContentDraftAction,
+} from "../application/content-actions";
 import type { ContentDetailDto } from "../application/content-read-service";
+import { deriveContentAcceptanceState } from "../domain";
+import { ContentVersionHistory } from "./content-version-history";
 import { StructuredScriptEditor } from "./structured-script-editor";
 import {
   useContentDraftAutosave,
@@ -67,6 +73,58 @@ export function ContentEditor({ content, workspaceId }: Props) {
     save,
     workspaceId,
   });
+  const [acceptedVersionId, setAcceptedVersionId] = useState(content.acceptedVersionId);
+  const [versions, setVersions] = useState(content.versions);
+  const [isAccepting, setIsAccepting] = useState(false);
+  const [acceptanceError, setAcceptanceError] = useState<"CONFLICT" | "OTHER" | null>(null);
+  const [acceptanceSuccess, setAcceptanceSuccess] = useState(false);
+  const acceptedVersion = versions.find((version) => version.id === acceptedVersionId);
+  const acceptanceState = deriveContentAcceptanceState({
+    acceptedVersionId,
+    acceptedDocument: acceptedVersion?.document ?? null,
+    draftDocument: autosave.document,
+  });
+  const acceptanceUnavailableReason =
+    autosave.status === "saving" || autosave.isSaving
+      ? t("acceptanceUnavailableSaving")
+      : autosave.status === "failed"
+        ? t("acceptanceUnavailableFailed")
+        : autosave.status === "conflict"
+          ? t("acceptanceUnavailableConflict")
+          : autosave.isDirty
+            ? t("acceptanceUnavailableUnsaved")
+            : null;
+  const canAccept = acceptanceUnavailableReason === null && !isAccepting;
+  const accept = async () => {
+    if (!canAccept) return;
+    setIsAccepting(true);
+    setAcceptanceError(null);
+    setAcceptanceSuccess(false);
+    const result = await acceptContentAction({
+      workspaceId,
+      contentId: content.id,
+      expectedDraftRevision: autosave.revision,
+    });
+    setIsAccepting(false);
+    if (!result.ok) {
+      setAcceptanceError(result.code === "CONFLICT" ? "CONFLICT" : "OTHER");
+      return;
+    }
+
+    autosave.adoptPersistedDraft(result.result.draft);
+    setAcceptedVersionId(result.result.acceptedVersion.id);
+    setVersions((current) => {
+      const existing = current.find((version) => version.id === result.result.acceptedVersion.id);
+      const accepted = existing ?? result.result.acceptedVersion;
+      return [
+        { ...accepted, isCurrentAccepted: true },
+        ...current
+          .filter((version) => version.id !== accepted.id)
+          .map((version) => ({ ...version, isCurrentAccepted: false })),
+      ].sort((left, right) => right.versionNumber - left.versionNumber);
+    });
+    setAcceptanceSuccess(true);
+  };
   const reportDirty = useUnsavedChanges();
   useEffect(() => {
     reportDirty(autosave.isDirty);
@@ -178,12 +236,68 @@ export function ContentEditor({ content, workspaceId }: Props) {
           </AlertDescription>
         </Alert>
       ) : null}
+      <section
+        aria-labelledby="content-acceptance-title"
+        className="flex flex-col gap-3 rounded-xl border border-border/80 bg-muted/20 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5"
+      >
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold" id="content-acceptance-title">
+            {t("acceptanceTitle")}
+          </h2>
+          <div className="mt-2 flex flex-wrap items-center gap-2" role="status">
+            <Badge variant={acceptanceState === "NOT_ACCEPTED" ? "outline" : "secondary"}>
+              {t(
+                acceptanceState === "NOT_ACCEPTED"
+                  ? "acceptanceNotAccepted"
+                  : acceptanceState === "ACCEPTED"
+                    ? "acceptanceAccepted"
+                    : "acceptanceUnacceptedChanges",
+              )}
+            </Badge>
+            <span className="text-sm text-muted-foreground">{t("acceptanceDescription")}</span>
+          </div>
+          {acceptanceUnavailableReason ? (
+            <p className="mt-2 text-xs text-muted-foreground" id="content-acceptance-help">
+              {acceptanceUnavailableReason}
+            </p>
+          ) : null}
+          {acceptanceSuccess ? (
+            <p aria-live="polite" className="mt-2 text-sm text-foreground" role="status">
+              {t("acceptanceSuccess")}
+            </p>
+          ) : null}
+          {acceptanceError ? (
+            <p aria-live="assertive" className="mt-2 text-sm text-destructive" role="alert">
+              {t(acceptanceError === "CONFLICT" ? "acceptanceConflict" : "acceptanceFailed")}
+            </p>
+          ) : null}
+        </div>
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <Button
+            aria-describedby={acceptanceUnavailableReason ? "content-acceptance-help" : undefined}
+            className="min-h-10"
+            disabled={!canAccept}
+            onClick={() => void accept()}
+            type="button"
+          >
+            {isAccepting ? t("accepting") : t("acceptDraft")}
+          </Button>
+          <ContentVersionHistory
+            acceptedVersionId={acceptedVersionId}
+            contentLanguage={content.contentLanguage}
+            versions={versions}
+          />
+        </div>
+      </section>
       <Card>
         <CardHeader>
           <CardTitle>
-            <h2 className="text-xl font-semibold tracking-tight" id="content-script-title">
-              {t("scriptTitle")}
-            </h2>
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-xl font-semibold tracking-tight" id="content-script-title">
+                {t("scriptTitle")}
+              </h2>
+              <Badge variant="outline">{t("currentDraftEditable")}</Badge>
+            </div>
           </CardTitle>
           <CardDescription>{t("scriptDescription")}</CardDescription>
         </CardHeader>

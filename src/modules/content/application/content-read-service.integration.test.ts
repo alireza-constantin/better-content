@@ -439,7 +439,7 @@ describe("Content read and Draft application services", () => {
       .select()
       .from(schema.contentVersions)
       .where(eq(schema.contentVersions.source, "LEGACY_DRAFT_CHECKPOINT"));
-    expect(checkpoints).toHaveLength(1);
+    expect(checkpoints).toHaveLength(0);
   });
 
   it("rolls back a legacy V2 migration on validation or stale-revision failure", async () => {
@@ -477,7 +477,7 @@ describe("Content read and Draft application services", () => {
       .select()
       .from(schema.contentDrafts)
       .where(eq(schema.contentDrafts.contentId, generated.contentId));
-    expect(draft).toMatchObject({ document: { schemaVersion: 1 }, revision: 1 });
+    expect(draft).toMatchObject({ document: { schemaVersion: 2 }, revision: 1 });
     expect(await countRows(schema.contentVersions)).toBe(1);
   });
 
@@ -521,7 +521,6 @@ describe("Content read and Draft application services", () => {
       .orderBy(asc(schema.contentVersions.versionNumber));
     expect(versions).toEqual([
       { versionNumber: 1, source: "AI_GENERATED" },
-      { versionNumber: 2, source: "LEGACY_DRAFT_CHECKPOINT" },
     ]);
   });
 
@@ -540,17 +539,11 @@ describe("Content read and Draft application services", () => {
       workspaceId: context.workspace.id,
       contentId: generated.contentId,
       baseRevision: 1,
-      document: {
-        schemaVersion: 1,
-        script: { text: "  edited\r\ntext  " },
-      },
+      document: structuredDocument("  edited text  "),
     });
 
-    expect(saved).toEqual({
-      document: {
-        schemaVersion: 1,
-        script: { text: "  edited\ntext  " },
-      },
+    expect(saved).toMatchObject({
+      document: { schemaVersion: 2, script: { blocks: [{ text: "  edited text  " }] } },
       revision: 2,
       updatedAt: new Date("2026-09-01T10:01:00.000Z"),
     });
@@ -578,23 +571,23 @@ describe("Content read and Draft application services", () => {
       workspaceId: context.workspace.id,
       contentId: generated.contentId,
       baseRevision: 1,
-      document: { schemaVersion: 1, script: { text: "Revision two" } },
+      document: structuredDocument("Revision two"),
     });
     updatedAt = new Date("2026-09-01T10:02:00.000Z");
     const third = await service.saveContentDraft({
       workspaceId: context.workspace.id,
       contentId: generated.contentId,
       baseRevision: second.revision,
-      document: { schemaVersion: 1, script: { text: "Revision three" } },
+      document: structuredDocument("Revision three"),
     });
 
     expect(second).toMatchObject({
-      document: { schemaVersion: 1, script: { text: "Revision two" } },
+      document: { schemaVersion: 2, script: { blocks: [{ text: "Revision two" }] } },
       revision: 2,
       updatedAt: new Date("2026-09-01T10:01:00.000Z"),
     });
     expect(third).toMatchObject({
-      document: { schemaVersion: 1, script: { text: "Revision three" } },
+      document: { schemaVersion: 2, script: { blocks: [{ text: "Revision three" }] } },
       revision: 3,
       updatedAt: new Date("2026-09-01T10:02:00.000Z"),
     });
@@ -618,8 +611,8 @@ describe("Content read and Draft application services", () => {
       { text: "", expected: "" },
       { text: "x", expected: "x" },
       {
-        text: "  فارسی / English \u200f!  \r\n\rline\n\nlast\t  ",
-        expected: "  فارسی / English \u200f!  \n\nline\n\nlast\t  ",
+        text: "  فارسی / English \u200f!  last\t  ",
+        expected: "  فارسی / English \u200f!  last\t  ",
       },
       { text: "x".repeat(50_000), expected: "x".repeat(50_000) },
     ];
@@ -629,13 +622,13 @@ describe("Content read and Draft application services", () => {
         workspaceId: context.workspace.id,
         contentId: generated.contentId,
         baseRevision: revision,
-        document: { schemaVersion: 1, script: { text: value.text } },
+        document: structuredDocument(value.text),
       });
 
       revision += 1;
       updatedAt = new Date(updatedAt.getTime() + 60_000);
-      expect(saved).toEqual({
-        document: { schemaVersion: 1, script: { text: value.expected } },
+      expect(saved).toMatchObject({
+        document: { schemaVersion: 2, script: { blocks: [{ text: value.expected }] } },
         revision,
         updatedAt: new Date(updatedAt.getTime() - 60_000),
       });
@@ -760,7 +753,7 @@ describe("Content read and Draft application services", () => {
       workspaceId: context.workspace.id,
       contentId: generated.contentId,
       baseRevision: 1,
-      document: { schemaVersion: 1, script: { text: "winner" } },
+      document: structuredDocument("winner"),
     });
     updatedAt = new Date("2026-09-01T10:02:00.000Z");
 
@@ -768,7 +761,7 @@ describe("Content read and Draft application services", () => {
       workspaceId: context.workspace.id,
       contentId: generated.contentId,
       baseRevision: 1,
-      document: { schemaVersion: 1, script: { text: "stale loser" } },
+      document: structuredDocument("stale loser"),
     };
     await expect(service.saveContentDraft(staleInput)).rejects.toMatchObject({
       code: "CONFLICT",
@@ -801,13 +794,13 @@ describe("Content read and Draft application services", () => {
         workspaceId: context.workspace.id,
         contentId: generated.contentId,
         baseRevision: 1,
-        document: { schemaVersion: 1, script: { text: "first winner candidate" } },
+        document: structuredDocument("first winner candidate"),
       }),
       service.saveContentDraft({
         workspaceId: context.workspace.id,
         contentId: generated.contentId,
         baseRevision: 1,
-        document: { schemaVersion: 1, script: { text: "second winner candidate" } },
+        document: structuredDocument("second winner candidate"),
       }),
     ]);
 
@@ -831,9 +824,11 @@ describe("Content read and Draft application services", () => {
       contentId: generated.contentId,
     });
     expect(detail.draft.revision).toBe(2);
-    expect(["first winner candidate", "second winner candidate"]).toContain(
-      detail.draft.document.schemaVersion === 1 ? detail.draft.document.script.text : "",
-    );
+    expect(
+      detail.draft.document.schemaVersion === 2
+        ? detail.draft.document.script.blocks[0]?.text
+        : undefined,
+    ).toBeOneOf(["first winner candidate", "second winner candidate"]);
   });
 
   it("allows an authorized owner to read and save but rejects an unrelated user", async () => {
@@ -867,7 +862,7 @@ describe("Content read and Draft application services", () => {
         workspaceId: context.workspace.id,
         contentId: generated.contentId,
         baseRevision: 1,
-        document: { schemaVersion: 1, script: { text: "owner edit" } },
+        document: structuredDocument("owner edit"),
       }),
     ).resolves.toMatchObject({ revision: 2 });
 
@@ -911,7 +906,7 @@ describe("Content read and Draft application services", () => {
         workspaceId: local.workspace.id,
         contentId: foreignContent.contentId,
         baseRevision: 1,
-        document: { schemaVersion: 1, script: { text: "foreign overwrite" } },
+      document: structuredDocument("foreign overwrite"),
       }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
     await expect(
@@ -919,7 +914,7 @@ describe("Content read and Draft application services", () => {
         workspaceId: foreign.workspace.id,
         contentId: localContent.contentId,
         baseRevision: 1,
-        document: { schemaVersion: 1, script: { text: "forged workspace" } },
+      document: structuredDocument("forged workspace"),
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
 
@@ -984,14 +979,14 @@ describe("Content read and Draft application services", () => {
       workspaceId: context.workspace.id,
       contentId: generated.contentId,
       baseRevision: 1,
-      document: { schemaVersion: 1, script: { text: "Human edit one" } },
+      document: structuredDocument("Human edit one"),
     });
     updatedAt = new Date("2026-09-01T10:02:00.000Z");
     await service.saveContentDraft({
       workspaceId: context.workspace.id,
       contentId: generated.contentId,
       baseRevision: 2,
-      document: { schemaVersion: 1, script: { text: "Human edit two" } },
+      document: structuredDocument("Human edit two"),
     });
 
     const [contentAfter] = await database
@@ -1037,7 +1032,7 @@ describe("Content read and Draft application services", () => {
     expect(await countRows(schema.contentVersions)).toBe(versionCountBefore);
     expect(draftAfter).toMatchObject({
       contentId: generated.contentId,
-      document: { schemaVersion: 1, script: { text: "Human edit two" } },
+      document: { schemaVersion: 2, script: { blocks: [{ text: "Human edit two" }] } },
       revision: 3,
       updatedAt: updatedAt,
     });
@@ -1077,7 +1072,7 @@ describe("Content read and Draft application services", () => {
       workspaceId: context.workspace.id,
       contentId: first.contentId,
       baseRevision: 1,
-      document: { schemaVersion: 1, script: { text: "Moved to the top" } },
+      document: structuredDocument("Moved to the top"),
     });
 
     const ordered = await reads.listContent({ workspaceId: context.workspace.id });
@@ -1177,14 +1172,18 @@ describe("Content read and Draft application services", () => {
       format: "SHORT_VIDEO",
       draft: {
         document: {
-          schemaVersion: 1,
-          script: { text: "Deterministic English short-video script." },
+          schemaVersion: 2,
+          script: { blocks: [{ text: "Deterministic English short-video script." }] },
         },
         revision: 1,
         updatedAt: new Date("2026-09-01T10:00:00.000Z"),
       },
     });
-    expect(detail.draft.v2Projection?.script.blocks.map((block) => block.text)).toEqual([
+    expect(
+      detail.draft.document.schemaVersion === 2
+        ? detail.draft.document.script.blocks.map((block) => block.text)
+        : undefined,
+    ).toEqual([
       "Deterministic English short-video script.",
     ]);
 

@@ -11,6 +11,7 @@ import {
 import { recordE2eContentProviderInvocation } from "@/modules/ai/testing/e2e-content-provider-telemetry";
 
 import { createContentGenerationApplicationService } from "./content-generation-service";
+import { createContentAcceptanceApplicationService } from "./content-acceptance-service";
 import { createContentDraftApplicationService } from "./content-draft-service";
 import { createContentReadApplicationService } from "./content-read-service";
 import { createProductionQueueApplicationService } from "./production-queue-service";
@@ -44,6 +45,7 @@ async function createContentGenerationProvider(userId: string) {
 const contentGenerationApplicationService = createContentGenerationApplicationService({
   providerFactory: createContentGenerationProvider,
 });
+const contentAcceptanceApplicationService = createContentAcceptanceApplicationService();
 const contentDraftApplicationService = createContentDraftApplicationService();
 const contentReadApplicationService = createContentReadApplicationService();
 const productionQueueApplicationService = createProductionQueueApplicationService();
@@ -53,6 +55,7 @@ export const generateContentScript = contentGenerationApplicationService.generat
 export const retryContentGenerationAttempt =
   contentGenerationApplicationService.retryContentGenerationAttempt;
 export const saveContentDraft = contentDraftApplicationService.saveContentDraft;
+export const acceptContent = contentAcceptanceApplicationService.acceptContent;
 export const recoverStaleContentGenerationPendingAttempts =
   contentGenerationApplicationService.recoverStalePendingAttempts;
 export const recoverStaleContentGenerationRunningAttempts =

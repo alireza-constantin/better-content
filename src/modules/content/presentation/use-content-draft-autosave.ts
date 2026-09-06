@@ -45,6 +45,7 @@ type Result = Readonly<{
   reloadError: boolean;
   copyFeedback: "copied" | "failed" | null;
   onChange: (document: AutosaveDocument) => void;
+  adoptPersistedDraft: (draft: ContentDraftDto) => void;
   saveNow: () => void;
   reload: () => Promise<void>;
   copyUnsaved: () => Promise<void>;
@@ -213,6 +214,24 @@ export function useContentDraftAutosave({
     }
     start(latest.current, baseRevision.current);
   };
+  const adoptPersistedDraft = (draft: ContentDraftDto) => {
+    const authoritative = requireV2(draft);
+    clearTimer();
+    latest.current = authoritative;
+    persisted.current = authoritative;
+    baseRevision.current = draft.revision;
+    blocked.current = false;
+    explicit.current = false;
+    inFlight.current = false;
+    setDocument(authoritative);
+    setPersistedDocument(authoritative);
+    setRevision(draft.revision);
+    setIsSaving(false);
+    setFailureCode(null);
+    setReloadError(false);
+    setCopyFeedback(null);
+    setStatus("saved");
+  };
   const reloadDraft = async () => {
     if (!mounted.current || !blocked.current || inFlight.current || reloading.current) return;
     clearTimer();
@@ -281,6 +300,7 @@ export function useContentDraftAutosave({
     reloadError,
     copyFeedback,
     onChange,
+    adoptPersistedDraft,
     saveNow,
     reload: reloadDraft,
     copyUnsaved,

@@ -6,6 +6,7 @@ export {
   type ContentGenerationResult,
 } from "./content-generation-service";
 export {
+  acceptContent,
   acceptContentGeneration,
   getContentByIdea,
   getContentDraft,
@@ -39,6 +40,7 @@ export {
   retryContentGenerationAttemptAction,
   saveContentDraftAction,
   type ContentActionFailure,
+  type AcceptContentActionResult,
   type ContentGenerationRetryAttemptDto,
   type GenerateContentScriptActionResult,
   type GetContentByIdeaActionResult,
@@ -53,6 +55,12 @@ export {
   type RetryContentGenerationAttemptActionResult,
   type SaveContentDraftActionResult,
 } from "./content-actions";
+export {
+  createContentAcceptanceApplicationService,
+  type AcceptContentInput,
+  type ContentAcceptanceApplicationServiceDependencies,
+  type ContentAcceptanceResultDto,
+} from "./content-acceptance-service";
 export {
   createProductionQueueApplicationService,
   productionQueueItemSchema,
@@ -87,6 +95,7 @@ export {
   type ContentByIdeaDto,
   type ContentDetailDto,
   type ContentDraftDto,
+  type ContentVersionDto,
   type ContentGenerationAttemptDetailDto,
   type ContentGenerationAttemptHistoryDto,
   type ContentListItemDto,
