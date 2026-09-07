@@ -53,6 +53,20 @@ creator-accepted Versions have no AI Run link. The database must enforce the
 same-Content pointer relationship with the strongest practical composite
 constraint; the application enforces the allowed-source rule.
 
+### Phase 6 clarification — Asset-bearing Content lineage
+
+Asset attachment and detachment are mutations of the canonical structured
+Content Draft under ADR-018. They participate in the existing revision,
+optimistic-concurrency, acceptance, and accepted/unaccepted-change semantics;
+they are not mutable production state outside the document.
+
+Acceptance of a ContentDocumentV3 Draft snapshots its Asset IDs into an
+immutable Content Version. Later Draft changes or accepted-pointer movement do
+not rewrite that Version. Every reference from every surviving immutable V3
+Version protects the referenced Asset, not only the current accepted Version.
+Publications continue to reference immutable Content Versions and therefore
+inherit the exact Asset identities recorded by the selected Version.
+
 ## Consequences
 
 ### Positive
@@ -77,6 +91,9 @@ constraint; the application enforces the allowed-source rule.
 - Acceptance points to an immutable Version belonging to the same Content.
 - `AI_GENERATED` and `LEGACY_DRAFT_CHECKPOINT` Versions can never be current
   accepted pointers.
+- An Asset attachment change never mutates an existing Content Version.
+- Every surviving immutable V3 Version retains and protects its recorded Asset
+  identities.
 
 ## Rejected alternatives
 

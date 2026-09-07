@@ -2,12 +2,12 @@
 
 ## 1. Status, prerequisites, and authority
 
-- **Status:** Proposed — ready for Product Architect review
+- **Status:** Approved
 - **Decision owners:** Product Architect / Technical Lead
 - **Prerequisite:** Phase 5 complete and approved
-- **Required architecture work before implementation:** the ADR and documentation reconciliation in Section 28
+- **Architecture reconciliation:** complete as recorded in Section 28
 
-This document is the authoritative Phase 6 implementation specification once approved. It does not itself create implementation tickets, migrations, dependencies, infrastructure, or code.
+This document is the authoritative Phase 6 implementation specification. It does not itself create implementation tickets, migrations, dependencies, infrastructure, or code.
 
 The source-of-truth order remains PRD, Architecture, accepted ADRs, this approved phase specification, `AGENTS.md`, and implementation. Phase 5's approved structured-editor specification and implemented Content lifecycle are prerequisites. `CONTEXT.md` is supplementary vocabulary only.
 
@@ -268,9 +268,9 @@ DELETING is an irreversible, non-attachable cleanup state. It cannot be renamed,
 
 ### Begin
 
-The owner supplies one file, media type, display name, original leaf filename, browser-reported exact size, and preliminary MIME. Server validation rejects invalid names, missing/invalid leaf filenames, non-positive/oversized files, unsupported extensions, and meaningful MIME/extension disagreement before creating storage authority.
+The owner supplies one file, declared media type, display name, original leaf filename, browser-reported exact size, and preliminary browser MIME. Begin validates the declared media type, byte size, name/filename safety, supported upload extension, and extension compatibility with the declared media type before creating storage authority.
 
-Empty or generic browser MIME may remain a weak hint; any meaningful declared MIME must be compatible with the chosen type and later detected media. Server-side detected bytes remain authoritative.
+Browser-reported MIME is only a preliminary hint. Begin must not reject an otherwise eligible upload solely because that MIME disagrees with the filename. Processing through `MediaInspector` is authoritative: the detected media must agree with the declared media type and, for uploads, the supported filename extension.
 
 After authorization and ingestion-admission checks, Begin creates one UPLOAD/PENDING Asset with an opaque staging key and returns a four-hour presigned PUT capability for exactly that staging object. The capability cannot list, read, delete, promote, or address another key.
 
@@ -280,9 +280,11 @@ The provider contract should bind exact Content-Length where supported. Finaliza
 
 ### Finalize
 
-Finalize reauthorizes, locks/reloads the Asset, verifies the unexpired unfinalized state, HEADs the staging object, verifies exact stored length against the declared value and media limit, records one logical Finalize transition, and atomically enqueues one processing job. It returns promptly.
+Finalize reauthorizes, locks/reloads the Asset, verifies the unexpired unfinalized state, HEADs the staging object, verifies exact stored length against the declared value and media limit, and atomically establishes one logical upload-processing workflow. It returns promptly.
 
-Repeated/concurrent Finalize requests converge on the same workflow. Finalize never processes media synchronously. New PUT capabilities cannot be issued after Finalize wins.
+The unique ADR-009 job/idempotency boundary for that Asset is the durable indication that Finalize succeeded; no additional Asset lifecycle status is introduced. Repeated/concurrent Finalize requests converge on that same workflow. Finalize never processes media synchronously.
+
+An unfinalized PENDING upload has no upload-processing workflow, may receive a replacement PUT capability inside its 24-hour upload session, and remains eligible for abandoned-upload expiration. A finalized PENDING upload has that durable workflow, may not receive another PUT capability, is not eligible for abandoned-upload expiration, and awaits a processing-job claim. Introduce another persistence field or entity only if the existing PostgreSQL job model cannot safely enforce this invariant.
 
 Promotion must consume a complete staging-object observation. The permanent object is independently re-read and inspected before READY, so a racing or later staging overwrite cannot change READY media. If the provider cannot support the required complete-object PUT/copy semantics, implementation stops for architecture review.
 
@@ -333,7 +335,7 @@ The UI tells creators they must have the right to use submitted media. Successfu
 
 Reject every unlisted format/codec. In particular, V1 excludes SVG, animated WebP, GIF/APNG, AVIF, HEIC/HEIF, TIFF, BMP, ICO, MOV, WebM, MKV, AVI, HEVC/H.265, VP8/VP9, AV1, OGG, Opus, FLAC, AIFF, and raw AAC.
 
-Filename extension, browser MIME, URL extension, and remote Content-Type are preliminary only. Upload extensions must match detected format. URL extensions are optional. Declared/detected mismatch fails rather than relabeling.
+Filename extension, browser MIME, URL extension, and remote Content-Type are preliminary only. Browser MIME disagreement alone does not fail an upload. Detected uploaded media must match the declared media type and supported upload extension. URL extensions are optional. A detected-media mismatch fails rather than silently relabeling.
 
 ### Inspector boundary
 
@@ -454,7 +456,7 @@ DELETING remains visible but disabled until cleanup completes. Missing storage o
 
 - Valid zero-reference READY Assets remain indefinitely.
 - FAILED metadata remains until creator deletion.
-- An unfinalized UPLOAD/PENDING Asset expires 24 hours after creation, transitions to FAILED/UPLOAD_EXPIRED under a lock, and schedules staging cleanup.
+- An unfinalized UPLOAD/PENDING Asset with no durable upload-processing workflow expires 24 hours after creation, transitions to FAILED/UPLOAD_EXPIRED under a lock, and schedules staging cleanup. A finalized PENDING upload is protected from abandoned-upload expiration.
 - Worker-local temporary files are removed after every attempt.
 - Staging is removed after READY or terminal FAILED unless an active retry still needs it.
 - Unowned staging older than 24 hours may be deleted only after authoritative database/job recheck.
@@ -687,7 +689,7 @@ Phase 6 is acceptable only when all applicable criteria below are implementation
 
 14. Begin issues only an exact staging PUT capability after authorization/admission validation; no normal HTTP request carries media bytes through Next.js.
 15. PUT retry remains possible only while the upload is unfinalized PENDING and inside its 24-hour window.
-16. Finalize is short, reauthorized, idempotent, exact-size checked, and creates one logical processing workflow.
+16. Finalize is short, reauthorized, idempotent, exact-size checked, and durably creates one unique logical processing workflow; that workflow distinguishes finalized from unfinalized PENDING uploads for replacement-PUT and expiration rules.
 17. External ingestion accepts only approved direct HTTPS media and rejects unsafe destinations, rebinding, invalid redirects, non-media responses, excess bytes, and timeouts safely.
 18. Jobs contain Asset ID only and never media, URLs, credentials, or signed capabilities.
 19. Only allowlisted, in-bounds, permanently re-inspected media becomes READY with all required metadata.
@@ -738,18 +740,33 @@ Future reviewed phases may add:
 
 Future-ready means stable Asset identity, managed-media lifecycle, provider-neutral storage/inspection, immutable Version references, and Content using Asset IDs. It does not mean reserving speculative enums, fields, providers, or workflows now.
 
-## 28. Required ADR and documentation reconciliation
+## 28. Completed ADR and documentation reconciliation
 
-Before implementation tickets are approved:
+The pre-ticketing architecture reconciliation is complete:
 
-1. Create an Asset domain/lifecycle/lineage ADR covering Workspace ownership, immutable READY media, ContentDocumentV3 authority, derived references, acceptance lineage, and reference-safe deletion.
-2. Create a managed-storage/ingestion/security ADR covering private S3-compatible storage, ArvanCloud as initial configuration, storage adapters, staging/promotion, permanent-key reservation, direct HTTPS ingestion, inspection, capabilities, and the external worker boundary.
-3. Amend ADR-003 to state that Asset attachment is a meaningful Content mutation captured by immutable Versions and protected through Version lineage.
-4. Amend ADR-004 for ContentDocumentV3, eligible direction Asset IDs, lazy V2→V3 projection, V2/V3 semantic equality, preserved V1 checkpoint behavior, and immutable V1/V2 history.
-5. Clarify ADR-009 so its internal runner is trusted server-side execution outside normal user HTTP lifecycle and may be scheduled or supervised without changing the PostgreSQL job architecture.
-6. Leave ADR-008 unchanged; Asset source URLs are ordinary plaintext PostgreSQL application data, not encrypted social credentials.
-7. Update the PRD to record upload/direct-link Asset creation, managed preview, approved attachment types, Workspace reuse, and the lightweight-library boundary.
-8. Update Architecture to replace deferred Asset decisions with the approved module, persistence, storage, worker, security, and V3 lineage model; remove stale Phase 5 taxonomy/anchoring deferrals where already superseded.
-9. Publish the approved Phase 5 specification into the canonical phase-document set if repository policy requires it; do not let stale ticket statuses override completed/approved Phase 5 behavior.
+1. ADR-018 records Workspace ownership, immutable READY media,
+   ContentDocumentV3 authority, derived references, acceptance lineage, and
+   reference-safe deletion.
+2. ADR-019 records private S3-compatible storage, ArvanCloud as initial
+   configuration, storage adapters, staging/promotion, permanent-key
+   reservation, direct HTTPS ingestion, inspection, capabilities, and the
+   external worker boundary.
+3. ADR-003 records Asset attachment as a meaningful Content mutation captured
+   by immutable Versions and protected through Version lineage.
+4. ADR-004 records ContentDocumentV3, eligible direction Asset IDs, lazy V2→V3
+   projection, V2/V3 semantic equality, preserved V1 checkpoint behavior, and
+   immutable V1/V2 history.
+5. ADR-009 records trusted server-side runner execution outside normal user
+   HTTP lifecycles and permits scheduled or supervised activation without
+   changing the PostgreSQL job architecture.
+6. ADR-008 remains unchanged; Asset source URLs are ordinary plaintext
+   PostgreSQL application data, not encrypted social credentials.
+7. The PRD records upload/direct-link creation, managed preview, approved
+   attachment types, Workspace reuse, and the lightweight-library boundary.
+8. Architecture records the approved module, persistence, storage, worker,
+   security, and V3 lineage model and no longer defers resolved Phase 5
+   taxonomy/anchoring decisions.
+9. The completed Phase 5 specification is published in the canonical
+   `docs/phases` set; scratch ticket history remains preserved.
 
 No Phase 6 implementation ticket may redefine these decisions. Ticket decomposition begins only after this specification and required ADR/documentation changes receive Product Architect approval.

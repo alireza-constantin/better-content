@@ -89,7 +89,8 @@ Production Direction
 
 Performance and Edit Directions must remain associated with the relevant Script content.
 
-The exact anchoring representation and exact V1 direction taxonomy are deferred until Phase 5.
+Phase 5 resolves the exact anchoring representation and V1 direction taxonomy
+below.
 
 Both mutable drafts and immutable content versions store the structured document.
 
@@ -112,13 +113,39 @@ artifacts, while newly generated mutable Drafts are deterministically derived
 as V2. This changes Draft serialization, not the historical AI artifact or its
 Script meaning.
 
+### Phase 6 resolution — V3 Asset references and lazy V2 projection
+
+ContentDocumentV3 preserves the V2 Script block and Production Direction model
+and adds optional Asset identity only to the approved Edit Directions:
+
+```text
+BROLL_CUE.assetId? → one READY IMAGE or VIDEO Asset
+SOUND_CUE.assetId? → one READY AUDIO Asset
+```
+
+No other Phase 6 direction contains an Asset reference. The document stores
+`assetId` only; Asset metadata, source URLs, storage keys, and access
+capabilities remain outside JSONB.
+
+The canonical V3 document is the sole authority for which Asset fulfills which
+Production Direction. Any relational Asset-reference rows are a
+transactionally synchronized, rebuildable projection for integrity and query
+needs, never an independently editable source of truth.
+
+V2 Drafts are lazily projected to V3 without Asset references. An untouched
+projection is canonically equal to its V2 source, so opening or projecting a
+Draft does not create an unaccepted change. The first meaningful V3 save or
+acceptance persists canonical V3 through the existing optimistic-concurrency
+boundary. Existing V1 checkpoint behavior remains unchanged, and historical V1
+and V2 Versions are never rewritten.
+
 ## Schema evolution
 
 Every document contains `schemaVersion`.
 
 Breaking document-model changes require an explicit transform/migration path, for example:
 
-`Document V1 → transform → Document V2`
+`Document V1 → transform → Document V2 → project → Document V3`
 
 Old documents must never silently change meaning.
 

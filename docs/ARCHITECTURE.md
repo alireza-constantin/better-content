@@ -272,9 +272,11 @@ Owns:
 
 Owns:
 
-* uploaded asset metadata,
-* storage references,
-* access policy.
+* Workspace-owned managed-media identity and lifecycle,
+* upload and direct-media-link ingestion,
+* provider-neutral media inspection,
+* private storage references and access policy, and
+* the derived Asset-reference integrity/query projection.
 
 ---
 
@@ -1310,6 +1312,11 @@ validated, block-scoped, and has no text-range anchors. Existing V1 Drafts are
 lazily transformed only through the approved checkpoint transaction; immutable
 schema-v1 Content Versions and AI Run outputs retain their original meaning.
 
+Phase 6 evolves current working state to V3 by adding optional Asset IDs to the
+approved B-roll and sound-cue Edit Directions. Existing V2 Drafts are lazily
+projected without references and remain canonically equal until a meaningful
+V3 save or acceptance. Historical V1 and V2 Versions are never rewritten.
+
 Example conceptually:
 
 ```json
@@ -1359,6 +1366,8 @@ Future editor schema changes must have explicit migrations/transforms such as:
 Document V1
    ↓ migrate
 Document V2
+   ↓ project
+Document V3
 ```
 
 Do not silently change the interpretation of old content documents.
@@ -1452,42 +1461,31 @@ They must not exist only as markers embedded inside Script text.
 
 # 38. Production Direction Taxonomy
 
-The distinction between Performance Direction and Edit Direction is accepted.
+Phase 5 resolved the bounded V2 taxonomy.
 
-However, the exact V1 direction taxonomy is intentionally deferred until the structured-editor phase.
+Performance Direction is a strict discriminated union of:
 
-Before Phase 5, we will define a deliberately small canonical set of:
+* `PAUSE`
+* `EMPHASIS`
+* `DELIVERY`
+* `GESTURE`
+* `POSITION`
+* `GAZE`
+* `PERFORMANCE_NOTE`
 
-### Performance Direction types
+Edit Direction is a strict discriminated union of:
 
-Potential categories include:
+* `TEXT_OVERLAY`
+* `ZOOM`
+* `CUT`
+* `BROLL_CUE`
+* `SOUND_CUE`
+* `CAPTION_EMPHASIS`
+* `EDIT_NOTE`
 
-- timing / pause
-- movement
-- position
-- gaze
-- gesture
-- expression
-- voice
-- object interaction
-
-### Edit Direction types
-
-Potential categories include:
-
-- zoom
-- cut
-- image overlay
-- video overlay
-- B-roll
-- text
-- sound effect
-- transition
-- emphasis
-
-The exact allowed values, parameters, and constraints must be defined in the Phase 5 specification.
-
-Codex must not independently invent dozens of production-direction types.
+The canonical Phase 5 specification defines their exact payloads and limits.
+Phase 6 changes only `BROLL_CUE` and `SOUND_CUE` through optional, typed V3
+Asset references; it does not reopen or expand the taxonomy.
 
 ---
 
@@ -1514,52 +1512,66 @@ Edit Directions
 └── image overlay after sentence
 ```
 
-The exact anchoring representation is intentionally deferred until Phase 5.
-
-Potential anchor concepts may include:
-
-* entire Script block
-* text span
-* word or phrase cue
-* before/after block
-* relative timing
-
-Codex must not invent the final anchoring schema before the relevant phase specification.
+Phase 5 resolved anchoring as structural ownership by exactly one whole Script
+block. Directions are ordered inside that block. V2 and V3 do not contain text
+ranges, offsets, word/phrase cues, cross-block anchors, timing tracks, or
+speculative anchor wrappers.
 
 ---
 
 # 40. Asset Architecture
 
-Assets may support:
+ADR-018 and ADR-019 define Phase 6.
 
-* image overlays,
-* screenshots,
-* B-roll references,
-* visual references.
+An Asset belongs to exactly one Workspace, represents one immutable managed
+IMAGE, VIDEO, or AUDIO object, and has source type UPLOAD or EXTERNAL_URL. It
+may be standalone or reused by multiple Contents in the same Workspace.
 
-PostgreSQL stores asset metadata.
-
-Actual binary files should **not** be stored inside PostgreSQL.
-
-Conceptually:
+ContentDocumentV3 is authoritative for Asset attachment:
 
 ```text
-assets
-├── id
-├── workspace_id
-├── storage_key
-├── mime_type
-├── size_bytes
-├── original_filename
-├── status
-└── created_at
+BROLL_CUE.assetId? → one READY IMAGE or VIDEO
+SOUND_CUE.assetId? → one READY AUDIO
 ```
 
-Binary storage will use an object-storage provider.
+An `asset_references` relation is a transactionally synchronized, rebuildable
+projection only. Draft saves and acceptance validate same-Workspace ownership,
+READY state, compatibility, and cardinality. Every surviving immutable V3
+Version reference protects its Asset.
 
-The exact provider is deferred until the asset phase.
+PostgreSQL stores lifecycle, provenance, opaque storage keys, and
+provider-neutral metadata. It does not store media bytes or signed URLs. Private
+media lives behind `AssetStorage` in S3-compatible object storage. ArvanCloud
+Object Storage is the initial configured provider; the domain is not coupled to
+it. Local development has a filesystem adapter and tests use a deterministic
+fake.
 
-A provider abstraction should prevent application logic from being tied directly to one vendor.
+UPLOAD uses private staging and one scoped complete-object PUT. Browser MIME is
+preliminary; Begin validates declared type, size, filename safety, and supported
+extension compatibility. Finalize durably creates one unique logical ADR-009
+workflow per Asset. Its existence distinguishes unfinalized from finalized
+PENDING uploads without another lifecycle status.
+
+EXTERNAL_URL accepts direct public unauthenticated HTTPS media only and
+snapshots it into managed storage through redirect-aware, DNS-rebinding-safe
+SSRF controls and streaming byte ceilings. Hosted-media pages, social posts,
+and private/authenticated URLs are unsupported.
+
+Both sources converge on one asynchronous lifecycle:
+
+```text
+PENDING → PROCESSING → READY | FAILED
+eligible state → DELETING
+```
+
+Sharp and pinned ffprobe inspect actual media. Before permanent object creation,
+PostgreSQL reserves the opaque permanent key. The worker promotes and revalidates
+that exact object before READY. No transcoding or replace-in-place is allowed.
+
+Buckets remain private. Authorized preview/download operations issue
+non-persisted, operation-scoped 15-minute capabilities. Deletion is explicit,
+reference-safe, object-first, idempotent, and recoverable through reconciliation.
+Zero-reference READY Assets are not automatically removed.
 
 ---
 
@@ -2287,23 +2299,31 @@ Jobs must still be written to be idempotent.
 
 # 69. Job Scheduling
 
-A deployment scheduler/cron periodically invokes a protected internal runner.
+A dedicated server-side runner outside normal user-facing HTTP requests claims
+and processes bounded job batches. It remains part of the modular-monolith
+deployment.
 
 Conceptually:
 
 ```text
-Scheduler
+Scheduler or supervised process
    ↓
-Internal Job Runner
+Dedicated server-side runner
    ↓
 PostgreSQL Jobs
    ↓
 Process limited batch
 ```
 
-We intentionally do not tie the architecture to one hosting provider's scheduler yet.
+We intentionally do not tie the architecture to one hosting provider or runner
+activation mechanism. A trigger/control surface, if present, is authenticated
+and unavailable to ordinary users. User-facing requests enqueue durable work
+and do not remain open while jobs execute.
 
-The runner endpoint must be authenticated using a server-side secret or deployment-specific trusted mechanism.
+Phase 6 requires the runner capability contract in ADR-009: Node, Sharp, pinned
+ffprobe, child-process execution, sufficient execution time and temporary disk,
+PostgreSQL, private S3-compatible storage, outbound HTTPS, and structured
+logging/alert routing.
 
 ---
 
@@ -2798,8 +2818,9 @@ Particularly important:
 
 * do not execute generated markup,
 * sanitize rendered HTML where HTML is ever supported,
-* avoid arbitrary URL fetching,
-* enforce upload MIME/size constraints.
+* avoid arbitrary URL fetching; Phase 6's narrow direct-media ingestion is
+  governed by ADR-019's SSRF and redirect boundary,
+* enforce byte-detected media and size constraints.
 
 ---
 
@@ -3245,9 +3266,9 @@ These require future product evidence.
 
 ---
 
-# 106. Architectural Decisions Requiring ADRs
+# 106. Architectural Decision Records
 
-The following decisions should become formal ADRs.
+The following accepted decisions are recorded as formal ADRs.
 
 ## ADR-001 — Modular Monolith
 
@@ -3320,33 +3341,25 @@ Queue membership is derived from `ACCEPTED` plus zero linked Content; queue
 order is a persisted nullable positive integer on Idea, updated transactionally
 with stale-set `CONFLICT` handling. No separate queue aggregate is introduced.
 
+## ADR-018 — Workspace Assets, Lifecycle, and Content Lineage
+
+Assets are reusable Workspace-owned immutable managed media.
+ContentDocumentV3 is authoritative for typed B-roll/sound-cue references, and
+every immutable V3 Version reference protects its Asset.
+
+## ADR-019 — Private Managed Media Storage, Ingestion, and Access
+
+Private S3-compatible storage, validated upload/direct-HTTPS ingestion,
+provider-neutral inspection, PostgreSQL jobs, short-lived access capabilities,
+and recoverable object lifecycle preserve secure immutable media identity.
+
 ---
 
 # 107. Decisions Still Open
 
 These must be resolved before their relevant implementation phases.
 
-## Product-level
-
-### Exact V1 Performance Direction taxonomy
-
-The semantic category is defined, but the exact supported actions and parameters are deferred until Phase 5.
-
-### Exact V1 Edit Direction taxonomy
-
-The semantic category is defined, but the exact supported actions and parameters are deferred until Phase 5.
-
-### Direction anchoring schema
-
-We must define exactly how Performance Directions and Edit Directions attach to Script blocks, spans, phrases, or timing cues.
-
----
-
 ## Technical
-
-### Asset storage provider
-
-Deferred until the asset phase.
 
 ### First social platform implementation
 
@@ -3359,10 +3372,6 @@ Codex must not decide this independently.
 ### Exact social API scopes
 
 Must be verified immediately before implementing each provider.
-
-### Content editor library
-
-Do not select TipTap, Lexical, or another editor framework until the structured-editor phase.
 
 ### Hosting provider
 
@@ -3482,9 +3491,15 @@ range anchors, rich-text framework, AI direction generation, or collaboration.
 
 ## Phase 6 — Assets
 
-Implement minimal asset support required by production signals.
+Implement the approved Workspace Asset Library and focused editor picker for
+private IMAGE, VIDEO, and AUDIO media created from upload or supported direct
+HTTPS links. Use ContentDocumentV3 for optional typed B-roll and sound-cue
+references, preserve immutable Version lineage, and process media through the
+provider-neutral private-storage/inspection architecture in ADR-018 and
+ADR-019.
 
-Do not build a full media-management product.
+Do not add a full DAM, timeline/editor/rendering system, arbitrary files,
+transcoding, generated/stock media, deduplication, quotas, or Content deletion.
 
 ---
 

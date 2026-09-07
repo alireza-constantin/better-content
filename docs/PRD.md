@@ -787,19 +787,31 @@ The underlying data must remain structured.
 
 # 23. References and Assets
 
-Production Directions, especially Edit Directions, may reference assets.
+Phase 6 provides a Workspace Asset Library for reusable creator media.
 
-Examples:
+An Asset is one managed IMAGE, VIDEO, or AUDIO object created from either:
 
-* overlay image
-* screenshot
-* image reference
-* B-roll reference
-* visual example
+* a creator-uploaded media file, or
+* a supported direct HTTPS media link.
 
-V1 needs the architectural ability to associate assets/references with relevant Production Directions.
+The system stores a private managed copy and provides an in-product image,
+video, or audio preview for READY media. Media type describes the file itself,
+not its use; logos and screenshots remain IMAGE, B-roll clips remain VIDEO, and
+music or sound effects remain AUDIO.
 
-A complete digital asset management platform is outside V1.
+ContentDocumentV3 records Asset identity inside the relevant Production
+Direction. A B-roll cue may optionally select one IMAGE or VIDEO Asset; a sound
+cue may optionally select one AUDIO Asset. Assets are reusable within their
+owning Workspace, but cross-Workspace references are forbidden.
+
+Accepted and historical immutable Content Versions preserve the exact Asset IDs
+selected at snapshot time. READY media cannot be replaced in place, and an
+Asset referenced by a current Draft or any surviving immutable Version cannot
+be deleted.
+
+Phase 6 does not add documents/arbitrary files, folders, tags, rich DAM
+workflows, timeline editing, rendering, transcoding, generated media, stock
+media, social/hosted-media page imports, deduplication, or storage quotas.
 
 ---
 
@@ -814,10 +826,10 @@ Users must be able to:
 * edit Performance Directions and Edit Directions,
 * save their work.
 
-Phase 4 implements plain Script viewing/editing and autosave only. Adding and
-editing structured Performance Directions, Edit Directions, sections, and
-anchors begins in Phase 5 after its taxonomy and anchoring decisions are
-approved.
+Phase 4 implemented plain Script viewing/editing and autosave. Phase 5 added
+the approved block-scoped structured editor and bounded Performance/Edit
+Direction taxonomy. Phase 6 adds the approved Asset references without adding
+text-range anchoring or a media timeline.
 
 Human edits should remain distinguishable from the originally generated output where practical.
 
@@ -1508,10 +1520,12 @@ Examples include:
 * token refresh
 * potentially long AI generation operations
 * retrying external platform requests
+* media ingestion and inspection
 
-The exact job architecture will be decided in technical architecture work.
-
-We should choose the simplest reliable mechanism appropriate to actual V1 requirements.
+V1 uses the accepted PostgreSQL-backed job architecture. A dedicated
+server-side runner executes durable work outside normal user-facing HTTP request
+lifetimes. The runner remains part of the modular monolith; V1 does not add
+Redis, a message broker, or a second backend.
 
 ---
 
@@ -1530,7 +1544,9 @@ At minimum:
 * input validation
 * secrets outside source control
 * careful public/private data separation
-* safe handling of uploaded assets
+* safe handling of uploaded and linked private media
+* SSRF-resistant direct-media ingestion
+* authorized, short-lived private media access
 * secure external integrations
 * rate limiting where necessary
 * protection against unauthorized publication/analytics access

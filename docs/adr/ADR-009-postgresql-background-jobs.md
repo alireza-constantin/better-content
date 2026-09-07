@@ -41,15 +41,36 @@ Job payloads should contain entity identifiers, not secrets or large documents.
 
 ## Execution
 
-A deployment scheduler periodically invokes a protected internal runner that processes a bounded number of jobs.
+A dedicated server-side runner outside normal user-facing HTTP request
+execution claims and processes a bounded number of jobs. It remains part of
+the modular-monolith deployment and shares the application's PostgreSQL-backed
+job contracts and provider adapters.
+
+The runner may be activated by a deployment scheduler or supervised as a
+long-lived process according to the selected host, but it must not depend on a
+creator request remaining open. Any trigger/control surface is authenticated
+and inaccessible to ordinary users.
 
 The architecture is intentionally hosting-provider-neutral.
+
+Phase 6 Asset ingestion requires a runner environment with Node, Sharp, pinned
+`ffprobe`, child-process execution, sufficient execution time and temporary
+disk, PostgreSQL connectivity, private S3-compatible storage access, outbound
+HTTPS, and structured logging/alert routing. Selecting the actual production
+host remains a deployment decision; a host that cannot satisfy this contract
+requires architecture review.
 
 ## Idempotency
 
 Jobs must be safe to retry.
 
 Use transactions, unique constraints, and deduplication where appropriate.
+
+For upload Finalize, one unique logical processing workflow per Asset is the
+preferred durable idempotency boundary. Its existence distinguishes
+unfinalized PENDING uploads from finalized PENDING uploads without adding a new
+Asset lifecycle status. Concurrent Finalize calls must converge on that
+workflow.
 
 ## Consequences
 
