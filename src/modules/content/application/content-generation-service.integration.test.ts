@@ -821,7 +821,7 @@ describe("content generation execution", () => {
       contentId: result.contentId,
       revision: 1,
       document: {
-        schemaVersion: 2,
+        schemaVersion: 3,
         script: {
           blocks: [
             {

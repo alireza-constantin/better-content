@@ -12,6 +12,8 @@ import {
   contentDocumentsEqual,
   materializeContentDocumentV2,
   projectContentDocumentV2ToV3,
+  projectContentDocumentToV3,
+  projectContentDocumentV3ToV2,
   canonicalizeContentDocumentV3,
   type ContentDocument,
   type ContentDocumentV3,
@@ -106,6 +108,13 @@ function toDraftDto(
 
   return {
     document,
+    editorDocument: projectContentDocumentToV3(document),
+    v2Projection:
+      document.schemaVersion === 1
+        ? materializeContentDocumentV2(document)
+        : document.schemaVersion === 2
+          ? document
+          : projectContentDocumentV3ToV2(document),
     revision: draft.revision,
     updatedAt: draft.updatedAt,
   };

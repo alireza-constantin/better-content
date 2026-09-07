@@ -12,8 +12,11 @@ import {
   contentVersionSourceSchema,
   generationLanguageSchema,
   materializeContentDocumentV2,
+  projectContentDocumentToV3,
+  projectContentDocumentV3ToV2,
   type ContentDocument,
   type ContentDocumentV2,
+  type ContentDocumentV3,
   type ContentVersionSource,
   type ContentScriptFormat,
   type GenerationLanguage,
@@ -66,9 +69,11 @@ export type ContentListItemDto = Readonly<{
 }>;
 
 export type ContentDraftDto = Readonly<{
-  /** The authoritative stored document; V1 remains V1 until a V2 save. */
+  /** The authoritative persisted document; legacy schemas remain unchanged on read. */
   document: ContentDocument;
-  /** A read-only, in-memory V2 view for a legacy V1 Draft, if applicable. */
+  /** The deterministic, read-only editor projection. It is always V3. */
+  editorDocument: ContentDocumentV3;
+  /** A pre-Asset compatibility view for the existing structured editor. */
   v2Projection?: ContentDocumentV2;
   revision: number;
   updatedAt: Date;
@@ -203,9 +208,13 @@ function toDraftDto(record: ContentDetailRecord["draft"]): ContentDraftDto {
   try {
     return {
       document,
-      ...(document.schemaVersion === 1
-        ? { v2Projection: materializeContentDocumentV2(document) }
-        : {}),
+      editorDocument: projectContentDocumentToV3(document),
+      v2Projection:
+        document.schemaVersion === 1
+          ? materializeContentDocumentV2(document)
+          : document.schemaVersion === 2
+            ? document
+            : projectContentDocumentV3ToV2(document),
       revision: record.revision,
       updatedAt: record.updatedAt,
     };

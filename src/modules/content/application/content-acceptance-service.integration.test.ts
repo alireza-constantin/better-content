@@ -12,6 +12,8 @@ import { contentScriptGenerationSettings } from "./content-generation-repository
 import { createContentDraftApplicationService } from "./content-draft-service";
 import { createContentAcceptanceApplicationService } from "./content-acceptance-service";
 import { createContentReadApplicationService } from "./content-read-service";
+import { projectContentDocumentV2ToV3 } from "../domain";
+import { contentDocumentV2Schema } from "../domain";
 
 vi.mock("@/db", () => ({ db: {} }));
 vi.mock("@/lib/auth/server", () => ({ getServerSession: vi.fn() }));
@@ -216,8 +218,25 @@ describe("Content acceptance application service", () => {
     });
 
     expect(first.acceptedVersion.versionNumber).toBe(2);
+    expect(first.acceptedVersion.document.schemaVersion).toBe(2);
     expect(repeated.acceptedVersion.id).toBe(first.acceptedVersion.id);
     expect(await contentVersionsFor(context.contentId)).toHaveLength(2);
+
+    const [draft] = await database
+      .select()
+      .from(schema.contentDrafts)
+      .where(eq(schema.contentDrafts.contentId, context.contentId));
+    expect(draft?.document).toMatchObject({
+      schemaVersion: 2,
+      script: { blocks: [{ text: "Draft A" }] },
+    });
+    expect(draft?.revision).toBe(1);
+    expect(
+      await database
+        .select()
+        .from(schema.assetReferences)
+        .where(eq(schema.assetReferences.contentId, context.contentId)),
+    ).toHaveLength(0);
 
     const [content] = await database
       .select()
@@ -286,7 +305,9 @@ describe("Content acceptance application service", () => {
       workspaceId: context.workspaceId,
       contentId: context.contentId,
       baseRevision: 2,
-      document: first.acceptedVersion.document,
+      document: projectContentDocumentV2ToV3(
+        contentDocumentV2Schema.parse(first.acceptedVersion.document),
+      ),
     });
     const third = await service.acceptContent({
       workspaceId: context.workspaceId,
@@ -327,6 +348,12 @@ describe("Content acceptance application service", () => {
     expect(result.acceptedVersion.document.schemaVersion).toBe(3);
     expect(draft?.document).toEqual(result.acceptedVersion.document);
     expect(draft?.revision).toBe(2);
+    expect(
+      await database
+        .select()
+        .from(schema.assetReferences)
+        .where(eq(schema.assetReferences.contentId, context.contentId)),
+    ).toHaveLength(0);
   });
 
   it("leaves an over-limit legacy Draft untouched when acceptance migration fails", async () => {

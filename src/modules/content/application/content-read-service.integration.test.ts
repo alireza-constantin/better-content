@@ -333,6 +333,23 @@ async function getAttemptPair(attemptId: string) {
 
 function structuredDocument(text = "Structured script") {
   return {
+    schemaVersion: 3 as const,
+    script: {
+      blocks: [
+        {
+          id: randomUUID(),
+          type: "paragraph" as const,
+          text,
+          performanceDirections: [],
+          editDirections: [],
+        },
+      ],
+    },
+  };
+}
+
+function legacyV2Document(text = "Legacy structured script") {
+  return {
     schemaVersion: 2 as const,
     script: {
       blocks: [
@@ -363,7 +380,7 @@ afterAll(async () => {
 });
 
 describe("Content read and Draft application services", () => {
-  it("projects a legacy V1 Draft without writes, then checkpoints its exact value on first V2 save", async () => {
+  it("projects a legacy V1 Draft without writes, then checkpoints its exact value on first V3 save", async () => {
     const context = await createContext();
     const generated = await createGeneration(
       context,
@@ -383,10 +400,22 @@ describe("Content read and Draft application services", () => {
       contentId: generated.contentId,
     });
     expect(before.draft.document).toEqual(exactLegacy);
+    expect(before.draft.editorDocument.schemaVersion).toBe(3);
     expect(before.draft.v2Projection?.script.blocks.map((block) => block.text)).toEqual([
       "  first",
       "second  ",
     ]);
+    const repeatedRead = await createReads(context).getContentDetail({
+      workspaceId: context.workspace.id,
+      contentId: generated.contentId,
+    });
+    expect(repeatedRead.draft.editorDocument).toEqual(before.draft.editorDocument);
+    const [storedAfterRead] = await database
+      .select()
+      .from(schema.contentDrafts)
+      .where(eq(schema.contentDrafts.contentId, generated.contentId));
+    expect(storedAfterRead?.document).toEqual(exactLegacy);
+    expect(storedAfterRead?.revision).toBe(1);
     expect(await countRows(schema.contentVersions)).toBe(1);
 
     const saved = await createDrafts(
@@ -399,7 +428,7 @@ describe("Content read and Draft application services", () => {
       document: structuredDocument("The structured replacement"),
     });
 
-    expect(saved).toMatchObject({ document: { schemaVersion: 2 }, revision: 2 });
+    expect(saved).toMatchObject({ document: { schemaVersion: 3 }, revision: 2 });
     const [checkpoint] = await database
       .select()
       .from(schema.contentVersions)
@@ -412,7 +441,73 @@ describe("Content read and Draft application services", () => {
     expect(checkpoint).toMatchObject({ versionNumber: 2, document: exactLegacy, aiRunId: null });
   });
 
-  it("uses canonical whole-document V2 saves without further checkpoints", async () => {
+  it("projects stored V2 without writes, then upgrades a meaningful V2 mutation exactly once", async () => {
+    const context = await createContext();
+    const generated = await createGeneration(
+      context,
+      new FakeGenerateContentScriptProvider(),
+      () => new Date("2026-09-01T10:00:00.000Z"),
+    ).generateContentScript(request(context));
+    if (!generated.contentId) throw new Error("Test Content was not created.");
+
+    const storedV2 = legacyV2Document("Stored V2");
+    await database
+      .update(schema.contentDrafts)
+      .set({ document: storedV2 })
+      .where(eq(schema.contentDrafts.contentId, generated.contentId));
+    const before = await database
+      .select()
+      .from(schema.contentDrafts)
+      .where(eq(schema.contentDrafts.contentId, generated.contentId));
+
+    const reads = createReads(context);
+    const projected = await reads.getContentDetail({
+      workspaceId: context.workspace.id,
+      contentId: generated.contentId,
+    });
+    const repeated = await reads.getContentDetail({
+      workspaceId: context.workspace.id,
+      contentId: generated.contentId,
+    });
+    expect(projected.draft.document).toEqual(storedV2);
+    expect(projected.draft.editorDocument.schemaVersion).toBe(3);
+    expect(repeated.draft.editorDocument).toEqual(projected.draft.editorDocument);
+    expect(
+      await database
+        .select()
+        .from(schema.contentDrafts)
+        .where(eq(schema.contentDrafts.contentId, generated.contentId)),
+    ).toEqual(before);
+
+    const saved = await createDrafts(
+      context,
+      () => new Date("2026-09-01T10:01:00.000Z"),
+    ).saveContentDraft({
+      workspaceId: context.workspace.id,
+      contentId: generated.contentId,
+      baseRevision: 1,
+      document: legacyV2Document("Meaningful V2 mutation"),
+    });
+    expect(saved.document.schemaVersion).toBe(3);
+    expect(saved.revision).toBe(2);
+
+    await expect(
+      createDrafts(context, () => new Date("2026-09-01T10:02:00.000Z")).saveContentDraft({
+        workspaceId: context.workspace.id,
+        contentId: generated.contentId,
+        baseRevision: 2,
+        document: legacyV2Document("Stale V2 downgrade"),
+      }),
+    ).rejects.toMatchObject({ code: "VALIDATION_ERROR" });
+    const [afterRejectedDowngrade] = await database
+      .select()
+      .from(schema.contentDrafts)
+      .where(eq(schema.contentDrafts.contentId, generated.contentId));
+    expect(afterRejectedDowngrade?.document).toMatchObject({ schemaVersion: 3 });
+    expect(afterRejectedDowngrade?.revision).toBe(2);
+  });
+
+  it("uses canonical whole-document V3 saves without further checkpoints", async () => {
     const context = await createContext();
     const generated = await createGeneration(
       context,
@@ -434,7 +529,7 @@ describe("Content read and Draft application services", () => {
       document: structuredDocument("Next V2 revision"),
     });
 
-    expect(saved).toMatchObject({ document: { schemaVersion: 2 }, revision: 3 });
+    expect(saved).toMatchObject({ document: { schemaVersion: 3 }, revision: 3 });
     const checkpoints = await database
       .select()
       .from(schema.contentVersions)
@@ -442,7 +537,7 @@ describe("Content read and Draft application services", () => {
     expect(checkpoints).toHaveLength(0);
   });
 
-  it("rolls back a legacy V2 migration on validation or stale-revision failure", async () => {
+  it("keeps the generated V3 Draft unchanged on validation or stale-revision failure", async () => {
     const context = await createContext();
     const generated = await createGeneration(
       context,
@@ -477,7 +572,7 @@ describe("Content read and Draft application services", () => {
       .select()
       .from(schema.contentDrafts)
       .where(eq(schema.contentDrafts.contentId, generated.contentId));
-    expect(draft).toMatchObject({ document: { schemaVersion: 2 }, revision: 1 });
+    expect(draft).toMatchObject({ document: { schemaVersion: 3 }, revision: 1 });
     expect(await countRows(schema.contentVersions)).toBe(1);
   });
 
@@ -541,7 +636,7 @@ describe("Content read and Draft application services", () => {
     });
 
     expect(saved).toMatchObject({
-      document: { schemaVersion: 2, script: { blocks: [{ text: "  edited text  " }] } },
+      document: { schemaVersion: 3, script: { blocks: [{ text: "  edited text  " }] } },
       revision: 2,
       updatedAt: new Date("2026-09-01T10:01:00.000Z"),
     });
@@ -580,12 +675,12 @@ describe("Content read and Draft application services", () => {
     });
 
     expect(second).toMatchObject({
-      document: { schemaVersion: 2, script: { blocks: [{ text: "Revision two" }] } },
+      document: { schemaVersion: 3, script: { blocks: [{ text: "Revision two" }] } },
       revision: 2,
       updatedAt: new Date("2026-09-01T10:01:00.000Z"),
     });
     expect(third).toMatchObject({
-      document: { schemaVersion: 2, script: { blocks: [{ text: "Revision three" }] } },
+      document: { schemaVersion: 3, script: { blocks: [{ text: "Revision three" }] } },
       revision: 3,
       updatedAt: new Date("2026-09-01T10:02:00.000Z"),
     });
@@ -626,7 +721,7 @@ describe("Content read and Draft application services", () => {
       revision += 1;
       updatedAt = new Date(updatedAt.getTime() + 60_000);
       expect(saved).toMatchObject({
-        document: { schemaVersion: 2, script: { blocks: [{ text: value.expected }] } },
+        document: { schemaVersion: 3, script: { blocks: [{ text: value.expected }] } },
         revision,
         updatedAt: new Date(updatedAt.getTime() - 60_000),
       });
@@ -823,7 +918,7 @@ describe("Content read and Draft application services", () => {
     });
     expect(detail.draft.revision).toBe(2);
     expect(
-      detail.draft.document.schemaVersion === 2
+      detail.draft.document.schemaVersion === 3
         ? detail.draft.document.script.blocks[0]?.text
         : undefined,
     ).toBeOneOf(["first winner candidate", "second winner candidate"]);
@@ -1030,7 +1125,7 @@ describe("Content read and Draft application services", () => {
     expect(await countRows(schema.contentVersions)).toBe(versionCountBefore);
     expect(draftAfter).toMatchObject({
       contentId: generated.contentId,
-      document: { schemaVersion: 2, script: { blocks: [{ text: "Human edit two" }] } },
+      document: { schemaVersion: 3, script: { blocks: [{ text: "Human edit two" }] } },
       revision: 3,
       updatedAt: updatedAt,
     });
@@ -1170,7 +1265,7 @@ describe("Content read and Draft application services", () => {
       format: "SHORT_VIDEO",
       draft: {
         document: {
-          schemaVersion: 2,
+          schemaVersion: 3,
           script: { blocks: [{ text: "Deterministic English short-video script." }] },
         },
         revision: 1,
@@ -1178,7 +1273,7 @@ describe("Content read and Draft application services", () => {
       },
     });
     expect(
-      detail.draft.document.schemaVersion === 2
+      detail.draft.document.schemaVersion === 3
         ? detail.draft.document.script.blocks.map((block) => block.text)
         : undefined,
     ).toEqual(["Deterministic English short-video script."]);

@@ -6,6 +6,7 @@ import {
   type AutosaveSaveResult,
   useContentDraftAutosave,
 } from "./use-content-draft-autosave";
+import { projectContentDocumentV2ToV3 } from "../domain";
 
 const document = (text: string) => ({
   schemaVersion: 2 as const,
@@ -23,6 +24,8 @@ const document = (text: string) => ({
 });
 const draft = (revision: number, text: string) => ({
   document: document(text),
+  editorDocument: projectContentDocumentV2ToV3(document(text)),
+  v2Projection: document(text),
   revision,
   updatedAt: new Date(),
 });

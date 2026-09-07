@@ -510,6 +510,36 @@ export function projectContentDocumentV2ToV3(input: ContentDocumentV2): ContentD
   return contentDocumentV3Schema.parse({ ...document, schemaVersion: 3 });
 }
 
+/**
+ * Compatibility projection for the pre-Asset editor. It is never an
+ * authority and deliberately removes only the V3 Asset identity field.
+ * Callers that persist the result must pass through the V3 migration boundary.
+ */
+export function projectContentDocumentV3ToV2(input: ContentDocumentV3): ContentDocumentV2 {
+  const document = canonicalizeContentDocumentV3(input);
+  return contentDocumentV2Schema.parse({
+    schemaVersion: 2,
+    script: {
+      blocks: document.script.blocks.map((block) => ({
+        ...block,
+        editDirections: block.editDirections.map((direction) => {
+          const withoutAsset = { ...direction } as typeof direction & { assetId?: string };
+          delete withoutAsset.assetId;
+          return withoutAsset;
+        }),
+      })),
+    },
+  });
+}
+
+/** Pure editor projection for every persisted document version. */
+export function projectContentDocumentToV3(input: ContentDocument): ContentDocumentV3 {
+  if (input.schemaVersion === 1)
+    return projectContentDocumentV2ToV3(materializeContentDocumentV2(input));
+  if (input.schemaVersion === 2) return projectContentDocumentV2ToV3(input);
+  return canonicalizeContentDocumentV3(input);
+}
+
 export function parseContentDocument(input: unknown): ContentDocument {
   const parsed = contentDocumentSchema.parse(input);
   return parsed.schemaVersion === 2
@@ -528,8 +558,8 @@ export function materializeContentDocumentV2(document: ContentDocumentV1): Conte
   return canonicalizeContentDocumentV2({
     schemaVersion: 2,
     script: {
-      blocks: segmentContentDocumentV1(document).map((text) => ({
-        id: crypto.randomUUID(),
+      blocks: segmentContentDocumentV1(document).map((text, index) => ({
+        id: deterministicLegacyBlockId(text, index),
         type: "paragraph",
         text,
         performanceDirections: [],
@@ -537,6 +567,17 @@ export function materializeContentDocumentV2(document: ContentDocumentV1): Conte
       })),
     },
   });
+}
+
+function deterministicLegacyBlockId(text: string, index = 0): string {
+  const digest = createHash("sha256")
+    .update(`content-document-v1-block:${index}:${text}`, "utf8")
+    .digest();
+  const bytes = Uint8Array.from(digest.subarray(0, 16));
+  bytes[6] = (bytes[6]! & 0x0f) | 0x50;
+  bytes[8] = (bytes[8]! & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
 /**

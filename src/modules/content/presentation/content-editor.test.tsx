@@ -11,6 +11,28 @@ vi.mock("../application/content-actions", () => ({
   saveContentDraftAction: vi.fn(),
 }));
 import { ContentEditor } from "./content-editor";
+import { projectContentDocumentV2ToV3 } from "../domain";
+const v2Projection = {
+  schemaVersion: 2 as const,
+  script: {
+    blocks: [
+      {
+        id: "00000000-0000-4000-8000-000000000001",
+        type: "paragraph" as const,
+        text: "First",
+        performanceDirections: [],
+        editDirections: [],
+      },
+      {
+        id: "00000000-0000-4000-8000-000000000002",
+        type: "paragraph" as const,
+        text: "Second",
+        performanceDirections: [],
+        editDirections: [],
+      },
+    ],
+  },
+};
 const content = (language: "en" | "fa" = "en"): ContentDetailDto => ({
   id: "c",
   sourceIdea: { id: "i", title: "Idea" },
@@ -30,27 +52,8 @@ const content = (language: "en" | "fa" = "en"): ContentDetailDto => ({
   ],
   draft: {
     document: { schemaVersion: 1, script: { text: "First\nSecond" } },
-    v2Projection: {
-      schemaVersion: 2,
-      script: {
-        blocks: [
-          {
-            id: "00000000-0000-4000-8000-000000000001",
-            type: "paragraph",
-            text: "First",
-            performanceDirections: [],
-            editDirections: [],
-          },
-          {
-            id: "00000000-0000-4000-8000-000000000002",
-            type: "paragraph",
-            text: "Second",
-            performanceDirections: [],
-            editDirections: [],
-          },
-        ],
-      },
-    },
+    editorDocument: projectContentDocumentV2ToV3(v2Projection),
+    v2Projection,
     revision: 4,
     updatedAt: new Date(),
   },

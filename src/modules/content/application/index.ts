@@ -82,6 +82,12 @@ export {
   type SaveContentDraftInput,
 } from "./content-draft-service";
 export {
+  countAssetContentReferences,
+  rebuildAssetReferencesBatch,
+  type AssetReferenceRebuildBatchResult,
+  type AssetReferenceRebuildCursor,
+} from "./asset-reference-repository";
+export {
   findContentDraftWriteTarget,
   updateContentDraftIfRevisionMatches,
 } from "./content-draft-repository";

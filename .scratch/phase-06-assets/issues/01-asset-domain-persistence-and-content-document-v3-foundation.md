@@ -6,7 +6,7 @@ identity without rewriting historical Content.
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 ## Scope
 
