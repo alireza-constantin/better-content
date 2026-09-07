@@ -71,6 +71,27 @@
       "when": 1788682000000,
       "tag": "0009_smart_ladybug",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1788789154935,
+      "tag": "0010_overrated_thunderbird",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1788789376030,
+      "tag": "0011_lovely_nightmare",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1788790762649,
+      "tag": "0012_aberrant_squirrel_girl",
+      "breakpoints": true
     }
   ]
 }

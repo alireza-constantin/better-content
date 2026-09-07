@@ -11,7 +11,9 @@ import { requireWorkspaceOwner } from "@/modules/workspace/application";
 import {
   contentDocumentSchema,
   contentDocumentV2Schema,
+  contentDocumentV3Schema,
   canonicalizeContentDocumentV2,
+  canonicalizeContentDocumentV3,
   parseHumanContentScriptDraft,
 } from "../domain";
 import type { ContentDraftDto } from "./content-read-service";
@@ -21,6 +23,10 @@ import {
   lockContentDraftWriteTarget,
   updateContentDraftIfRevisionMatches,
 } from "./content-draft-repository";
+import {
+  reconcileAssetReferencesForArtifact,
+  validateReferencedAssets,
+} from "./asset-reference-repository";
 
 const saveContentDraftInputShapeSchema = z
   .object({
@@ -66,9 +72,10 @@ function parseSaveInput(input: unknown): SaveContentDraftInput {
 function parseSubmittedDraft(document: unknown) {
   try {
     const parsed = contentDocumentSchema.parse(document);
-    return parsed.schemaVersion === 1
-      ? parseHumanContentScriptDraft(parsed)
-      : canonicalizeContentDocumentV2(contentDocumentV2Schema.parse(parsed));
+    if (parsed.schemaVersion === 1) return parseHumanContentScriptDraft(parsed);
+    return parsed.schemaVersion === 2
+      ? canonicalizeContentDocumentV2(contentDocumentV2Schema.parse(parsed))
+      : canonicalizeContentDocumentV3(contentDocumentV3Schema.parse(parsed));
   } catch {
     throw new ApplicationError("VALIDATION_ERROR", "The Content Draft document is invalid.");
   }
@@ -161,7 +168,10 @@ export function createContentDraftApplicationService(
           throw new ApplicationError("INTERNAL_ERROR", "The Content Draft invariant is invalid.");
         }
 
-        if (storedDocument.data.schemaVersion === 1 && document.schemaVersion === 2) {
+        if (
+          storedDocument.data.schemaVersion === 1 &&
+          (document.schemaVersion === 2 || document.schemaVersion === 3)
+        ) {
           if (await hasLegacyDraftCheckpoint(transaction, parsedInput.contentId)) {
             throw new ApplicationError(
               "INTERNAL_ERROR",
@@ -174,12 +184,14 @@ export function createContentDraftApplicationService(
             document: storedDocument.data,
             createdByUserId: userId,
           });
-        } else if (storedDocument.data.schemaVersion === 2 && document.schemaVersion !== 2) {
+        } else if (storedDocument.data.schemaVersion === 2 && document.schemaVersion === 1) {
           throw new ApplicationError(
             "VALIDATION_ERROR",
             "A structured Content Draft requires a structured document.",
           );
         }
+
+        await validateReferencedAssets(transaction, parsedInput.workspaceId, document);
 
         const updated = await updateContentDraftIfRevisionMatches(transaction, {
           workspaceId: parsedInput.workspaceId,
@@ -190,6 +202,12 @@ export function createContentDraftApplicationService(
         });
 
         if (updated) {
+          await reconcileAssetReferencesForArtifact(transaction, {
+            workspaceId: parsedInput.workspaceId,
+            contentId: parsedInput.contentId,
+            artifactKind: "DRAFT",
+            document,
+          });
           return toDraftDto(updated);
         }
 

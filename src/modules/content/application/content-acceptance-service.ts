@@ -6,12 +6,15 @@ import { db } from "@/db";
 import {
   contentDocumentSchema,
   contentDocumentV2Schema,
+  contentDocumentV3Schema,
   contentVersionSourceSchema,
   canonicalizeContentDocumentV2,
   contentDocumentsEqual,
   materializeContentDocumentV2,
+  projectContentDocumentV2ToV3,
+  canonicalizeContentDocumentV3,
   type ContentDocument,
-  type ContentDocumentV2,
+  type ContentDocumentV3,
 } from "../domain";
 import { getServerSession } from "@/lib/auth/server";
 import { ApplicationError } from "@/lib/errors/app-error";
@@ -28,6 +31,10 @@ import {
   updateContentDraftForLegacyAcceptance,
 } from "./content-acceptance-repository";
 import { hasLegacyDraftCheckpoint } from "./content-draft-repository";
+import {
+  reconcileAssetReferencesForArtifact,
+  validateReferencedAssets,
+} from "./asset-reference-repository";
 
 const acceptContentInputSchema = z
   .object({
@@ -81,9 +88,12 @@ function parseStoredDocument(value: unknown): ContentDocument {
   return result.data;
 }
 
-function parseStoredV2Document(value: unknown): ContentDocumentV2 {
+function parseStoredStructuredDocument(value: unknown): ContentDocument {
   try {
-    return canonicalizeContentDocumentV2(contentDocumentV2Schema.parse(value));
+    const document = contentDocumentSchema.parse(value);
+    return document.schemaVersion === 2
+      ? canonicalizeContentDocumentV2(contentDocumentV2Schema.parse(document))
+      : canonicalizeContentDocumentV3(contentDocumentV3Schema.parse(document));
   } catch {
     throw new ApplicationError("INTERNAL_ERROR", "The structured Content Draft is invalid.");
   }
@@ -206,9 +216,11 @@ export function createContentAcceptanceApplicationService(
             );
           }
 
-          let migratedDocument: ContentDocumentV2;
+          let migratedDocument: ContentDocumentV3;
           try {
-            migratedDocument = materializeContentDocumentV2(storedDocument);
+            migratedDocument = projectContentDocumentV2ToV3(
+              materializeContentDocumentV2(storedDocument),
+            );
           } catch {
             throw new ApplicationError(
               "VALIDATION_ERROR",
@@ -249,6 +261,20 @@ export function createContentAcceptanceApplicationService(
             createdByUserId: userId,
             createdAt: acceptedAt,
           });
+          await validateReferencedAssets(transaction, parsedInput.workspaceId, migratedDocument);
+          await reconcileAssetReferencesForArtifact(transaction, {
+            workspaceId: parsedInput.workspaceId,
+            contentId: target.content.id,
+            artifactKind: "DRAFT",
+            document: migratedDocument,
+          });
+          await reconcileAssetReferencesForArtifact(transaction, {
+            workspaceId: parsedInput.workspaceId,
+            contentId: target.content.id,
+            artifactKind: "VERSION",
+            versionId: accepted.id,
+            document: migratedDocument,
+          });
           const updatedContent = await setAcceptedContentVersion(
             transaction,
             target.content.id,
@@ -265,8 +291,7 @@ export function createContentAcceptanceApplicationService(
           return resultFrom(migratedDraft, accepted);
         }
 
-        const authoritativeDocument = parseStoredV2Document(storedDocument);
-
+        const authoritativeDocument = parseStoredStructuredDocument(storedDocument);
         if (
           acceptedVersion &&
           contentDocumentsEqual(acceptedVersion.document, authoritativeDocument)
@@ -281,6 +306,14 @@ export function createContentAcceptanceApplicationService(
           document: authoritativeDocument,
           createdByUserId: userId,
           createdAt: acceptedAt,
+        });
+        await validateReferencedAssets(transaction, parsedInput.workspaceId, authoritativeDocument);
+        await reconcileAssetReferencesForArtifact(transaction, {
+          workspaceId: parsedInput.workspaceId,
+          contentId: target.content.id,
+          artifactKind: "VERSION",
+          versionId: accepted.id,
+          document: authoritativeDocument,
         });
         const updatedContent = await setAcceptedContentVersion(
           transaction,

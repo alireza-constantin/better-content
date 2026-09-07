@@ -324,9 +324,122 @@ export const contentDocumentV2Schema = z
   });
 export type ContentDocumentV2 = z.infer<typeof contentDocumentV2Schema>;
 
+const assetIdSchema = z.uuid().optional();
+const editDirectionV3Schema = z.discriminatedUnion("type", [
+  z
+    .object({
+      id: directionIdSchema,
+      type: z.literal("TEXT_OVERLAY"),
+      text: z.string().max(productionDirectionLimits.overlay),
+      placement: z.enum(productionDirectionValues.placement),
+      nuance: nuanceSchema,
+    })
+    .strict(),
+  z
+    .object({
+      id: directionIdSchema,
+      type: z.literal("ZOOM"),
+      mode: z.enum(productionDirectionValues.zoomMode),
+      intensity: z.enum(productionDirectionValues.zoomIntensity),
+      nuance: nuanceSchema,
+    })
+    .strict(),
+  z
+    .object({
+      id: directionIdSchema,
+      type: z.literal("CUT"),
+      style: z.enum(productionDirectionValues.cut),
+      nuance: nuanceSchema,
+    })
+    .strict(),
+  z
+    .object({
+      id: directionIdSchema,
+      type: z.literal("BROLL_CUE"),
+      description: z.string().max(productionDirectionLimits.note),
+      nuance: nuanceSchema,
+      assetId: assetIdSchema,
+    })
+    .strict(),
+  z
+    .object({
+      id: directionIdSchema,
+      type: z.literal("SOUND_CUE"),
+      kind: z.enum(productionDirectionValues.soundKind),
+      description: z.string().max(productionDirectionLimits.soundCue),
+      nuance: nuanceSchema,
+      assetId: assetIdSchema,
+    })
+    .strict(),
+  z
+    .object({
+      id: directionIdSchema,
+      type: z.literal("CAPTION_EMPHASIS"),
+      style: z.enum(productionDirectionValues.caption),
+      nuance: nuanceSchema,
+    })
+    .strict(),
+  z
+    .object({
+      id: directionIdSchema,
+      type: z.literal("EDIT_NOTE"),
+      text: z.string().max(productionDirectionLimits.note),
+    })
+    .strict(),
+]);
+
+/** V3 is intentionally V2-shaped; Asset identity is allowed only on its two approved edit cues. */
+export const contentDocumentV3Schema = z
+  .object({
+    schemaVersion: z.literal(3),
+    script: z
+      .object({
+        blocks: z
+          .array(
+            z
+              .object({
+                id: z.uuid(),
+                type: z.literal("paragraph"),
+                text: z.string().refine((value) => !/[\r\n]/.test(value)),
+                performanceDirections: z
+                  .array(performanceDirectionSchema)
+                  .max(productionDirectionLimits.perBlockCategory),
+                editDirections: z
+                  .array(editDirectionV3Schema)
+                  .max(productionDirectionLimits.perBlockCategory),
+              })
+              .strict(),
+          )
+          .min(1)
+          .max(1000),
+      })
+      .strict(),
+  })
+  .strict()
+  .superRefine((document, context) => {
+    const v2Shape = {
+      schemaVersion: 2,
+      script: {
+        blocks: document.script.blocks.map((block) => ({
+          ...block,
+          editDirections: block.editDirections.map((direction) => {
+            const withoutAsset = { ...direction } as typeof direction & { assetId?: string };
+            delete withoutAsset.assetId;
+            return withoutAsset;
+          }),
+        })),
+      },
+    };
+    const result = contentDocumentV2Schema.safeParse(v2Shape);
+    if (!result.success)
+      for (const issue of result.error.issues) context.addIssue({ ...issue, path: issue.path });
+  });
+export type ContentDocumentV3 = z.infer<typeof contentDocumentV3Schema>;
+
 export const contentDocumentSchema = z.union([
   contentScriptDocumentSchema,
   contentDocumentV2Schema,
+  contentDocumentV3Schema,
 ]);
 export type ContentDocument = z.infer<typeof contentDocumentSchema>;
 
@@ -364,9 +477,46 @@ export function canonicalizeContentDocumentV2(input: unknown): ContentDocumentV2
   });
 }
 
+export function canonicalizeContentDocumentV3(input: unknown): ContentDocumentV3 {
+  const document = contentDocumentV3Schema.parse(input);
+  const blocks = document.script.blocks.filter(
+    (block) =>
+      block.text.trim().length > 0 ||
+      block.performanceDirections.length > 0 ||
+      block.editDirections.length > 0,
+  );
+  return contentDocumentV3Schema.parse({
+    ...document,
+    script: {
+      blocks:
+        blocks.length > 0
+          ? blocks
+          : [
+              {
+                id: document.script.blocks[0].id,
+                type: "paragraph",
+                text: "",
+                performanceDirections: [],
+                editDirections: [],
+              },
+            ],
+    },
+  });
+}
+
+/** Pure, deterministic, lossless V2 view upgrade. It intentionally performs no persistence. */
+export function projectContentDocumentV2ToV3(input: ContentDocumentV2): ContentDocumentV3 {
+  const document = canonicalizeContentDocumentV2(input);
+  return contentDocumentV3Schema.parse({ ...document, schemaVersion: 3 });
+}
+
 export function parseContentDocument(input: unknown): ContentDocument {
   const parsed = contentDocumentSchema.parse(input);
-  return parsed.schemaVersion === 2 ? canonicalizeContentDocumentV2(parsed) : parsed;
+  return parsed.schemaVersion === 2
+    ? canonicalizeContentDocumentV2(parsed)
+    : parsed.schemaVersion === 3
+      ? canonicalizeContentDocumentV3(parsed)
+      : parsed;
 }
 
 export function segmentContentDocumentV1(document: ContentDocumentV1): readonly string[] {
@@ -467,6 +617,11 @@ function describeEditDirection(direction: EditDirection): string {
 export function contentDocumentsEqual(left: unknown, right: unknown): boolean {
   const leftDocument = parseContentDocument(left);
   const rightDocument = parseContentDocument(right);
+
+  if (leftDocument.schemaVersion === 2 && rightDocument.schemaVersion === 3)
+    return contentDocumentsEqual(projectContentDocumentV2ToV3(leftDocument), rightDocument);
+  if (leftDocument.schemaVersion === 3 && rightDocument.schemaVersion === 2)
+    return contentDocumentsEqual(leftDocument, projectContentDocumentV2ToV3(rightDocument));
 
   if (leftDocument.schemaVersion !== rightDocument.schemaVersion) return false;
 

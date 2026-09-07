@@ -303,7 +303,7 @@ describe("Content acceptance application service", () => {
     ).toEqual([1, 2, 3, 4]);
   });
 
-  it("migrates a legacy V1 Draft atomically before creating its accepted V2 Version", async () => {
+  it("migrates a legacy V1 Draft atomically before creating its accepted V3 Version", async () => {
     const context = await seedContent(v1Document);
     const service = createAcceptanceService(context.userId);
 
@@ -324,7 +324,7 @@ describe("Content acceptance application service", () => {
       [3, "CREATOR_ACCEPTED"],
     ]);
     expect(versions[1]?.document).toEqual(v1Document);
-    expect(result.acceptedVersion.document.schemaVersion).toBe(2);
+    expect(result.acceptedVersion.document.schemaVersion).toBe(3);
     expect(draft?.document).toEqual(result.acceptedVersion.document);
     expect(draft?.revision).toBe(2);
   });

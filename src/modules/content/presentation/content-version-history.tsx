@@ -19,7 +19,12 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import type { ContentVersionDto } from "../application/content-read-service";
-import type { ContentDocumentV2, EditDirection, PerformanceDirection } from "../domain";
+import type {
+  ContentDocumentV2,
+  ContentDocumentV3,
+  EditDirection,
+  PerformanceDirection,
+} from "../domain";
 
 type Props = Readonly<{
   versions: readonly ContentVersionDto[];
@@ -136,7 +141,7 @@ function DirectionGroup({
 function V2Preview({
   document,
   contentLanguage,
-}: Readonly<{ document: ContentDocumentV2; contentLanguage: "en" | "fa" }>) {
+}: Readonly<{ document: ContentDocumentV2 | ContentDocumentV3; contentLanguage: "en" | "fa" }>) {
   const t = useTranslations("Content");
   const direction = contentLanguage === "fa" ? "rtl" : "ltr";
   return (

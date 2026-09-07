@@ -35,6 +35,7 @@ import { lockWorkspaceForUpdate } from "@/modules/workspace/application";
 import type { GenerateContentScriptSuccess } from "@/modules/ai/domain/generate-content-script";
 import {
   materializeContentDocumentV2,
+  projectContentDocumentV2ToV3,
   type CanonicalContentScriptGenerationRequest,
 } from "../domain/content-script-contracts";
 import { parseCanonicalIdea, type CanonicalIdea } from "@/modules/ideas/domain";
@@ -626,11 +627,11 @@ export async function completeContentGenerationInvocation(
     }
 
     // Provider output remains the immutable V1 artifact. Only the mutable Draft
-    // crosses the Phase 5 boundary, and deriving it here keeps every success
+    // crosses the current document boundary, and deriving it here keeps every success
     // artifact (including the queue exit) in this one rollback boundary.
     let draftDocument;
     try {
-      draftDocument = materializeContentDocumentV2(result.output);
+      draftDocument = projectContentDocumentV2ToV3(materializeContentDocumentV2(result.output));
     } catch {
       throw new ApplicationError(
         "AI_OUTPUT_INVALID",

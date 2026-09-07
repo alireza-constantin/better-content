@@ -168,6 +168,7 @@ export const contents = pgTable(
       name: "contents_workspace_source_generation_attempt_fk",
     }),
     unique("contents_source_generation_attempt_id_unique").on(table.sourceGenerationAttemptId),
+    unique("contents_workspace_id_id_candidate_key").on(table.workspaceId, table.id),
     check("contents_language_check", sql`${table.contentLanguage} IN ('en', 'fa')`),
     check("contents_format_check", sql`${table.format} IN ('SHORT_VIDEO', 'LONG_VIDEO')`),
     index("contents_workspace_id_idx").on(table.workspaceId),
