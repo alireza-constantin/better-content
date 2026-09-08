@@ -5,3 +5,6 @@ export * from "./media-inspector";
 export * from "./staged-media-processor";
 export * from "./upload-service";
 export * from "./upload-processing-handler";
+export * from "./external-url-service";
+export * from "./external-url-ingestion-handler";
+export * from "./asset-capability-service";

@@ -6,7 +6,7 @@ hosts, redirects, or DNS behavior to cross the private-network boundary.
 
 **Blocked by:** 04 — Deliver the direct upload lifecycle.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 ## Scope
 
@@ -91,26 +91,26 @@ hosts, redirects, or DNS behavior to cross the private-network boundary.
 
 ## Acceptance criteria
 
-- [ ] Valid direct HTTPS fixtures create one PENDING EXTERNAL_URL Asset, persist
+- [x] Valid direct HTTPS fixtures create one PENDING EXTERNAL_URL Asset, persist
       normalized private provenance, enqueue one logical ingestion job, and
       become READY through the shared managed-media pipeline.
-- [ ] The initial target and every redirect enforce scheme/port/userinfo/
+- [x] The initial target and every redirect enforce scheme/port/userinfo/
       credential rules, the three-redirect maximum, DNS/public-IP policy, TLS
       hostname verification, and rebinding-safe connection behavior.
-- [ ] IPv4, IPv6, IPv4-mapped IPv6, mixed public/prohibited DNS answers, and
+- [x] IPv4, IPv6, IPv4-mapped IPv6, mixed public/prohibited DNS answers, and
       metadata/private-network destinations are rejected without making an
       unsafe connection.
-- [ ] Timeouts, header bounds, early Content-Length checks, streaming byte
+- [x] Timeouts, header bounds, early Content-Length checks, streaming byte
       ceilings, non-media/HTML responses, and remote interruption fail safely
       without unbounded memory/disk use.
-- [ ] Transient remote/infrastructure failures retry boundedly; deterministic
+- [x] Transient remote/infrastructure failures retry boundedly; deterministic
       security/validation failures do not retry; terminal output uses stable
       localized-safe failure categories.
-- [ ] READY media remains the managed snapshot when the remote fixture changes
+- [x] READY media remains the managed snapshot when the remote fixture changes
       or disappears and no READY workflow refetches it.
-- [ ] Full source URL cannot appear in job payloads, DTOs, Content/Versions,
+- [x] Full source URL cannot appear in job payloads, DTOs, Content/Versions,
       recovery output, logs, or creator-facing errors.
-- [ ] Cross-Workspace and non-owner creation attempts fail through established
+- [x] Cross-Workspace and non-owner creation attempts fail through established
       nondisclosing authorization behavior.
 
 ## Focused tests

@@ -3,6 +3,7 @@ import type { Readable } from "node:stream";
 import type {
   AssetStorage,
   PrivateReadCapability,
+  PrivateReadOptions,
   StagingPutCapability,
   StoredObjectMetadata,
 } from "./asset-storage";
@@ -23,10 +24,15 @@ export interface S3CompatiblePrivateObjectClient {
   issueStagingPut(key: string, expiresAt: Date, contentLength: number): Promise<{ url: string }>;
   head(key: string): Promise<{ sizeBytes: number } | null>;
   get(key: string): Promise<Readable | null>;
+  putStaging(key: string, source: AsyncIterable<Uint8Array>): Promise<void>;
   putIfAbsent(key: string, source: AsyncIterable<Uint8Array>): Promise<void>;
   copyIfAbsent(source: string, destination: string): Promise<void>;
   delete(key: string): Promise<void>;
-  issuePrivateRead(key: string, expiresAt: Date): Promise<{ url: string }>;
+  issuePrivateRead(
+    key: string,
+    expiresAt: Date,
+    options: PrivateReadOptions,
+  ): Promise<{ url: string }>;
 }
 
 /** Provider-neutral mapper; concrete SDK configuration remains deployment work. */
@@ -72,6 +78,19 @@ export class S3CompatibleAssetStorage implements AssetStorage {
 
   async openStagingRead(key: StagingStorageKey): Promise<Readable> {
     return this.openRead(assertStagingStorageKey(key));
+  }
+
+  async putStagingFromStream(
+    key: StagingStorageKey,
+    source: AsyncIterable<Uint8Array>,
+  ): Promise<void> {
+    const validKey = assertStagingStorageKey(key);
+    try {
+      await this.client.putStaging(validKey, source);
+    } catch (error) {
+      if (error instanceof AssetStorageError) throw error;
+      throw new AssetStorageError("Managed storage is unavailable.", "UNAVAILABLE");
+    }
   }
 
   async putPermanentFromStream(
@@ -122,10 +141,14 @@ export class S3CompatibleAssetStorage implements AssetStorage {
   async createPrivateReadCapability(
     key: PermanentStorageKey,
     expiresAt: Date,
+    options: PrivateReadOptions,
   ): Promise<PrivateReadCapability> {
     const validKey = assertPermanentStorageKey(key);
     try {
-      return { url: (await this.client.issuePrivateRead(validKey, expiresAt)).url, expiresAt };
+      return {
+        url: (await this.client.issuePrivateRead(validKey, expiresAt, options)).url,
+        expiresAt,
+      };
     } catch (error) {
       if (error instanceof AssetStorageError) throw error;
       throw new AssetStorageError("Managed storage is unavailable.", "UNAVAILABLE");

@@ -39,7 +39,13 @@ async function exerciseStorage(
     chunks.push(Buffer.from(chunk));
   expect(Buffer.concat(chunks)).toEqual(bytes);
   expect(
-    (await storage.createPrivateReadCapability(permanent, new Date("2026-09-07T00:01:00Z"))).url,
+    (
+      await storage.createPrivateReadCapability(permanent, new Date("2026-09-07T00:01:00Z"), {
+        contentType: "image/jpeg",
+        contentDisposition: "inline",
+        rangeAllowed: false,
+      })
+    ).url,
   ).not.toContain(permanent);
   await storage.deletePermanentObject(permanent);
   await storage.deletePermanentObject(permanent);
@@ -81,6 +87,11 @@ describe("AssetStorage adapters", () => {
       get: async (key) => {
         const value = objects.get(key);
         return value ? Readable.from(value) : null;
+      },
+      putStaging: async (key, source) => {
+        const chunks: Buffer[] = [];
+        for await (const chunk of source) chunks.push(Buffer.from(chunk));
+        objects.set(key, Buffer.concat(chunks));
       },
       putIfAbsent: async (key, source) => {
         if (objects.has(key)) return;

@@ -528,5 +528,11 @@
     "contentGenericErrorTitle": "Script generation could not be completed",
     "contentGenericErrorDescription": "We could not complete this request. Refresh the page and try again; no private provider details are shown.",
     "privacyNote": "Generated ideas are shown as plain text. Do not include unnecessary sensitive information in Content DNA."
+  },
+  "Assets": {
+    "loading": "Loading media…",
+    "accessError": "Media access is unavailable. Try again.",
+    "retry": "Retry",
+    "download": "Download"
   }
 }

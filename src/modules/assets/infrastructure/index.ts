@@ -7,3 +7,4 @@ export * from "./s3-compatible-asset-storage";
 export * from "./sharp-media-inspector";
 export * from "./storage-keys";
 export * from "./temporary-media-file";
+export * from "./controlled-remote-acquisition";

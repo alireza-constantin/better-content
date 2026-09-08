@@ -11,6 +11,7 @@ import {
   createUploadExpirationHandler,
   createUploadProcessingHandler,
 } from "@/modules/assets/application/upload-processing-handler";
+import { createExternalUrlIngestionHandler } from "@/modules/assets/application/external-url-ingestion-handler";
 import { DefaultMediaInspector, FilesystemAssetStorage } from "@/modules/assets/infrastructure";
 
 const storage = new FilesystemAssetStorage(
@@ -20,6 +21,10 @@ const registry = new MapAssetJobHandlerRegistry()
   .register(
     "PROCESS_UPLOAD",
     createUploadProcessingHandler({ storage, inspector: new DefaultMediaInspector() }),
+  )
+  .register(
+    "INGEST_EXTERNAL_URL",
+    createExternalUrlIngestionHandler({ storage, inspector: new DefaultMediaInspector() }),
   )
   .register("EXPIRE_UPLOAD", createUploadExpirationHandler({ storage }));
 

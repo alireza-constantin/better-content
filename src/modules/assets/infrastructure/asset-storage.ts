@@ -9,6 +9,11 @@ export type StagingPutCapability = Readonly<{
   expiresAt: Date;
   contentLength: number;
 }>;
+export type PrivateReadOptions = Readonly<{
+  contentType: string;
+  contentDisposition: string;
+  rangeAllowed: boolean;
+}>;
 export type PrivateReadCapability = Readonly<{ url: string; expiresAt: Date }>;
 
 /**
@@ -25,6 +30,8 @@ export interface AssetStorage {
     key: StagingStorageKey | PermanentStorageKey,
   ): Promise<StoredObjectMetadata | null>;
   openStagingRead(key: StagingStorageKey): Promise<Readable>;
+  /** Server-side acquisition writes only opaque, quarantined staging objects. */
+  putStagingFromStream(key: StagingStorageKey, source: AsyncIterable<Uint8Array>): Promise<void>;
   putPermanentFromStream(
     key: PermanentStorageKey,
     source: AsyncIterable<Uint8Array>,
@@ -38,6 +45,7 @@ export interface AssetStorage {
   createPrivateReadCapability(
     key: PermanentStorageKey,
     expiresAt: Date,
+    options: PrivateReadOptions,
   ): Promise<PrivateReadCapability>;
 }
 

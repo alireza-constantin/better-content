@@ -54,6 +54,27 @@ export class FilesystemAssetStorage implements AssetStorage {
     await writeFile(path, bytes, { flag: "w" });
   }
 
+  async putStagingFromStream(
+    key: StagingStorageKey,
+    source: AsyncIterable<Uint8Array>,
+  ): Promise<void> {
+    const destination = this.pathFor(assertStagingStorageKey(key));
+    const temporaryDestination = `${destination}.acquire-${randomUUID()}`;
+    try {
+      await mkdir(resolve(destination, ".."), { recursive: true });
+      await pipeline(
+        Readable.from(source),
+        createWriteStream(temporaryDestination, { flags: "wx", mode: 0o600 }),
+      );
+      await rm(destination, { force: true });
+      await link(temporaryDestination, destination);
+    } catch {
+      throw new AssetStorageError("Filesystem storage is unavailable.", "UNAVAILABLE");
+    } finally {
+      await rm(temporaryDestination, { force: true }).catch(() => undefined);
+    }
+  }
+
   async getObjectMetadata(
     key: StagingStorageKey | PermanentStorageKey,
   ): Promise<StoredObjectMetadata | null> {
@@ -132,7 +153,9 @@ export class FilesystemAssetStorage implements AssetStorage {
   async createPrivateReadCapability(
     key: PermanentStorageKey,
     expiresAt: Date,
+    options: import("./asset-storage").PrivateReadOptions,
   ): Promise<PrivateReadCapability> {
+    void options;
     if (!(await this.getObjectMetadata(assertPermanentStorageKey(key))))
       throw new AssetStorageError("Private object is missing.", "NOT_FOUND");
     // A future authorized preview endpoint resolves this opaque capability.

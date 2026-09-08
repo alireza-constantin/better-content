@@ -69,6 +69,18 @@ export class FakeAssetStorage implements AssetStorage {
     return this.openRead(assertStagingStorageKey(key));
   }
 
+  async putStagingFromStream(
+    key: StagingStorageKey,
+    source: AsyncIterable<Uint8Array>,
+  ): Promise<void> {
+    const validKey = assertStagingStorageKey(key);
+    this.throwFailure("put");
+    this.operations.push(`staging-put:${validKey}`);
+    const chunks: Buffer[] = [];
+    for await (const chunk of source) chunks.push(Buffer.from(chunk));
+    this.objects.set(validKey, Buffer.concat(chunks));
+  }
+
   async putPermanentFromStream(
     key: PermanentStorageKey,
     source: AsyncIterable<Uint8Array>,
@@ -113,7 +125,9 @@ export class FakeAssetStorage implements AssetStorage {
   async createPrivateReadCapability(
     key: PermanentStorageKey,
     expiresAt: Date,
+    options: import("./asset-storage").PrivateReadOptions,
   ): Promise<PrivateReadCapability> {
+    void options;
     const validKey = assertPermanentStorageKey(key);
     this.throwFailure("capability");
     if (!this.objects.has(validKey))
