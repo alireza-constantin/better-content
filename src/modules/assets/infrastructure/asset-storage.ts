@@ -15,12 +15,25 @@ export type PrivateReadOptions = Readonly<{
   rangeAllowed: boolean;
 }>;
 export type PrivateReadCapability = Readonly<{ url: string; expiresAt: Date }>;
+export type ManagedObjectNamespace = "staging" | "permanent";
+export type ManagedStorageObject = Readonly<{
+  key: StagingStorageKey | PermanentStorageKey;
+  sizeBytes: number;
+  lastModified: Date;
+}>;
+export type ManagedStorageObjectPage = Readonly<{
+  objects: readonly ManagedStorageObject[];
+  nextCursor: string | null;
+}>;
 
 /**
- * Private object boundary. It intentionally has no list operation and never
- * exposes provider SDK types, bucket locations, or public object URLs.
+ * Private boundary. Bounded listing is restricted to managed namespaces and
+ * exists only for operational reconciliation; it never proves ownership.
  */
 export interface AssetStorage {
+  listManagedObjects(
+    input: Readonly<{ namespace: ManagedObjectNamespace; cursor?: string | null; limit?: number }>,
+  ): Promise<ManagedStorageObjectPage>;
   createStagingPutCapability(
     key: StagingStorageKey,
     expiresAt: Date,

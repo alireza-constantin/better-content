@@ -6,7 +6,7 @@ preserving autosave, acceptance, recovery, and immutable Version history.
 
 **Blocked by:** 07 — Deliver the Workspace Asset Library.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 ## Scope
 
@@ -87,24 +87,24 @@ preserving autosave, acceptance, recovery, and immutable Version history.
 
 ## Acceptance criteria
 
-- [ ] Only B-roll and sound cues expose the picker, with exactly the approved
+- [x] Only B-roll and sound cues expose the picker, with exactly the approved
       READY media compatibility and one-Asset cardinality.
-- [ ] Picker authorization, pagination/search, preview, current selection, focus
+- [x] Picker authorization, pagination/search, preview, current selection, focus
       return, and responsive dialog/sheet behavior work in EN/FA and LTR/RTL.
-- [ ] Picker upload/link creates a reusable Workspace Asset but never
+- [x] Picker upload/link creates a reusable Workspace Asset but never
       auto-attaches; failure leaves Content unchanged.
-- [ ] Use/Replace/Detach produces canonical V3 local state, autosaves at the
+- [x] Use/Replace/Detach produces canonical V3 local state, autosaves at the
       expected revision, and atomically synchronizes DRAFT projection rows.
-- [ ] Foreign, non-READY, incompatible, stale, or DELETING Assets cannot be
+- [x] Foreign, non-READY, incompatible, stale, or DELETING Assets cannot be
       persisted even if the client previously displayed them.
-- [ ] Attachment differences derive unaccepted changes; equivalent V2/V3
+- [x] Attachment differences derive unaccepted changes; equivalent V2/V3
       documents without Asset changes remain accepted/equal.
-- [ ] Acceptance atomically creates an immutable V3 Version and VERSION
+- [x] Acceptance atomically creates an immutable V3 Version and VERSION
       reference rows; later Draft or display-name changes do not alter its Asset
       identity.
-- [ ] History/recovery is safe and human-readable and excludes IDs where
+- [x] History/recovery is safe and human-readable and excludes IDs where
       required, source/storage/signed URLs, and raw JSON.
-- [ ] Existing Phase 5 block/direction/autosave/conflict/acceptance/history
+- [x] Existing Phase 5 block/direction/autosave/conflict/acceptance/history
       behavior remains green.
 
 ## Focused tests
@@ -118,3 +118,12 @@ preserving autosave, acceptance, recovery, and immutable Version history.
   Use/Replace/Detach, create-without-auto-attach, preview, focus return,
   conflicts, history/recovery, keyboard, EN/FA, RTL/LTR, and bidi names.
 - **E2E:** none here; Ticket 10 owns the representative persisted editor journey.
+
+## Answer
+
+Resolved on 2026-09-08. The eligible-direction picker reuses the Workspace
+Asset Library query, creation, preview, and bounded polling boundaries. Asset
+selection remains a normal ContentDocumentV3 Draft mutation and is validated,
+projected, accepted, and recovered through the existing Content lifecycle.
+Version History resolves only current safe Asset display metadata; immutable
+V1/V2 documents remain unchanged. Ticket 09+ behavior was not added.

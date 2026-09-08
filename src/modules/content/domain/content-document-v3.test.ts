@@ -5,6 +5,7 @@ import {
   contentDocumentV3Schema,
   contentDocumentsEqual,
   extractAssetReferences,
+  exportContentDocumentV3Recovery,
   projectContentDocumentV2ToV3,
 } from "./index";
 
@@ -75,5 +76,35 @@ describe("ContentDocumentV3", () => {
   it("does not derive references from historical V1/V2 and rejects unknown schemas", () => {
     expect(extractAssetReferences(v2)).toEqual([]);
     expect(() => contentDocumentV3Schema.parse({ ...v2, schemaVersion: 4 })).toThrow();
+  });
+
+  it("exports safe readable attached media without identifiers or private metadata", () => {
+    const assetId = randomUUID();
+    const attached = contentDocumentV3Schema.parse({
+      ...projectContentDocumentV2ToV3(v2),
+      script: {
+        blocks: [
+          {
+            ...v2.script.blocks[0],
+            editDirections: [{ ...v2.script.blocks[0].editDirections[0], assetId }],
+          },
+        ],
+      },
+    });
+    const recovery = exportContentDocumentV3Recovery(
+      attached,
+      { [assetId]: { displayName: "نمونه image", mediaType: "IMAGE" } },
+      { attachedMedia: "رسانه", unavailable: "ناموجود" },
+    );
+    expect(recovery).toContain("نمونه image (IMAGE)");
+    expect(recovery).not.toContain(assetId);
+    expect(recovery).not.toMatch(/https?:|storage|signed/iu);
+    expect(
+      exportContentDocumentV3Recovery(
+        attached,
+        {},
+        { attachedMedia: "Media", unavailable: "Unavailable" },
+      ),
+    ).toContain("Media: Unavailable");
   });
 });

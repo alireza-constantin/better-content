@@ -52,6 +52,10 @@ export async function validateReferencedAssets(
 ): Promise<void> {
   const references = extractAssetReferences(document);
   if (!references.length) return;
+  // The enclosing Draft/acceptance transaction holds every referenced Asset
+  // lock in sorted identity order. This serializes attach/delete races: a
+  // delete that won first is observed as DELETING, while an attachment that
+  // won first projects a surviving reference before deletion can proceed.
   const rows = await database
     .select()
     .from(assets)
@@ -63,7 +67,9 @@ export async function validateReferencedAssets(
           references.map((reference) => reference.assetId),
         ),
       ),
-    );
+    )
+    .orderBy(asc(assets.id))
+    .for("update");
   if (rows.length !== new Set(references.map((reference) => reference.assetId)).size)
     throw new ApplicationError("VALIDATION_ERROR", "A referenced Asset is unavailable.");
   for (const reference of references) {

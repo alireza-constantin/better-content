@@ -6,7 +6,7 @@ idempotent cleanup/reconciliation paths.
 
 **Blocked by:** 07 — Deliver the Workspace Asset Library.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 ## Scope
 
@@ -89,25 +89,35 @@ idempotent cleanup/reconciliation paths.
 
 ## Acceptance criteria
 
-- [ ] Only the current Workspace owner can confirm deletion; the UI is explicit,
+- [x] Only the current Workspace owner can confirm deletion; the UI is explicit,
       irreversible, localized, focus-safe, and shows current usage.
-- [ ] Current Draft or any surviving immutable V3 Version reference yields
+- [x] Current Draft or any surviving immutable V3 Version reference yields
       ASSET_IN_USE with no state/object/document change.
-- [ ] PROCESSING conflicts, while eligible unreferenced PENDING/READY/FAILED
+- [x] PROCESSING conflicts, while eligible unreferenced PENDING/READY/FAILED
       atomically becomes DELETING with exactly one cleanup workflow.
-- [ ] Concurrent attachment/acceptance/deletion produces only the two approved
+- [x] Concurrent attachment/acceptance/deletion produces only the two approved
       safe outcomes and never a dangling reference.
-- [ ] Cleanup is idempotent, removes staging/permanent media before metadata, and
+- [x] Cleanup is idempotent, removes staging/permanent media before metadata, and
       handles already-missing objects without hiding READY integrity anomalies.
-- [ ] Storage/database/worker failure windows remain recoverable; exhausted
+- [x] Storage/database/worker failure windows remain recoverable; exhausted
       cleanup stays DELETING and emits safe actionable operational evidence.
-- [ ] Abandoned expiration cannot claim finalized PENDING and cleans only proven
+- [x] Abandoned expiration cannot claim finalized PENDING and cleans only proven
       unfinalized uploads after 24 hours.
-- [ ] Staging/permanent orphan cleanup proves absence of Asset/recoverable job,
+- [x] Staging/permanent orphan cleanup proves absence of Asset/recoverable job,
       honors age windows, and retains every uncertain candidate.
-- [ ] Projection reconciliation is bounded/idempotent, restores canonical rows,
+- [x] Projection reconciliation is bounded/idempotent, restores canonical rows,
       and never edits V3/V1/V2 documents.
-- [ ] Valid zero-reference READY Assets are never selected by automatic cleanup.
+- [x] Valid zero-reference READY Assets are never selected by automatic cleanup.
+
+## Answer
+
+Resolved on 2026-09-08. Creator-authorized deletion transitions eligible,
+unreferenced Assets to DELETING with one durable cleanup job; object cleanup is
+idempotent and metadata-last. Bounded managed-namespace listing now supports
+conservative orphan candidate discovery in fake, filesystem, and S3-compatible
+adapters. PostgreSQL remains ownership authority, and no reconciliation
+checkpoint table was needed because callers retain opaque page cursors between
+bounded runs. Ticket 10 was not changed.
 
 ## Focused tests
 

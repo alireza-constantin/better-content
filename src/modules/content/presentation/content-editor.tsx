@@ -31,7 +31,8 @@ import {
   saveContentDraftAction,
 } from "../application/content-actions";
 import type { ContentDetailDto } from "../application/content-read-service";
-import { deriveContentAcceptanceState } from "../domain";
+import { deriveContentAcceptanceState, exportContentDocumentV3Recovery } from "../domain";
+import type { ContentDocumentV3 } from "../domain";
 import { ContentVersionHistory } from "./content-version-history";
 import { StructuredScriptEditor } from "./structured-script-editor";
 import {
@@ -49,9 +50,7 @@ const icons = {
   conflict: AlertCircleIcon,
 } as const;
 function initialDocument(draft: ContentDetailDto["draft"]) {
-  if (draft.document.schemaVersion === 2) return draft.document;
-  if (draft.v2Projection) return draft.v2Projection;
-  throw new Error("The legacy Content Draft projection is unavailable.");
+  return draft.editorDocument;
 }
 function presentation(language: ContentDetailDto["contentLanguage"]) {
   return language === "fa" ? "rtl" : "ltr";
@@ -72,6 +71,11 @@ export function ContentEditor({ content, workspaceId }: Props) {
     reload,
     save,
     workspaceId,
+    recoveryExport: (document) =>
+      exportContentDocumentV3Recovery(document, content.assetPresentations, {
+        attachedMedia: t("historyAttachedMedia"),
+        unavailable: t("assetUnavailable"),
+      }),
   });
   const [acceptedVersionId, setAcceptedVersionId] = useState(content.acceptedVersionId);
   const [versions, setVersions] = useState(content.versions);
@@ -285,6 +289,7 @@ export function ContentEditor({ content, workspaceId }: Props) {
           <ContentVersionHistory
             acceptedVersionId={acceptedVersionId}
             contentLanguage={content.contentLanguage}
+            assetPresentations={content.assetPresentations}
             versions={versions}
           />
         </div>
@@ -304,7 +309,7 @@ export function ContentEditor({ content, workspaceId }: Props) {
         <CardContent>
           <StructuredScriptEditor
             disabled={autosave.status === "conflict"}
-            document={autosave.document}
+            document={autosave.document as ContentDocumentV3}
             language={content.contentLanguage}
             labels={{
               region: t("scriptLabel"),
@@ -319,6 +324,7 @@ export function ContentEditor({ content, workspaceId }: Props) {
               confirm: t("confirmDeleteBlock"),
             }}
             onChange={autosave.onChange}
+            workspaceId={workspaceId}
           />
           <p className="mt-3 text-sm text-muted-foreground" id="content-script-help">
             {t("scriptHelp")}

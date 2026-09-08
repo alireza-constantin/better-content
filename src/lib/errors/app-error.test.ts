@@ -18,6 +18,7 @@ describe("ApplicationError", () => {
       "NOT_FOUND",
       "VALIDATION_ERROR",
       "CONFLICT",
+      "ASSET_IN_USE",
       "RATE_LIMITED",
       "PROVIDER_ERROR",
       "AI_OUTPUT_INVALID",

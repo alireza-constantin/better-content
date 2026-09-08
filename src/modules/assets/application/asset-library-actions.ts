@@ -9,6 +9,10 @@ import {
   type AssetLibraryItemDto,
 } from "./asset-library-service";
 import {
+  createAssetDeletionApplicationService,
+  type DeleteAssetResult,
+} from "./asset-deletion-service";
+import {
   createUploadApplicationService,
   type BeginUploadResult,
   type FinalizeUploadResult,
@@ -38,6 +42,10 @@ export async function renameAssetAction(
   input: unknown,
 ): Promise<ActionResult<AssetLibraryItemDto>> {
   return resultFrom(() => createAssetLibraryApplicationService().renameAsset(input));
+}
+
+export async function deleteAssetAction(input: unknown): Promise<ActionResult<DeleteAssetResult>> {
+  return resultFrom(() => createAssetDeletionApplicationService().deleteAsset(input));
 }
 
 export async function beginAssetUploadAction(

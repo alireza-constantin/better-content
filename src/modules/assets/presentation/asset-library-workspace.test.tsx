@@ -19,11 +19,13 @@ const mocks = vi.hoisted(() => ({
   video: vi.fn(),
   audio: vi.fn(),
   download: vi.fn(),
+  delete: vi.fn(),
 }));
 
 vi.mock("../application/asset-library-actions", () => ({
   beginAssetUploadAction: mocks.begin,
   createExternalAssetLinkAction: mocks.createLink,
+  deleteAssetAction: mocks.delete,
   finalizeAssetUploadAction: mocks.finalize,
   getAssetLibraryAction: mocks.getLibrary,
   renameAssetAction: mocks.rename,
@@ -281,6 +283,31 @@ describe("Workspace Asset Library", () => {
       }),
     );
     expect(mocks.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("confirms irreversible deletion and presents an in-use conflict without closing the detail", async () => {
+    mocks.delete.mockResolvedValue({ ok: false, code: "ASSET_IN_USE" });
+    renderWorkspace("en", [item({ displayName: "Referenced" })]);
+    fireEvent.click(screen.getByRole("button", { name: /Referenced/u }));
+    await screen.findByRole("dialog");
+    fireEvent.click(screen.getByRole("button", { name: "Delete media" }));
+    expect(screen.getByRole("alertdialog")).not.toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Delete permanently" }));
+    await waitFor(() =>
+      expect(mocks.delete).toHaveBeenCalledWith({ workspaceId, assetId: item().id }),
+    );
+    expect(
+      screen.getByText("This media is still referenced by content and cannot be deleted."),
+    ).not.toBeNull();
+  });
+
+  it("keeps a deleting asset visible but disables its mutation and capability controls", async () => {
+    renderWorkspace("en", [item({ status: "DELETING", displayName: "Removing" })]);
+    fireEvent.click(screen.getByRole("button", { name: /Removing/u }));
+    await screen.findByRole("dialog");
+    expect(screen.queryByRole("button", { name: "Save name" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Delete media" })).toBeNull();
+    expect(mocks.download).not.toHaveBeenCalled();
   });
 
   it("shows all lifecycle labels and uses localized RTL controls", () => {

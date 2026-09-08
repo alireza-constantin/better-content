@@ -7,13 +7,19 @@ import type { SaveContentDraftActionResult } from "../application/content-action
 import type { ContentDraftDto } from "../application/content-read-service";
 import {
   contentDocumentsEqual,
+  exportContentDocumentV3Recovery,
   exportContentDocumentV2Recovery,
   type ContentDocumentV2,
+  type ContentDocumentV3,
 } from "../domain";
 
 export const CONTENT_DRAFT_AUTOSAVE_DEBOUNCE_MS = 850;
 export type ContentDraftAutosaveStatus = "unsaved" | "saving" | "saved" | "failed" | "conflict";
-export type AutosaveDocument = ContentDocumentV2;
+export type AutosaveDocument = ContentDocumentV2 | ContentDocumentV3;
+const defaultRecoveryExport = (document: AutosaveDocument) =>
+  document.schemaVersion === 3
+    ? exportContentDocumentV3Recovery(document)
+    : exportContentDocumentV2Recovery(document);
 export type AutosaveSaveInput = Readonly<{
   workspaceId: string;
   contentId: string;
@@ -32,6 +38,7 @@ type Options = Readonly<{
   save: (input: AutosaveSaveInput) => Promise<AutosaveSaveResult>;
   reload: () => Promise<AutosaveReloadResult>;
   debounceMs?: number;
+  recoveryExport?: (document: AutosaveDocument) => string;
 }>;
 type Result = Readonly<{
   document: AutosaveDocument;
@@ -51,10 +58,8 @@ type Result = Readonly<{
   copyUnsaved: () => Promise<void>;
 }>;
 
-function requireV2(draft: ContentDraftDto): ContentDocumentV2 {
-  if (draft.document.schemaVersion === 2) return draft.document;
-  if (draft.v2Projection) return draft.v2Projection;
-  throw new Error("A legacy Content Draft requires its V2 projection.");
+function requireV3(draft: ContentDraftDto): ContentDocumentV3 {
+  return draft.editorDocument;
 }
 
 /** Serializes whole-document saves; refs ensure responses cannot overwrite newer local editing. */
@@ -66,6 +71,7 @@ export function useContentDraftAutosave({
   save,
   reload,
   debounceMs = CONTENT_DRAFT_AUTOSAVE_DEBOUNCE_MS,
+  recoveryExport = defaultRecoveryExport,
 }: Options): Result {
   const [document, setDocument] = useState(initialDocument);
   const [persistedDocument, setPersistedDocument] = useState(initialDocument);
@@ -137,7 +143,7 @@ export function useContentDraftAutosave({
           fail(result.code);
           return;
         }
-        const saved = requireV2(result.draft);
+        const saved = requireV3(result.draft);
         baseRevision.current = result.draft.revision;
         persisted.current = saved;
         setPersistedDocument(saved);
@@ -215,7 +221,7 @@ export function useContentDraftAutosave({
     start(latest.current, baseRevision.current);
   };
   const adoptPersistedDraft = (draft: ContentDraftDto) => {
-    const authoritative = requireV2(draft);
+    const authoritative = requireV3(draft);
     clearTimer();
     latest.current = authoritative;
     persisted.current = authoritative;
@@ -252,7 +258,7 @@ export function useContentDraftAutosave({
       setStatus("conflict");
       return;
     }
-    const authoritative = requireV2(result.draft);
+    const authoritative = requireV3(result.draft);
     latest.current = authoritative;
     persisted.current = authoritative;
     baseRevision.current = result.draft.revision;
@@ -272,7 +278,7 @@ export function useContentDraftAutosave({
     setIsCopying(true);
     setCopyFeedback(null);
     try {
-      await navigator.clipboard.writeText(exportContentDocumentV2Recovery(latest.current));
+      await navigator.clipboard.writeText(recoveryExport(latest.current));
       if (mounted.current) setCopyFeedback("copied");
     } catch {
       if (mounted.current) setCopyFeedback("failed");

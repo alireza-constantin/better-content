@@ -12,6 +12,17 @@ import {
 import { z } from "zod";
 
 import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogBackdrop,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogPortal,
+  AlertDialogTitle,
+  AlertDialogViewport,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -34,6 +45,7 @@ import type { AssetLibraryDto, AssetLibraryItemDto } from "../application/asset-
 import {
   beginAssetUploadAction,
   createExternalAssetLinkAction,
+  deleteAssetAction,
   finalizeAssetUploadAction,
   getAssetLibraryAction,
   renameAssetAction,
@@ -143,7 +155,8 @@ function useLifecyclePolling(
 ) {
   const lifecycleStartedAt = useRef<number | null>(null);
   const activeLifecycleCount = library.assets.filter(
-    (asset) => asset.status === "PENDING" || asset.status === "PROCESSING",
+    (asset) =>
+      asset.status === "PENDING" || asset.status === "PROCESSING" || asset.status === "DELETING",
   ).length;
   useEffect(() => {
     if (!active || activeLifecycleCount === 0) {
@@ -238,19 +251,24 @@ function AssetFilters({ state }: Readonly<{ state: AssetLibraryUrlState }>) {
   );
 }
 
-function CreationPanel({
+export function AssetCreationPanel({
   workspaceId,
   onCreated,
-}: Readonly<{ workspaceId: string; onCreated: () => void }>) {
+  allowedMediaTypes = mediaTypes,
+}: Readonly<{
+  workspaceId: string;
+  onCreated: (assetId?: string) => void;
+  allowedMediaTypes?: readonly MediaType[];
+}>) {
   const t = useTranslations("AssetLibrary");
   const [notice, setNotice] = useState<"error" | "uploading" | "created" | null>(null);
   const upload = useForm<{ mediaType: MediaType; displayName: string; file: FileList }>({
     resolver: zodResolver(uploadCreationSchema),
-    defaultValues: { mediaType: "IMAGE", displayName: "" },
+    defaultValues: { mediaType: allowedMediaTypes[0] ?? "IMAGE", displayName: "" },
   });
   const link = useForm<{ mediaType: MediaType; displayName: string; sourceUrl: string }>({
     resolver: zodResolver(linkCreationSchema),
-    defaultValues: { mediaType: "IMAGE", displayName: "", sourceUrl: "" },
+    defaultValues: { mediaType: allowedMediaTypes[0] ?? "IMAGE", displayName: "", sourceUrl: "" },
   });
   const createUpload = upload.handleSubmit(async (values) => {
     const file = values.file?.item?.(0) ?? values.file?.[0];
@@ -291,7 +309,7 @@ function CreationPanel({
       }
       upload.reset();
       setNotice("created");
-      onCreated();
+      onCreated(finalized.value.assetId);
     } catch {
       setNotice("error");
     }
@@ -305,7 +323,7 @@ function CreationPanel({
       }
       link.reset();
       setNotice("created");
-      onCreated();
+      onCreated(result.value.assetId);
     } catch {
       setNotice("error");
     }
@@ -324,6 +342,7 @@ function CreationPanel({
             errors={upload.formState.errors}
             fileRegistration={upload.register("file")}
             mediaTypeRegistration={upload.register("mediaType")}
+            allowedMediaTypes={allowedMediaTypes}
             prefix="upload"
             t={t}
           />
@@ -341,6 +360,7 @@ function CreationPanel({
             displayNameRegistration={link.register("displayName")}
             errors={link.formState.errors}
             mediaTypeRegistration={link.register("mediaType")}
+            allowedMediaTypes={allowedMediaTypes}
             prefix="link"
             sourceUrlRegistration={link.register("sourceUrl")}
             t={t}
@@ -381,6 +401,7 @@ function CreationFields({
   errors,
   fileRegistration,
   mediaTypeRegistration,
+  allowedMediaTypes,
   prefix,
   sourceUrlRegistration,
   t,
@@ -393,6 +414,7 @@ function CreationFields({
   }>;
   fileRegistration?: UseFormRegisterReturn;
   mediaTypeRegistration: UseFormRegisterReturn;
+  allowedMediaTypes: readonly MediaType[];
   prefix: string;
   sourceUrlRegistration?: UseFormRegisterReturn;
   t: ReturnType<typeof useTranslations>;
@@ -411,7 +433,7 @@ function CreationFields({
           className="h-9 rounded-md border bg-background px-3 text-sm text-foreground"
           {...mediaTypeRegistration}
         >
-          {mediaTypes.map((type) => (
+          {allowedMediaTypes.map((type) => (
             <option key={type} value={type}>
               {t(`type${type}`)}
             </option>
@@ -450,11 +472,13 @@ function AssetDetail({
   asset,
   workspaceId,
   onClose,
+  onDeleted,
   onRenamed,
 }: Readonly<{
   asset: AssetLibraryItemDto | null;
   workspaceId: string;
   onClose: () => void;
+  onDeleted: () => void;
   onRenamed: () => void;
 }>) {
   const t = useTranslations("AssetLibrary");
@@ -463,6 +487,8 @@ function AssetDetail({
     resolver: zodResolver(renameSchema),
     values: { displayName: asset?.displayName ?? "" },
   });
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteError, setDeleteError] = useState<"inUse" | "processing" | "generic" | null>(null);
   if (!asset) return null;
   const ready = asset.status === "READY";
   const submitRename = rename.handleSubmit(async (values) => {
@@ -477,6 +503,21 @@ function AssetDetail({
     }
     onRenamed();
   });
+  const submitDeletion = async () => {
+    const result = await deleteAssetAction({ workspaceId, assetId: asset.id });
+    if (result.ok) {
+      setConfirmDelete(false);
+      onDeleted();
+      return;
+    }
+    setDeleteError(
+      result.code === "ASSET_IN_USE"
+        ? "inUse"
+        : result.code === "CONFLICT" && asset.status === "PROCESSING"
+          ? "processing"
+          : "generic",
+    );
+  };
   return (
     <Dialog open={Boolean(asset)} onOpenChange={(open) => !open && onClose()}>
       <DialogPortal>
@@ -555,6 +596,67 @@ function AssetDetail({
                   </Button>
                 </form>
               ) : null}
+              {asset.status !== "DELETING" ? (
+                <section className="grid gap-3 border-t pt-4" aria-labelledby="asset-delete-title">
+                  <div>
+                    <h3 id="asset-delete-title" className="font-medium">
+                      {t("delete")}
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      {t("deleteDescription", { count: asset.referenceCount })}
+                    </p>
+                  </div>
+                  {asset.status === "PROCESSING" ? (
+                    <p className="text-sm text-muted-foreground">{t("deleteProcessing")}</p>
+                  ) : (
+                    <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
+                      <Button
+                        className="w-fit"
+                        type="button"
+                        variant="destructive"
+                        onClick={() => {
+                          setDeleteError(null);
+                          setConfirmDelete(true);
+                        }}
+                      >
+                        {t("delete")}
+                      </Button>
+                      <AlertDialogPortal>
+                        <AlertDialogBackdrop />
+                        <AlertDialogViewport>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>{t("deleteConfirmTitle")}</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                {t("deleteConfirmDescription")}
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setConfirmDelete(false)}
+                              >
+                                {t("cancel")}
+                              </Button>
+                              <Button type="button" variant="destructive" onClick={submitDeletion}>
+                                {t("deleteConfirm")}
+                              </Button>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialogViewport>
+                      </AlertDialogPortal>
+                    </AlertDialog>
+                  )}
+                  {deleteError ? (
+                    <p role="alert" className="text-sm text-destructive">
+                      {t(
+                        `delete${deleteError === "inUse" ? "InUse" : deleteError === "processing" ? "Processing" : "Error"}`,
+                      )}
+                    </p>
+                  ) : null}
+                </section>
+              ) : null}
             </div>
             <DialogFooter>
               {ready ? (
@@ -604,7 +706,7 @@ function AssetLibraryWorkspaceSession({
           </p>
         </div>
       </header>
-      <CreationPanel workspaceId={workspaceId} onCreated={refresh} />
+      <AssetCreationPanel workspaceId={workspaceId} onCreated={refresh} />
       <AssetFilters
         key={`${initialUrlState.page}:${initialUrlState.search}:${initialUrlState.mediaType ?? ""}:${initialUrlState.status ?? ""}`}
         state={initialUrlState}
@@ -685,6 +787,7 @@ function AssetLibraryWorkspaceSession({
         asset={selected}
         workspaceId={workspaceId}
         onClose={() => setSelected(null)}
+        onDeleted={refresh}
         onRenamed={refresh}
       />
     </section>

@@ -14,6 +14,7 @@ export type SaveContentDnaActionResult =
       ok: false;
       code:
         | "CONFLICT"
+        | "ASSET_IN_USE"
         | "VALIDATION_ERROR"
         | "UNAUTHORIZED"
         | "FORBIDDEN"

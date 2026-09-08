@@ -1,6 +1,12 @@
-import { contentDocumentV2Schema, type ContentDocumentV2 } from "../domain";
+import {
+  contentDocumentV2Schema,
+  contentDocumentV3Schema,
+  type ContentDocumentV2,
+  type ContentDocumentV3,
+} from "../domain";
 
-type Block = ContentDocumentV2["script"]["blocks"][number];
+type EditorDocument = ContentDocumentV2 | ContentDocumentV3;
+type Block = EditorDocument["script"]["blocks"][number];
 const freshBlock = (text = ""): Block => ({
   id: crypto.randomUUID(),
   type: "paragraph",
@@ -9,25 +15,23 @@ const freshBlock = (text = ""): Block => ({
   editDirections: [],
 });
 // Local editing retains a blank active paragraph; the save service is the canonical persistence boundary.
-const update = (
-  document: ContentDocumentV2,
-  blocks: readonly Block[],
-): ContentDocumentV2 | null => {
+const update = <T extends EditorDocument>(document: T, blocks: readonly Block[]): T | null => {
   try {
-    return contentDocumentV2Schema.parse({
+    const schema = document.schemaVersion === 3 ? contentDocumentV3Schema : contentDocumentV2Schema;
+    return schema.parse({
       ...document,
       script: { blocks: blocks.length ? blocks : [freshBlock()] },
-    });
+    }) as T;
   } catch {
     return null;
   }
 };
 
-export function replaceBlockText(
-  document: ContentDocumentV2,
+export function replaceBlockText<T extends EditorDocument>(
+  document: T,
   id: string,
   text: string,
-): ContentDocumentV2 | null {
+): T | null {
   return update(
     document,
     document.script.blocks.map((block) =>
@@ -35,12 +39,12 @@ export function replaceBlockText(
     ),
   );
 }
-export function splitBlock(
-  document: ContentDocumentV2,
+export function splitBlock<T extends EditorDocument>(
+  document: T,
   id: string,
   start: number,
   end: number,
-): ContentDocumentV2 | null {
+): T | null {
   const index = document.script.blocks.findIndex((block) => block.id === id);
   if (index < 0 || document.script.blocks.length >= 1000) return null;
   const block = document.script.blocks[index];
@@ -53,7 +57,7 @@ export function splitBlock(
     ...document.script.blocks.slice(index + 1),
   ]);
 }
-export function mergeBlock(document: ContentDocumentV2, id: string): ContentDocumentV2 | null {
+export function mergeBlock<T extends EditorDocument>(document: T, id: string): T | null {
   const index = document.script.blocks.findIndex((block) => block.id === id);
   if (index <= 0) return null;
   const previous = document.script.blocks[index - 1];
@@ -70,16 +74,16 @@ export function mergeBlock(document: ContentDocumentV2, id: string): ContentDocu
     ...document.script.blocks.slice(index + 1),
   ]);
 }
-export function addBlock(document: ContentDocumentV2): ContentDocumentV2 | null {
+export function addBlock<T extends EditorDocument>(document: T): T | null {
   return document.script.blocks.length >= 1000
     ? null
     : update(document, [...document.script.blocks, freshBlock()]);
 }
-export function moveBlock(
-  document: ContentDocumentV2,
+export function moveBlock<T extends EditorDocument>(
+  document: T,
   id: string,
   delta: -1 | 1,
-): ContentDocumentV2 | null {
+): T | null {
   const index = document.script.blocks.findIndex((block) => block.id === id);
   const target = index + delta;
   if (index < 0 || target < 0 || target >= document.script.blocks.length) return null;
@@ -87,7 +91,7 @@ export function moveBlock(
   [blocks[index], blocks[target]] = [blocks[target], blocks[index]];
   return update(document, blocks);
 }
-export function deleteBlock(document: ContentDocumentV2, id: string): ContentDocumentV2 | null {
+export function deleteBlock<T extends EditorDocument>(document: T, id: string): T | null {
   const index = document.script.blocks.findIndex((block) => block.id === id);
   if (index < 0) return null;
   return update(
@@ -97,13 +101,13 @@ export function deleteBlock(document: ContentDocumentV2, id: string): ContentDoc
 }
 
 /** Multiline paste is structural: only retained lines create new blocks. */
-export function pasteIntoBlock(
-  document: ContentDocumentV2,
+export function pasteIntoBlock<T extends EditorDocument>(
+  document: T,
   id: string,
   start: number,
   end: number,
   pasted: string,
-): ContentDocumentV2 | null {
+): T | null {
   const index = document.script.blocks.findIndex((block) => block.id === id);
   if (index < 0) return null;
   const lines = pasted.replace(/\r\n?/g, "\n").split("\n");

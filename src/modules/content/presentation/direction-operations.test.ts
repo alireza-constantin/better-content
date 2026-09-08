@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import type { ContentDocumentV2 } from "../domain";
+import { projectContentDocumentV2ToV3, type ContentDocumentV2 } from "../domain";
 import {
   addDirection,
   deleteDirection,
   moveDirection,
   replaceDirection,
+  setDirectionAsset,
 } from "./direction-operations";
 
 const blockId = "00000000-0000-4000-8000-000000000001";
@@ -23,6 +24,29 @@ const document = (): ContentDocumentV2 => ({
       },
     ],
   },
+});
+
+describe("direction Asset operations", () => {
+  it("changes only an eligible V3 cue Asset identity and supports detach", () => {
+    const cueId = "00000000-0000-4000-8000-000000000099";
+    const assetId = "00000000-0000-4000-8000-000000000098";
+    const v3 = projectContentDocumentV2ToV3({
+      ...document(),
+      script: {
+        blocks: [
+          {
+            ...document().script.blocks[0],
+            editDirections: [{ id: cueId, type: "BROLL_CUE", description: "Visual" }],
+          },
+        ],
+      },
+    });
+    const attached = setDirectionAsset(v3, blockId, cueId, assetId)!;
+    expect(attached.script.blocks[0].editDirections[0]).toMatchObject({ id: cueId, assetId });
+    expect(
+      setDirectionAsset(attached, blockId, cueId, undefined)!.script.blocks[0].editDirections[0],
+    ).not.toHaveProperty("assetId");
+  });
 });
 
 describe("direction operations", () => {

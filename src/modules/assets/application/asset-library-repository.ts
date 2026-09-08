@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 
 import { assetReferences, assets } from "@/db/schema";
 import type { AssetDatabase } from "./asset-repository";
@@ -10,6 +10,8 @@ export type AssetLibraryQuery = Readonly<{
   page: number;
   search: string;
   mediaType: "IMAGE" | "VIDEO" | "AUDIO" | null;
+  mediaTypes?: readonly ("IMAGE" | "VIDEO" | "AUDIO")[];
+  assetIds?: readonly string[];
   status: "PENDING" | "PROCESSING" | "READY" | "FAILED" | "DELETING" | null;
 }>;
 
@@ -25,7 +27,9 @@ export async function listAssetLibraryRecords(
   query: AssetLibraryQuery,
 ) {
   const conditions = [eq(assets.workspaceId, query.workspaceId)];
-  if (query.mediaType) conditions.push(eq(assets.mediaType, query.mediaType));
+  if (query.assetIds?.length) conditions.push(inArray(assets.id, query.assetIds));
+  if (query.mediaTypes?.length) conditions.push(inArray(assets.mediaType, query.mediaTypes));
+  else if (query.mediaType) conditions.push(eq(assets.mediaType, query.mediaType));
   if (query.status) conditions.push(eq(assets.status, query.status));
   if (query.search) {
     const pattern = escapedAssetLibrarySubstring(query.search);

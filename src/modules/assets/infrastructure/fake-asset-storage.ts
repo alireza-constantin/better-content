@@ -2,6 +2,7 @@ import { Readable } from "node:stream";
 
 import type {
   AssetStorage,
+  ManagedStorageObjectPage,
   PrivateReadCapability,
   StagingPutCapability,
   StoredObjectMetadata,
@@ -23,9 +24,33 @@ export class FakeAssetStorage implements AssetStorage {
   private readonly objects = new Map<string, Buffer>();
   private readonly failures = new Map<FailureOperation, Error>();
   private capabilitySequence = 0;
+  private readonly modifiedAt = new Map<string, Date>();
 
   putStagingObject(key: StagingStorageKey, bytes: Uint8Array): void {
     this.objects.set(assertStagingStorageKey(key), Buffer.from(bytes));
+    this.modifiedAt.set(key, new Date());
+  }
+
+  setObjectLastModified(key: StagingStorageKey | PermanentStorageKey, value: Date): void {
+    this.modifiedAt.set(assertStorageKey(key), value);
+  }
+
+  async listManagedObjects(
+    input: Readonly<{ namespace: "staging" | "permanent"; cursor?: string | null; limit?: number }>,
+  ): Promise<ManagedStorageObjectPage> {
+    const limit = Math.max(1, Math.min(input.limit ?? 100, 500));
+    const prefix = `${input.namespace}/`;
+    const keys = [...this.objects.keys()].filter((key) => key.startsWith(prefix)).sort();
+    const start = input.cursor ? keys.findIndex((key) => key > input.cursor!) : 0;
+    const page = keys.slice(Math.max(0, start), Math.max(0, start) + limit);
+    return {
+      objects: page.map((key) => ({
+        key: assertStorageKey(key),
+        sizeBytes: this.objects.get(key)!.byteLength,
+        lastModified: this.modifiedAt.get(key) ?? new Date(0),
+      })),
+      nextCursor: page.length === limit ? page.at(-1)! : null,
+    };
   }
 
   failNext(
@@ -79,6 +104,7 @@ export class FakeAssetStorage implements AssetStorage {
     const chunks: Buffer[] = [];
     for await (const chunk of source) chunks.push(Buffer.from(chunk));
     this.objects.set(validKey, Buffer.concat(chunks));
+    this.modifiedAt.set(validKey, new Date());
   }
 
   async putPermanentFromStream(
@@ -92,6 +118,7 @@ export class FakeAssetStorage implements AssetStorage {
     const chunks: Buffer[] = [];
     for await (const chunk of source) chunks.push(Buffer.from(chunk));
     this.objects.set(validKey, Buffer.concat(chunks));
+    this.modifiedAt.set(validKey, new Date());
   }
 
   private async openRead(validKey: string): Promise<Readable> {
@@ -111,7 +138,10 @@ export class FakeAssetStorage implements AssetStorage {
     this.operations.push(`copy:${sourceKey}:${destinationKey}`);
     const source = this.objects.get(sourceKey);
     if (!source) throw new AssetStorageError("Private object is missing.", "NOT_FOUND");
-    if (!this.objects.has(destinationKey)) this.objects.set(destinationKey, Buffer.from(source));
+    if (!this.objects.has(destinationKey)) {
+      this.objects.set(destinationKey, Buffer.from(source));
+      this.modifiedAt.set(destinationKey, new Date());
+    }
   }
 
   async deleteStagingObject(key: StagingStorageKey): Promise<void> {
@@ -141,6 +171,7 @@ export class FakeAssetStorage implements AssetStorage {
     this.throwFailure("delete");
     this.operations.push(`delete:${key}`);
     this.objects.delete(key);
+    this.modifiedAt.delete(key);
   }
 
   private throwFailure(operation: FailureOperation): void {

@@ -2,6 +2,7 @@ import type { Readable } from "node:stream";
 
 import type {
   AssetStorage,
+  ManagedStorageObjectPage,
   PrivateReadCapability,
   PrivateReadOptions,
   StagingPutCapability,
@@ -28,6 +29,14 @@ export interface S3CompatiblePrivateObjectClient {
   putIfAbsent(key: string, source: AsyncIterable<Uint8Array>): Promise<void>;
   copyIfAbsent(source: string, destination: string): Promise<void>;
   delete(key: string): Promise<void>;
+  list(
+    input: Readonly<{ prefix: "staging/" | "permanent/"; cursor?: string | null; limit: number }>,
+  ): Promise<
+    Readonly<{
+      objects: readonly Readonly<{ key: string; sizeBytes: number; lastModified: Date }>[];
+      nextCursor: string | null;
+    }>
+  >;
   issuePrivateRead(
     key: string,
     expiresAt: Date,
@@ -38,6 +47,36 @@ export interface S3CompatiblePrivateObjectClient {
 /** Provider-neutral mapper; concrete SDK configuration remains deployment work. */
 export class S3CompatibleAssetStorage implements AssetStorage {
   constructor(private readonly client: S3CompatiblePrivateObjectClient) {}
+
+  async listManagedObjects(
+    input: Readonly<{ namespace: "staging" | "permanent"; cursor?: string | null; limit?: number }>,
+  ): Promise<ManagedStorageObjectPage> {
+    const limit = Math.max(1, Math.min(input.limit ?? 100, 500));
+    try {
+      const page = await this.client.list({
+        prefix: `${input.namespace}/`,
+        cursor: input.cursor,
+        limit,
+      });
+      return {
+        objects: page.objects.map((object) => {
+          const key = assertStorageKey(object.key);
+          if (
+            !key.startsWith(`${input.namespace}/`) ||
+            !Number.isSafeInteger(object.sizeBytes) ||
+            object.sizeBytes < 0 ||
+            Number.isNaN(object.lastModified.getTime())
+          )
+            throw new AssetStorageError("Managed object listing is invalid.", "UNAVAILABLE");
+          return { ...object, key };
+        }),
+        nextCursor: page.nextCursor,
+      };
+    } catch (error) {
+      if (error instanceof AssetStorageError) throw error;
+      throw new AssetStorageError("Managed storage is unavailable.", "UNAVAILABLE");
+    }
+  }
 
   async createStagingPutCapability(
     key: StagingStorageKey,

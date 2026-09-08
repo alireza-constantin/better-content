@@ -23,6 +23,8 @@ const assetLibraryInputSchema = z
     page: z.number().int().min(1).max(100).default(1),
     search: z.string().max(400).default(""),
     mediaType: assetMediaTypeSchema.nullable().optional().default(null),
+    mediaTypes: z.array(assetMediaTypeSchema).min(1).max(2).optional(),
+    assetIds: z.array(z.uuid()).min(1).max(5).optional(),
     status: assetStatusSchema.nullable().optional().default(null),
   })
   .strict();

@@ -108,6 +108,20 @@ describe("AssetStorage adapters", () => {
       delete: async (key) => {
         objects.delete(key);
       },
+      list: async ({ prefix, cursor, limit }) => {
+        const keys = [...objects.keys()]
+          .filter((key) => key.startsWith(prefix) && (!cursor || key > cursor))
+          .sort()
+          .slice(0, limit);
+        return {
+          objects: keys.map((key) => ({
+            key,
+            sizeBytes: objects.get(key)!.byteLength,
+            lastModified: new Date("2026-09-01T00:00:00Z"),
+          })),
+          nextCursor: keys.length === limit ? keys.at(-1)! : null,
+        };
+      },
       issuePrivateRead: async (key, _expiresAt, options) => {
         privateRead = { key, rangeAllowed: options.rangeAllowed };
         return { url: `https://storage.test/private/${key}` };
@@ -140,5 +154,35 @@ describe("AssetStorage adapters", () => {
     expect(() => assertStagingStorageKey("staging/../secret")).toThrow();
     expect(() => assertPermanentStorageKey(createStagingStorageKey())).toThrow();
     expect(() => assertStagingStorageKey(createPermanentStorageKey())).toThrow();
+  });
+
+  it("lists only bounded managed namespace pages", async () => {
+    const storage = new FakeAssetStorage();
+    const first = createStagingStorageKey(),
+      second = createStagingStorageKey(),
+      permanent = createPermanentStorageKey();
+    storage.putStagingObject(first, bytes);
+    storage.putStagingObject(second, bytes);
+    await storage.putPermanentFromStream(
+      permanent,
+      (async function* () {
+        yield bytes;
+      })(),
+    );
+    const page = await storage.listManagedObjects({ namespace: "staging", limit: 1 });
+    expect(page.objects).toHaveLength(1);
+    expect(page.objects[0]?.key.startsWith("staging/")).toBe(true);
+    expect(page.nextCursor).not.toBeNull();
+    const next = await storage.listManagedObjects({
+      namespace: "staging",
+      cursor: page.nextCursor,
+      limit: 1,
+    });
+    expect(next.objects).toHaveLength(1);
+    expect(
+      (await storage.listManagedObjects({ namespace: "permanent" })).objects.map(
+        (object) => object.key,
+      ),
+    ).toEqual([permanent]);
   });
 });

@@ -1,12 +1,13 @@
 import { createReadStream, createWriteStream } from "node:fs";
 import { pipeline } from "node:stream/promises";
 import { Readable } from "node:stream";
-import { link, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { link, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { relative, resolve, sep } from "node:path";
 import { randomUUID } from "node:crypto";
 
 import type {
   AssetStorage,
+  ManagedStorageObjectPage,
   PrivateReadCapability,
   StagingPutCapability,
   StoredObjectMetadata,
@@ -30,6 +31,29 @@ export class FilesystemAssetStorage implements AssetStorage {
 
   constructor(rootDirectory: string) {
     this.root = resolve(rootDirectory);
+  }
+
+  async listManagedObjects(
+    input: Readonly<{ namespace: "staging" | "permanent"; cursor?: string | null; limit?: number }>,
+  ): Promise<ManagedStorageObjectPage> {
+    const limit = Math.max(1, Math.min(input.limit ?? 100, 500));
+    const namespaceRoot = resolve(this.root, input.namespace);
+    const keys = await listFiles(namespaceRoot, input.namespace).catch((error) => {
+      if (isMissing(error)) return [] as string[];
+      throw new AssetStorageError("Filesystem storage is unavailable.", "UNAVAILABLE");
+    });
+    const page = keys
+      .filter((key) => !input.cursor || key > input.cursor)
+      .sort()
+      .slice(0, limit);
+    const objects = await Promise.all(
+      page.map(async (key) => {
+        const validKey = assertStorageKey(key);
+        const metadata = await stat(this.pathFor(validKey));
+        return { key: validKey, sizeBytes: metadata.size, lastModified: metadata.mtime };
+      }),
+    );
+    return { objects, nextCursor: page.length === limit ? page.at(-1)! : null };
   }
 
   async createStagingPutCapability(
@@ -177,6 +201,22 @@ export class FilesystemAssetStorage implements AssetStorage {
       throw new AssetStorageError("Filesystem storage is unavailable.", "UNAVAILABLE");
     }
   }
+}
+
+async function listFiles(
+  directory: string,
+  namespace: "staging" | "permanent",
+  relativePath = "",
+): Promise<string[]> {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const result: string[] = [];
+  for (const entry of entries) {
+    const childRelative = relativePath ? `${relativePath}/${entry.name}` : entry.name;
+    if (entry.isDirectory())
+      result.push(...(await listFiles(resolve(directory, entry.name), namespace, childRelative)));
+    else if (entry.isFile()) result.push(`${namespace}/${childRelative}`);
+  }
+  return result;
 }
 
 function isMissing(error: unknown): boolean {

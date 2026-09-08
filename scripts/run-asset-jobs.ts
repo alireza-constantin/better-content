@@ -6,6 +6,7 @@ import {
   MapAssetJobHandlerRegistry,
   runAssetJobBatch,
 } from "@/modules/assets/application/asset-job-runner";
+import { createAssetDeletionHandler } from "@/modules/assets/application/asset-deletion-handler";
 import {
   createUploadExpirationHandler,
   createUploadProcessingHandler,
@@ -24,7 +25,8 @@ const registry = new MapAssetJobHandlerRegistry()
     "INGEST_EXTERNAL_URL",
     createExternalUrlIngestionHandler({ storage, inspector: new DefaultMediaInspector() }),
   )
-  .register("EXPIRE_UPLOAD", createUploadExpirationHandler({ storage }));
+  .register("EXPIRE_UPLOAD", createUploadExpirationHandler({ storage }))
+  .register("DELETE_ASSET", createAssetDeletionHandler({ storage }));
 
 // Deployment invokes this under a scheduler or supervisor; it is never an HTTP endpoint.
 await runAssetJobBatch({

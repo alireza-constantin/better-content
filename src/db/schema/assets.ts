@@ -45,6 +45,8 @@ export const assets = pgTable(
     durationMs: integer("duration_ms"),
     codecs: text("codecs"),
     failureCode: text("failure_code"),
+    /** Operational evidence retained only while irreversible cleanup is active. */
+    deletingFromReady: integer("deleting_from_ready").notNull().default(0),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
   },
@@ -79,6 +81,7 @@ export const assets = pgTable(
       "assets_failure_code_value_check",
       sql`${table.failureCode} IS NULL OR ${table.failureCode} IN ('UPLOAD_EXPIRED', 'MEDIA_TOO_LARGE', 'MEDIA_LIMIT_EXCEEDED', 'MEDIA_TYPE_MISMATCH', 'UNSUPPORTED_MEDIA', 'INVALID_MEDIA', 'UNSAFE_MEDIA_URL', 'MEDIA_SOURCE_UNAVAILABLE', 'PROCESSING_UNAVAILABLE')`,
     ),
+    check("assets_deleting_from_ready_check", sql`${table.deletingFromReady} IN (0, 1)`),
     check(
       "assets_positive_metadata_check",
       sql`(${table.declaredByteSize} IS NULL OR ${table.declaredByteSize} > 0) AND (${table.byteSize} IS NULL OR ${table.byteSize} > 0) AND (${table.width} IS NULL OR ${table.width} > 0) AND (${table.height} IS NULL OR ${table.height} > 0) AND (${table.durationMs} IS NULL OR ${table.durationMs} >= 0)`,

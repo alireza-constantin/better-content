@@ -30,6 +30,9 @@ type Props = Readonly<{
   versions: readonly ContentVersionDto[];
   acceptedVersionId: string | null;
   contentLanguage: "en" | "fa";
+  assetPresentations?: Readonly<
+    Record<string, Readonly<{ displayName: string; mediaType: string }>>
+  >;
 }>;
 
 function formatVersionDate(date: Date, locale: string) {
@@ -77,9 +80,9 @@ function directionDetail(
     case "CUT":
       return t(`directionValue${direction.style}`);
     case "BROLL_CUE":
-      return direction.description;
+      return `${direction.description}${"assetId" in direction && direction.assetId ? ` · ${t("historyAttachedMedia")}` : ""}`;
     case "SOUND_CUE":
-      return `${t(`directionValue${direction.kind}`)} · ${direction.description}`;
+      return `${t(`directionValue${direction.kind}`)} · ${direction.description}${"assetId" in direction && direction.assetId ? ` · ${t("historyAttachedMedia")}` : ""}`;
     case "CAPTION_EMPHASIS":
       return t(`directionValue${direction.style}`);
   }
@@ -88,12 +91,16 @@ function directionDetail(
 function DirectionPreview({
   direction,
   contentLanguage,
+  assetPresentations,
 }: Readonly<{
   direction: PerformanceDirection | EditDirection;
   contentLanguage: "en" | "fa";
+  assetPresentations?: Props["assetPresentations"];
 }>) {
   const t = useTranslations("Content");
   const detail = directionDetail(direction, t);
+  const assetId = (direction as { assetId?: string }).assetId;
+  const asset = assetId ? assetPresentations?.[assetId] : undefined;
   return (
     <li className="rounded-md border border-border/70 bg-muted/30 px-3 py-2 text-sm">
       <span className="font-medium">{t(`directionType${direction.type}`)}</span>
@@ -106,6 +113,13 @@ function DirectionPreview({
           {detail}
         </span>
       ) : null}
+      {assetId ? (
+        <span className="ms-2 text-muted-foreground">
+          <bdi dir="auto">{asset?.displayName ?? t("assetUnavailable")}</bdi>
+          {" · "}
+          {asset ? t(`assetType${asset.mediaType}`) : t("assetUnavailable")}
+        </span>
+      ) : null}
     </li>
   );
 }
@@ -114,10 +128,12 @@ function DirectionGroup({
   title,
   directions,
   contentLanguage,
+  assetPresentations,
 }: Readonly<{
   title: string;
   directions: readonly (PerformanceDirection | EditDirection)[];
   contentLanguage: "en" | "fa";
+  assetPresentations?: Props["assetPresentations"];
 }>) {
   if (!directions.length) return null;
   return (
@@ -130,6 +146,7 @@ function DirectionGroup({
           <DirectionPreview
             contentLanguage={contentLanguage}
             direction={direction}
+            assetPresentations={assetPresentations}
             key={direction.id}
           />
         ))}
@@ -141,7 +158,12 @@ function DirectionGroup({
 function V2Preview({
   document,
   contentLanguage,
-}: Readonly<{ document: ContentDocumentV2 | ContentDocumentV3; contentLanguage: "en" | "fa" }>) {
+  assetPresentations,
+}: Readonly<{
+  document: ContentDocumentV2 | ContentDocumentV3;
+  contentLanguage: "en" | "fa";
+  assetPresentations?: Props["assetPresentations"];
+}>) {
   const t = useTranslations("Content");
   const direction = contentLanguage === "fa" ? "rtl" : "ltr";
   return (
@@ -162,11 +184,13 @@ function V2Preview({
           </div>
           <DirectionGroup
             contentLanguage={contentLanguage}
+            assetPresentations={assetPresentations}
             directions={block.performanceDirections}
             title={t("performanceDirections")}
           />
           <DirectionGroup
             contentLanguage={contentLanguage}
+            assetPresentations={assetPresentations}
             directions={block.editDirections}
             title={t("editDirections")}
           />
@@ -179,7 +203,12 @@ function V2Preview({
 function VersionPreview({
   version,
   contentLanguage,
-}: Readonly<{ version: ContentVersionDto; contentLanguage: "en" | "fa" }>) {
+  assetPresentations,
+}: Readonly<{
+  version: ContentVersionDto;
+  contentLanguage: "en" | "fa";
+  assetPresentations?: Props["assetPresentations"];
+}>) {
   const t = useTranslations("Content");
   const direction = contentLanguage === "fa" ? "rtl" : "ltr";
   if (version.document.schemaVersion === 1) {
@@ -193,10 +222,21 @@ function VersionPreview({
       </p>
     );
   }
-  return <V2Preview contentLanguage={contentLanguage} document={version.document} />;
+  return (
+    <V2Preview
+      assetPresentations={assetPresentations}
+      contentLanguage={contentLanguage}
+      document={version.document}
+    />
+  );
 }
 
-export function ContentVersionHistory({ versions, acceptedVersionId, contentLanguage }: Props) {
+export function ContentVersionHistory({
+  versions,
+  acceptedVersionId,
+  contentLanguage,
+  assetPresentations,
+}: Props) {
   const t = useTranslations("Content");
   const locale = useLocale();
   const uiDirection = locale === "fa" ? "rtl" : "ltr";
@@ -300,7 +340,11 @@ export function ContentVersionHistory({ versions, acceptedVersionId, contentLang
                       </p>
                     </header>
                     <div className="mt-5">
-                      <VersionPreview contentLanguage={contentLanguage} version={selected} />
+                      <VersionPreview
+                        assetPresentations={assetPresentations}
+                        contentLanguage={contentLanguage}
+                        version={selected}
+                      />
                     </div>
                   </>
                 ) : (

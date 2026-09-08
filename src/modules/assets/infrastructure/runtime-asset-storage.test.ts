@@ -17,6 +17,7 @@ function fakeS3Client(): S3CompatiblePrivateObjectClient {
     putIfAbsent: async () => undefined,
     copyIfAbsent: async () => undefined,
     delete: async () => undefined,
+    list: async () => ({ objects: [], nextCursor: null }),
     issuePrivateRead: async () => ({ url: "https://storage.test/private" }),
   };
 }

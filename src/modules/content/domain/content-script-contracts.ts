@@ -604,6 +604,40 @@ export function exportContentDocumentV2Recovery(input: unknown): string {
   return lines.join("\n");
 }
 
+/**
+ * Recovery is deliberately a human-readable boundary, never a transport format.
+ * Asset identities are omitted; a later authorized read may enrich this with a
+ * current display name, but conflict copy must never leak an ID or capability.
+ */
+export function exportContentDocumentV3Recovery(
+  input: unknown,
+  assetPresentations: Readonly<
+    Record<string, Readonly<{ displayName: string; mediaType: string }>>
+  > = {},
+  labels: Readonly<{ attachedMedia: string; unavailable: string }> = {
+    attachedMedia: "Attached media",
+    unavailable: "unavailable",
+  },
+): string {
+  const document = canonicalizeContentDocumentV3(input);
+  const lines: string[] = ["Script"];
+  for (const block of document.script.blocks) {
+    lines.push(block.text);
+    for (const direction of block.performanceDirections)
+      lines.push(`Performance direction: ${describePerformanceDirection(direction)}`);
+    for (const direction of block.editDirections) {
+      lines.push(`Edit direction: ${describeEditDirection(direction)}`);
+      if ((direction.type === "BROLL_CUE" || direction.type === "SOUND_CUE") && direction.assetId) {
+        const asset = assetPresentations[direction.assetId];
+        lines.push(
+          `${labels.attachedMedia}: ${asset ? `${asset.displayName} (${asset.mediaType})` : labels.unavailable}`,
+        );
+      }
+    }
+  }
+  return lines.join("\n");
+}
+
 function appendNuance(summary: string, nuance: string | undefined): string {
   return nuance === undefined ? summary : `${summary} — ${nuance}`;
 }

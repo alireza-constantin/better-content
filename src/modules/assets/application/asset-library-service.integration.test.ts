@@ -9,6 +9,9 @@ import * as schema from "@/db/schema";
 import { getTestDatabaseUrl } from "@/db/test-environment";
 import { contentScriptGenerationSettings } from "@/modules/content/application/content-generation-repository";
 import { createAssetLibraryApplicationService } from "./asset-library-service";
+import { createAssetDeletionApplicationService } from "./asset-deletion-service";
+import { createAssetDeletionHandler } from "./asset-deletion-handler";
+import { FakeAssetStorage } from "../infrastructure/fake-asset-storage";
 
 const pool = new Pool({ connectionString: getTestDatabaseUrl(process.env) });
 const database = drizzle({ client: pool, schema });
@@ -173,6 +176,96 @@ beforeEach(async () =>
 afterAll(async () => pool.end());
 
 describe("Asset Library application service", () => {
+  it("transitions an owner’s eligible unreferenced asset once and cleans storage before metadata", async () => {
+    const context = await seedWorkspace();
+    const assetId = await seedAsset(context, { stagingKey: `staging/${randomUUID()}` });
+    const [asset] = await database
+      .select()
+      .from(schema.assets)
+      .where(eq(schema.assets.id, assetId));
+    if (!asset?.stagingKey || !asset.permanentKey) throw new Error("Expected managed keys.");
+    const storage = new FakeAssetStorage();
+    storage.putStagingObject(asset.stagingKey as `staging/${string}`, new Uint8Array([1]));
+    await storage.putPermanentFromStream(
+      asset.permanentKey as `permanent/${string}`,
+      (async function* () {
+        yield new Uint8Array([1]);
+      })(),
+    );
+    const service = createAssetDeletionApplicationService({
+      database,
+      getAuthenticatedUserId: async () => context.userId,
+    });
+    await expect(
+      service.deleteAsset({ workspaceId: context.workspaceId, assetId }),
+    ).resolves.toMatchObject({ status: "DELETING" });
+    await expect(
+      service.deleteAsset({ workspaceId: context.workspaceId, assetId }),
+    ).resolves.toMatchObject({ status: "DELETING" });
+    expect(
+      (await database.select().from(schema.assetJobs)).filter((job) => job.type === "DELETE_ASSET"),
+    ).toHaveLength(1);
+    const handler = createAssetDeletionHandler({
+      database,
+      storage,
+      logger: { info: () => undefined, warn: () => undefined },
+    });
+    await handler({ assetId, attempts: 1, maxAttempts: 5, heartbeat: async () => true });
+    expect(
+      await database.select().from(schema.assets).where(eq(schema.assets.id, assetId)),
+    ).toHaveLength(0);
+    expect(storage.operations.filter((operation) => operation.startsWith("delete:"))).toEqual([
+      `delete:${asset.stagingKey}`,
+      `delete:${asset.permanentKey}`,
+    ]);
+  });
+
+  it("protects projection and canonical references without mutating the Asset", async () => {
+    const context = await seedWorkspace();
+    const assetId = await seedAsset(context);
+    const contentId = await seedContentForReference(context);
+    await database.insert(schema.assetReferences).values({
+      workspaceId: context.workspaceId,
+      assetId,
+      contentId,
+      artifactKind: "DRAFT",
+      directionId: randomUUID(),
+    });
+    const service = createAssetDeletionApplicationService({
+      database,
+      getAuthenticatedUserId: async () => context.userId,
+    });
+    await expect(
+      service.deleteAsset({ workspaceId: context.workspaceId, assetId }),
+    ).rejects.toMatchObject({ code: "ASSET_IN_USE" });
+    expect(
+      (await database.select().from(schema.assets).where(eq(schema.assets.id, assetId)))[0]?.status,
+    ).toBe("READY");
+  });
+
+  it("rejects processing deletion and does not disclose a foreign Workspace asset", async () => {
+    const context = await seedWorkspace();
+    const assetId = await seedAsset(context, {
+      status: "PROCESSING",
+      permanentKey: undefined,
+      byteSize: undefined,
+      detectedMimeType: undefined,
+      mediaFormat: undefined,
+      width: undefined,
+      height: undefined,
+    });
+    const foreign = await seedWorkspace();
+    const service = createAssetDeletionApplicationService({
+      database,
+      getAuthenticatedUserId: async () => context.userId,
+    });
+    await expect(
+      service.deleteAsset({ workspaceId: context.workspaceId, assetId }),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+    await expect(
+      service.deleteAsset({ workspaceId: foreign.workspaceId, assetId }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
   it("returns only current-Workspace safe DTOs in newest/id deterministic pages", async () => {
     const context = await seedWorkspace();
     const createdAt = new Date("2026-09-08T00:00:00.000Z");

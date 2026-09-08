@@ -25,6 +25,7 @@ import {
   productionDirectionLimits,
   productionDirectionValues,
   type ContentDocumentV2,
+  type ContentDocumentV3,
 } from "../domain";
 import {
   addDirection,
@@ -34,13 +35,16 @@ import {
   type DirectionCategory,
   type ProductionDirection,
 } from "./direction-operations";
+import { setDirectionAsset } from "./direction-operations";
+import { DirectionAssetPicker } from "./direction-asset-picker";
 
 type Props = Readonly<{
-  block: ContentDocumentV2["script"]["blocks"][number];
-  document: ContentDocumentV2;
+  block: (ContentDocumentV2 | ContentDocumentV3)["script"]["blocks"][number];
+  document: ContentDocumentV2 | ContentDocumentV3;
+  workspaceId?: string;
   disabled: boolean;
   language: "en" | "fa";
-  onChange: (document: ContentDocumentV2) => void;
+  onChange: (document: ContentDocumentV2 | ContentDocumentV3) => void;
 }>;
 type EditorState = Readonly<{
   category: DirectionCategory;
@@ -355,6 +359,7 @@ function DirectionForm({
 export function BlockProductionDirections({
   block,
   document,
+  workspaceId,
   disabled,
   language,
   onChange,
@@ -367,6 +372,7 @@ export function BlockProductionDirections({
     editDirections: false,
   });
   const [deleteCandidate, setDeleteCandidate] = useState<string | null>(null);
+  const [assetDirectionId, setAssetDirectionId] = useState<string | null>(null);
   const groups: readonly [DirectionCategory, readonly ProductionDirection[], string][] = [
     ["performanceDirections", block.performanceDirections, t("performanceDirections")],
     ["editDirections", block.editDirections, t("editDirections")],
@@ -375,7 +381,7 @@ export function BlockProductionDirections({
     (count, item) => count + item.performanceDirections.length + item.editDirections.length,
     0,
   );
-  const apply = (next: ContentDocumentV2 | null) => {
+  const apply = (next: ContentDocumentV2 | ContentDocumentV3 | null) => {
     if (next) onChange(next);
   };
   return (
@@ -449,6 +455,24 @@ export function BlockProductionDirections({
                   >
                     {summary(direction, t)}
                   </Button>
+                  {document.schemaVersion === 3 &&
+                  (direction.type === "BROLL_CUE" || direction.type === "SOUND_CUE") ? (
+                    <Button
+                      aria-label={t("manageDirectionAsset", { direction: summary(direction, t) })}
+                      className="min-h-9 sm:min-h-6"
+                      disabled={disabled}
+                      onClick={() => setAssetDirectionId(direction.id)}
+                      size="xs"
+                      type="button"
+                      variant={
+                        (direction as { assetId?: string }).assetId ? "secondary" : "outline"
+                      }
+                    >
+                      {(direction as { assetId?: string }).assetId
+                        ? t("assetAttached")
+                        : t("selectAsset")}
+                    </Button>
+                  ) : null}
                   <details className="relative">
                     <summary
                       className="cursor-pointer list-none px-1 text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60"
@@ -524,6 +548,33 @@ export function BlockProductionDirections({
           }}
         />
       ) : null}
+      {assetDirectionId
+        ? (() => {
+            const direction = block.editDirections.find((item) => item.id === assetDirectionId);
+            if (
+              !direction ||
+              document.schemaVersion !== 3 ||
+              (direction.type !== "BROLL_CUE" && direction.type !== "SOUND_CUE") ||
+              !workspaceId
+            )
+              return null;
+            return (
+              <DirectionAssetPicker
+                currentAssetId={(direction as { assetId?: string }).assetId}
+                directionType={direction.type}
+                onClose={() => setAssetDirectionId(null)}
+                onDetach={() =>
+                  apply(setDirectionAsset(document, block.id, direction.id, undefined))
+                }
+                onUse={(assetId) =>
+                  apply(setDirectionAsset(document, block.id, direction.id, assetId))
+                }
+                open
+                workspaceId={workspaceId}
+              />
+            );
+          })()
+        : null}
     </div>
   );
 }

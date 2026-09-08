@@ -368,6 +368,11 @@ Assets application service
 
 `AssetStorage` exposes the smallest operations needed for exact staging PUT issuance, metadata/size checks, server-controlled promotion, private read capability issuance, streaming reads, and idempotent deletion. Provider SDK types do not escape the adapter.
 
+For bounded operational reconciliation, it also enumerates one selected managed
+namespace page (`staging/` or `permanent/`) with opaque pagination, normalized
+object metadata, and runtime key validation. Listing discovers candidates only;
+PostgreSQL ownership rechecks remain authoritative.
+
 The production S3-compatible adapter is configured by environment for endpoint, region, bucket, credentials, and compatibility flags. ArvanCloud is the initial provider; no Arvan endpoint, bucket URL, credential, SDK object, or signed URL is persisted. Use one active backend per environment. Provider migration copies/verifies objects while preserving keys, then switches configuration without changing Assets, Content, or Versions.
 
 Use one dedicated private, non-versioned managed-media bucket/namespace per environment. Object versioning must be disabled. Use opaque cryptographically random keys under separate namespaces, conceptually `staging/<random>` and `permanent/<random>`. Creator data never appears in keys.

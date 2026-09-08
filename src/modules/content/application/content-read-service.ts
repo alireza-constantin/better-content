@@ -1,8 +1,10 @@
 import "server-only";
 
+import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "@/db";
+import { assets } from "@/db/schema";
 import { getServerSession } from "@/lib/auth/server";
 import { ApplicationError, type RateLimitSource } from "@/lib/errors/app-error";
 import { logger } from "@/lib/logging/server";
@@ -14,6 +16,7 @@ import {
   materializeContentDocumentV2,
   projectContentDocumentToV3,
   projectContentDocumentV3ToV2,
+  extractAssetReferences,
   type ContentDocument,
   type ContentDocumentV2,
   type ContentDocumentV3,
@@ -97,7 +100,33 @@ export type ContentDetailDto = Readonly<{
   draft: ContentDraftDto;
   acceptedVersionId: string | null;
   versions: readonly ContentVersionDto[];
+  /** Current, safe presentation metadata for immutable V3 identities. */
+  assetPresentations?: Readonly<
+    Record<string, Readonly<{ displayName: string; mediaType: string }>>
+  >;
 }>;
+
+async function loadAssetPresentations(
+  database: Pick<typeof db, "select">,
+  workspaceId: string,
+  versions: readonly ContentVersionDto[],
+) {
+  const ids = [
+    ...new Set(
+      versions.flatMap((version) =>
+        extractAssetReferences(version.document).map((reference) => reference.assetId),
+      ),
+    ),
+  ];
+  if (!ids.length) return {};
+  const rows = await database
+    .select({ id: assets.id, displayName: assets.displayName, mediaType: assets.mediaType })
+    .from(assets)
+    .where(and(eq(assets.workspaceId, workspaceId), inArray(assets.id, ids)));
+  return Object.fromEntries(
+    rows.map((row) => [row.id, { displayName: row.displayName, mediaType: row.mediaType }]),
+  );
+}
 
 export type ContentGenerationAttemptHistoryDto = Readonly<{
   id: string;
@@ -519,7 +548,15 @@ export function createContentReadApplicationService(
         parsedInput.contentId,
       );
 
-      return toContentDetail(record, versions);
+      const detail = toContentDetail(record, versions);
+      return {
+        ...detail,
+        assetPresentations: await loadAssetPresentations(
+          database,
+          parsedInput.workspaceId,
+          detail.versions,
+        ),
+      };
     },
 
     async getIdeaContentGenerationHistory(

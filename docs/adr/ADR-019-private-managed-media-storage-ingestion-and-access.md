@@ -132,6 +132,11 @@ Preview uses the validated original through native image, video, or audio
 presentation. Storage/provider behavior must support private denial, signed GET,
 range requests and seeking where applicable, expiry, and safe response headers.
 
+For bounded operational reconciliation only, the provider-neutral `AssetStorage`
+port may enumerate one managed `staging/` or `permanent/` namespace page at a
+time. Enumeration yields opaque key, size, and last-modified metadata; it is a
+candidate-discovery mechanism, never ownership authority.
+
 ### Deletion and recovery
 
 Asset deletion is reference-safe under ADR-018. The Asset first becomes

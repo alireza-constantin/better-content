@@ -7,6 +7,7 @@ import {
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
@@ -175,6 +176,24 @@ function createAwsS3PrivateObjectClient(
     },
     async delete(key) {
       await client.send(new DeleteObjectCommand({ ...commandOptions, Key: key }));
+    },
+    async list({ prefix, cursor, limit }) {
+      const response = await client.send(
+        new ListObjectsV2Command({
+          ...commandOptions,
+          Prefix: prefix,
+          ContinuationToken: cursor ?? undefined,
+          MaxKeys: limit,
+        }),
+      );
+      return {
+        objects: (response.Contents ?? []).flatMap((object) =>
+          object.Key && typeof object.Size === "number" && object.LastModified
+            ? [{ key: object.Key, sizeBytes: object.Size, lastModified: object.LastModified }]
+            : [],
+        ),
+        nextCursor: response.IsTruncated ? (response.NextContinuationToken ?? null) : null,
+      };
     },
     async issuePrivateRead(key, expiresAt, options) {
       return {

@@ -12,3 +12,6 @@ export * from "./asset-capability-actions";
 export * from "./asset-library-repository";
 export * from "./asset-library-service";
 export * from "./asset-library-actions";
+export * from "./asset-deletion-service";
+export * from "./asset-deletion-handler";
+export * from "./asset-storage-reconciliation";
