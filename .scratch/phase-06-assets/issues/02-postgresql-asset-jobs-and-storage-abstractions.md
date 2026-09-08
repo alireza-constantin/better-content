@@ -7,7 +7,7 @@ tests and without cloud credentials in local development.
 **Blocked by:** 01 — Establish the Asset domain, persistence, and
 ContentDocumentV3 foundation.
 
-**Status:** ready-for-agent
+**Status:** resloved
 
 ## Scope
 
@@ -93,23 +93,23 @@ ContentDocumentV3 foundation.
 
 ## Acceptance criteria
 
-- [ ] The PostgreSQL job schema and repository support atomic claim, lease,
+- [x] The PostgreSQL job schema and repository support atomic claim, lease,
       heartbeat, reclaim, bounded retry, exhaustion, completion, and safe
       duplicate delivery.
-- [ ] Unique logical workflow ownership rejects parallel upload-processing
+- [x] Unique logical workflow ownership rejects parallel upload-processing
       workflows for one Asset and can durably distinguish unfinalized from
       finalized PENDING.
-- [ ] Job payload validation permits only the approved stable internal identity
+- [x] Job payload validation permits only the approved stable internal identity
       and rejects/leaves out sensitive or large values.
-- [ ] The dedicated runner processes bounded work independently of a user HTTP
+- [x] The dedicated runner processes bounded work independently of a user HTTP
       request and shuts down without abandoning unrecoverable ownership.
-- [ ] S3-compatible, filesystem, and fake adapters conform to one
+- [x] S3-compatible, filesystem, and fake adapters conform to one
       provider-neutral private-storage contract.
-- [ ] Staging and permanent namespaces cannot be confused, escaped, listed, or
+- [x] Staging and permanent namespaces cannot be confused, escaped, listed, or
       addressed using creator-controlled paths.
-- [ ] Permanent-key reservation is atomic/idempotent and repeated processing
+- [x] Permanent-key reservation is atomic/idempotent and repeated processing
       receives the same key.
-- [ ] Fake/filesystem behavior proves private scoped access, deterministic
+- [x] Fake/filesystem behavior proves private scoped access, deterministic
       failure injection, copy/read/delete semantics, and idempotent absence.
 
 ## Focused tests

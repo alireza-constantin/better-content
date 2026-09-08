@@ -7,7 +7,7 @@ never become READY.
 **Blocked by:** 01 — Establish the Asset domain, persistence, and
 ContentDocumentV3 foundation.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 ## Scope
 
@@ -77,19 +77,19 @@ ContentDocumentV3 foundation.
 
 ## Acceptance criteria
 
-- [ ] MediaInspector returns the approved normalized metadata for every
+- [x] MediaInspector returns the approved normalized metadata for every
       supported fixture and rejects every unsupported container/codec or corrupt
       fixture through a stable safe failure category.
-- [ ] Exact byte, dimension, pixel, duration, rotation/EXIF, animation, media
+- [x] Exact byte, dimension, pixel, duration, rotation/EXIF, animation, media
       type, and upload-extension boundaries are enforced.
-- [ ] A mismatched browser MIME alone is not a failure, while detected
+- [x] A mismatched browser MIME alone is not a failure, while detected
       media-type/extension mismatch is terminal.
-- [ ] ffprobe execution uses no shell or remote protocol and enforces fixed
+- [x] ffprobe execution uses no shell or remote protocol and enforces fixed
       arguments, timeout, and bounded validated output.
-- [ ] Sharp inspection applies resource/pixel limits and rejects animated WebP.
-- [ ] Temporary media is streamed with byte ceilings, never creator-named, and
+- [x] Sharp inspection applies resource/pixel limits and rejects animated WebP.
+- [x] Temporary media is streamed with byte ceilings, never creator-named, and
       removed after every success/failure path.
-- [ ] Raw tool output and private media metadata do not escape through persisted
+- [x] Raw tool output and private media metadata do not escape through persisted
       values, application errors, or structured logs.
 
 ## Focused tests

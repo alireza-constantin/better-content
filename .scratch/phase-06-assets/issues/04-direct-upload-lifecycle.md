@@ -7,7 +7,7 @@ produce either one immutable READY Asset or a safe terminal failure.
 **Blocked by:** 02 — Establish PostgreSQL Asset jobs and provider-neutral
 storage; 03 — Validate managed media through Sharp and ffprobe.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 ## Scope
 
@@ -91,26 +91,26 @@ storage; 03 — Validate managed media through Sharp and ffprobe.
 
 ## Acceptance criteria
 
-- [ ] Begin enforces authorization, approved filename/type/size rules, and
+- [x] Begin enforces authorization, approved filename/type/size rules, and
       race-safe admission without treating browser MIME as authoritative.
-- [ ] Begin creates one PENDING Asset/staging key and issues only a scoped
+- [x] Begin creates one PENDING Asset/staging key and issues only a scoped
       four-hour complete-PUT capability; no application request accepts media
       bytes.
-- [ ] Replacement PUT is possible only for unfinalized PENDING inside 24 hours.
-- [ ] Concurrent/repeated Finalize calls create/find exactly one logical job,
+- [x] Replacement PUT is possible only for unfinalized PENDING inside 24 hours.
+- [x] Concurrent/repeated Finalize calls create/find exactly one logical job,
       forbid future PUT replacement, and protect finalized PENDING from
       abandoned expiration.
-- [ ] Stored-size mismatch, missing/expired staging, unsupported/corrupt media,
+- [x] Stored-size mismatch, missing/expired staging, unsupported/corrupt media,
       and media-type/extension mismatch never reach READY and map safely.
-- [ ] Processing reserves one permanent key before object creation, reuses it on
+- [x] Processing reserves one permanent key before object creation, reuses it on
       retry, revalidates the permanent object, and persists complete normalized
       READY metadata atomically.
-- [ ] Duplicate delivery, worker crash/lease reclaim, and storage/database
+- [x] Duplicate delivery, worker crash/lease reclaim, and storage/database
       failure windows recover without duplicate permanent identity or silent
       loss.
-- [ ] Unfinalized uploads expire after 24 hours under lock; finalized jobs win
+- [x] Unfinalized uploads expire after 24 hours under lock; finalized jobs win
       the expiration race and staging is deleted only when no retry needs it.
-- [ ] Logs expose stable opaque correlation/failure codes without filenames,
+- [x] Logs expose stable opaque correlation/failure codes without filenames,
       storage keys, signed capabilities, media, or provider internals.
 
 ## Focused tests
