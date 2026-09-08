@@ -9,9 +9,15 @@ export const assetJobTypeSchema = z.enum([
 ]);
 export const assetJobStatusSchema = z.enum(["PENDING", "RUNNING", "COMPLETED", "FAILED"]);
 export const assetJobFailureCodeSchema = z.enum([
-  "PROCESSING_UNAVAILABLE",
-  "MEDIA_SOURCE_UNAVAILABLE",
+  "UPLOAD_EXPIRED",
+  "MEDIA_TOO_LARGE",
+  "MEDIA_LIMIT_EXCEEDED",
+  "MEDIA_TYPE_MISMATCH",
+  "UNSUPPORTED_MEDIA",
   "INVALID_MEDIA",
+  "UNSAFE_MEDIA_URL",
+  "MEDIA_SOURCE_UNAVAILABLE",
+  "PROCESSING_UNAVAILABLE",
 ]);
 
 /** Jobs carry no creator input, storage key, URL, capability, or media bytes. */
@@ -21,6 +27,19 @@ export type AssetJobType = z.infer<typeof assetJobTypeSchema>;
 export type AssetJobStatus = z.infer<typeof assetJobStatusSchema>;
 export type AssetJobFailureCode = z.infer<typeof assetJobFailureCodeSchema>;
 export type AssetJobPayload = z.infer<typeof assetJobPayloadSchema>;
+
+export const assetJobHandlerResultSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("COMPLETED") }).strict(),
+  z
+    .object({
+      kind: z.literal("FAILED"),
+      failureCode: assetJobFailureCodeSchema,
+      retryable: z.boolean(),
+    })
+    .strict(),
+]);
+
+export type AssetJobHandlerResult = z.infer<typeof assetJobHandlerResultSchema>;
 
 export const assetJobDefaults = {
   maxAttempts: 5,

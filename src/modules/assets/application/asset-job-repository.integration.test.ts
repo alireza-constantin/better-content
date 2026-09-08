@@ -9,7 +9,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vites
 import * as schema from "@/db/schema";
 import { getTestDatabaseUrl } from "@/db/test-environment";
 import { createPermanentStorageKey } from "../infrastructure/storage-keys";
-import { runAssetJobBatch } from "./asset-job-runner";
+import { MapAssetJobHandlerRegistry, runAssetJobBatch } from "./asset-job-runner";
 import {
   claimDueAssetJobs,
   completeAssetJob,
@@ -159,7 +159,7 @@ describe("Asset PostgreSQL jobs", () => {
       await runAssetJobBatch({
         database,
         workerId: "runner",
-        handlers: { PROCESS_UPLOAD: handler },
+        registry: new MapAssetJobHandlerRegistry({ PROCESS_UPLOAD: handler }),
         logger: { info: vi.fn(), warn: vi.fn() },
         now: () => now,
       }),
@@ -172,5 +172,69 @@ describe("Asset PostgreSQL jobs", () => {
       (await database.select().from(schema.assetJobs).where(eq(schema.assetJobs.id, job.id)))[0]
         ?.status,
     ).toBe("COMPLETED");
+  });
+
+  it("lets a handler classify terminal and retryable failures", async () => {
+    const terminalAssetId = await seedAsset();
+    const retryableAssetId = await seedAsset();
+    const terminalJob = await createAssetJob(database, {
+      type: "PROCESS_UPLOAD",
+      payload: { assetId: terminalAssetId },
+      scheduledAt: now,
+    });
+    const retryableJob = await createAssetJob(database, {
+      type: "INGEST_EXTERNAL_URL",
+      payload: { assetId: retryableAssetId },
+      scheduledAt: now,
+    });
+    const registry = new MapAssetJobHandlerRegistry()
+      .register("PROCESS_UPLOAD", async () => ({
+        kind: "FAILED",
+        failureCode: "INVALID_MEDIA",
+        retryable: false,
+      }))
+      .register("INGEST_EXTERNAL_URL", async () => ({
+        kind: "FAILED",
+        failureCode: "MEDIA_SOURCE_UNAVAILABLE",
+        retryable: true,
+      }));
+
+    await runAssetJobBatch({
+      database,
+      workerId: "runner",
+      registry,
+      logger: { info: vi.fn(), warn: vi.fn() },
+      now: () => now,
+      limit: 2,
+    });
+
+    const jobs = await database.select().from(schema.assetJobs);
+    expect(jobs.find((job) => job.id === terminalJob.id)).toMatchObject({
+      status: "FAILED",
+      failureCode: "INVALID_MEDIA",
+    });
+    expect(jobs.find((job) => job.id === retryableJob.id)).toMatchObject({
+      status: "PENDING",
+      failureCode: "MEDIA_SOURCE_UNAVAILABLE",
+    });
+  });
+
+  it("safely leaves an unregistered handler retryable", async () => {
+    const assetId = await seedAsset();
+    const job = await createAssetJob(database, {
+      type: "PROCESS_UPLOAD",
+      payload: { assetId },
+      scheduledAt: now,
+    });
+    await runAssetJobBatch({
+      database,
+      workerId: "runner",
+      registry: new MapAssetJobHandlerRegistry(),
+      logger: { info: vi.fn(), warn: vi.fn() },
+      now: () => now,
+    });
+    expect(
+      (await database.select().from(schema.assetJobs).where(eq(schema.assetJobs.id, job.id)))[0],
+    ).toMatchObject({ status: "PENDING", failureCode: "PROCESSING_UNAVAILABLE" });
   });
 });

@@ -92,6 +92,20 @@
       "when": 1788790762649,
       "tag": "0012_aberrant_squirrel_girl",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1788815304907,
+      "tag": "0013_secret_jane_foster",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1788835056565,
+      "tag": "0014_open_zombie",
+      "breakpoints": true
     }
   ]
 }

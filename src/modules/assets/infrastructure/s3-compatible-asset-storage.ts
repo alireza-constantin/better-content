@@ -1,38 +1,95 @@
 import type { Readable } from "node:stream";
 
-import type { AssetStorage, PrivateReadCapability, StoredObjectMetadata } from "./asset-storage";
+import type {
+  AssetStorage,
+  PrivateReadCapability,
+  StagingPutCapability,
+  StoredObjectMetadata,
+} from "./asset-storage";
 import { AssetStorageError } from "./asset-storage";
-import type { PermanentStorageKey, StagingStorageKey } from "./storage-keys";
+import {
+  assertPermanentStorageKey,
+  assertStagingStorageKey,
+  assertStorageKey,
+  type PermanentStorageKey,
+  type StagingStorageKey,
+} from "./storage-keys";
 
 /**
  * Narrow normalized transport supplied by the configured S3-compatible
  * provider adapter. It keeps any provider SDK/client out of application code.
  */
 export interface S3CompatiblePrivateObjectClient {
+  issueStagingPut(key: string, expiresAt: Date, contentLength: number): Promise<{ url: string }>;
   head(key: string): Promise<{ sizeBytes: number } | null>;
   get(key: string): Promise<Readable | null>;
+  putIfAbsent(key: string, source: AsyncIterable<Uint8Array>): Promise<void>;
   copyIfAbsent(source: string, destination: string): Promise<void>;
   delete(key: string): Promise<void>;
-  issuePrivateRead(key: string, expiresAt: Date): Promise<{ token: string }>;
+  issuePrivateRead(key: string, expiresAt: Date): Promise<{ url: string }>;
 }
 
 /** Provider-neutral mapper; concrete SDK configuration remains deployment work. */
 export class S3CompatibleAssetStorage implements AssetStorage {
   constructor(private readonly client: S3CompatiblePrivateObjectClient) {}
 
+  async createStagingPutCapability(
+    key: StagingStorageKey,
+    expiresAt: Date,
+    contentLength: number,
+  ): Promise<StagingPutCapability> {
+    const validKey = assertStagingStorageKey(key);
+    if (!Number.isSafeInteger(contentLength) || contentLength <= 0)
+      throw new AssetStorageError("Invalid staging content length.", "UNAVAILABLE");
+    try {
+      const { url } = await this.client.issueStagingPut(validKey, expiresAt, contentLength);
+      return { key: validKey, url, expiresAt, contentLength };
+    } catch (error) {
+      if (error instanceof AssetStorageError) throw error;
+      throw new AssetStorageError("Managed storage is unavailable.", "UNAVAILABLE");
+    }
+  }
+
   async getObjectMetadata(
     key: StagingStorageKey | PermanentStorageKey,
   ): Promise<StoredObjectMetadata | null> {
+    const validKey = assertStorageKey(key);
     try {
-      return await this.client.head(key);
-    } catch {
+      const metadata = await this.client.head(validKey);
+      if (metadata === null) return null;
+      if (!Number.isSafeInteger(metadata.sizeBytes) || metadata.sizeBytes <= 0)
+        throw new AssetStorageError("Managed object metadata is invalid.", "UNAVAILABLE");
+      return metadata;
+    } catch (error) {
+      if (error instanceof AssetStorageError) throw error;
       throw new AssetStorageError("Managed storage is unavailable.", "UNAVAILABLE");
     }
   }
 
   async openPermanentRead(key: PermanentStorageKey): Promise<Readable> {
+    return this.openRead(assertPermanentStorageKey(key));
+  }
+
+  async openStagingRead(key: StagingStorageKey): Promise<Readable> {
+    return this.openRead(assertStagingStorageKey(key));
+  }
+
+  async putPermanentFromStream(
+    key: PermanentStorageKey,
+    source: AsyncIterable<Uint8Array>,
+  ): Promise<void> {
+    const validKey = assertPermanentStorageKey(key);
     try {
-      const stream = await this.client.get(key);
+      await this.client.putIfAbsent(validKey, source);
+    } catch (error) {
+      if (error instanceof AssetStorageError) throw error;
+      throw new AssetStorageError("Managed storage is unavailable.", "UNAVAILABLE");
+    }
+  }
+
+  private async openRead(validKey: string): Promise<Readable> {
+    try {
+      const stream = await this.client.get(validKey);
       if (!stream) throw new AssetStorageError("Private object is missing.", "NOT_FOUND");
       return stream;
     } catch (error) {
@@ -44,36 +101,42 @@ export class S3CompatibleAssetStorage implements AssetStorage {
   async copyStagingToPermanent(
     input: Readonly<{ source: StagingStorageKey; destination: PermanentStorageKey }>,
   ): Promise<void> {
+    const source = assertStagingStorageKey(input.source);
+    const destination = assertPermanentStorageKey(input.destination);
     try {
-      await this.client.copyIfAbsent(input.source, input.destination);
-    } catch {
+      await this.client.copyIfAbsent(source, destination);
+    } catch (error) {
+      if (error instanceof AssetStorageError) throw error;
       throw new AssetStorageError("Managed storage is unavailable.", "UNAVAILABLE");
     }
   }
 
   async deleteStagingObject(key: StagingStorageKey): Promise<void> {
-    await this.delete(key);
+    await this.delete(assertStagingStorageKey(key));
   }
 
   async deletePermanentObject(key: PermanentStorageKey): Promise<void> {
-    await this.delete(key);
+    await this.delete(assertPermanentStorageKey(key));
   }
 
   async createPrivateReadCapability(
     key: PermanentStorageKey,
     expiresAt: Date,
   ): Promise<PrivateReadCapability> {
+    const validKey = assertPermanentStorageKey(key);
     try {
-      return { ...(await this.client.issuePrivateRead(key, expiresAt)), expiresAt };
-    } catch {
+      return { url: (await this.client.issuePrivateRead(validKey, expiresAt)).url, expiresAt };
+    } catch (error) {
+      if (error instanceof AssetStorageError) throw error;
       throw new AssetStorageError("Managed storage is unavailable.", "UNAVAILABLE");
     }
   }
 
-  private async delete(key: string): Promise<void> {
+  private async delete(key: StagingStorageKey | PermanentStorageKey): Promise<void> {
     try {
       await this.client.delete(key);
-    } catch {
+    } catch (error) {
+      if (error instanceof AssetStorageError) throw error;
       throw new AssetStorageError("Managed storage is unavailable.", "UNAVAILABLE");
     }
   }

@@ -91,6 +91,25 @@ export const assets = pgTable(
   ],
 );
 
+/** Accepted Asset creation events remain quota evidence after Asset cleanup. */
+export const assetAdmissionEvents = pgTable(
+  "asset_admission_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: uuid("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("asset_admission_events_user_created_at_idx").on(table.userId, table.createdAt),
+    index("asset_admission_events_workspace_created_at_idx").on(table.workspaceId, table.createdAt),
+  ],
+);
+
 /**
  * Durable, provider-neutral work ownership for the Asset module. Payloads are
  * deliberately restricted by the application boundary to a stable Asset ID.
@@ -133,6 +152,10 @@ export const assetJobs = pgTable(
     check(
       "asset_jobs_payload_check",
       sql`jsonb_typeof(${table.payload}) = 'object' AND ${table.payload} ? 'assetId' AND jsonb_typeof(${table.payload}->'assetId') = 'string' AND ${table.payload} = jsonb_build_object('assetId', ${table.payload}->'assetId')`,
+    ),
+    check(
+      "asset_jobs_failure_code_value_check",
+      sql`${table.failureCode} IS NULL OR ${table.failureCode} IN ('UPLOAD_EXPIRED', 'MEDIA_TOO_LARGE', 'MEDIA_LIMIT_EXCEEDED', 'MEDIA_TYPE_MISMATCH', 'UNSUPPORTED_MEDIA', 'INVALID_MEDIA', 'UNSAFE_MEDIA_URL', 'MEDIA_SOURCE_UNAVAILABLE', 'PROCESSING_UNAVAILABLE')`,
     ),
     check(
       "asset_jobs_running_lease_check",

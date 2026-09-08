@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
 
+import { AssetStorageError } from "./asset-storage";
+
 export type StagingStorageKey = `staging/${string}`;
 export type PermanentStorageKey = `permanent/${string}`;
 export type AssetStorageKey = StagingStorageKey | PermanentStorageKey;
@@ -16,16 +18,19 @@ export function createPermanentStorageKey(): PermanentStorageKey {
 }
 
 export function assertStorageKey(key: string): AssetStorageKey {
-  if (!opaqueKeyPattern.test(key)) throw new Error("Invalid private Asset storage key.");
+  if (typeof key !== "string" || !opaqueKeyPattern.test(key))
+    throw new AssetStorageError("Invalid private Asset storage key.", "INVALID_KEY");
   return key as AssetStorageKey;
 }
 
 export function assertStagingStorageKey(key: string): StagingStorageKey {
-  if (!key.startsWith("staging/")) throw new Error("Expected a staging Asset storage key.");
+  if (typeof key !== "string" || !key.startsWith("staging/"))
+    throw new AssetStorageError("Expected a staging Asset storage key.", "INVALID_KEY");
   return assertStorageKey(key) as StagingStorageKey;
 }
 
 export function assertPermanentStorageKey(key: string): PermanentStorageKey {
-  if (!key.startsWith("permanent/")) throw new Error("Expected a permanent Asset storage key.");
+  if (typeof key !== "string" || !key.startsWith("permanent/"))
+    throw new AssetStorageError("Expected a permanent Asset storage key.", "INVALID_KEY");
   return assertStorageKey(key) as PermanentStorageKey;
 }

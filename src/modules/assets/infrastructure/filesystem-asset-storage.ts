@@ -1,9 +1,16 @@
-import { createReadStream } from "node:fs";
-import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { createReadStream, createWriteStream } from "node:fs";
+import { pipeline } from "node:stream/promises";
+import { Readable } from "node:stream";
+import { link, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { relative, resolve, sep } from "node:path";
 import { randomUUID } from "node:crypto";
 
-import type { AssetStorage, PrivateReadCapability, StoredObjectMetadata } from "./asset-storage";
+import type {
+  AssetStorage,
+  PrivateReadCapability,
+  StagingPutCapability,
+  StoredObjectMetadata,
+} from "./asset-storage";
 import { AssetStorageError } from "./asset-storage";
 import {
   assertPermanentStorageKey,
@@ -25,6 +32,22 @@ export class FilesystemAssetStorage implements AssetStorage {
     this.root = resolve(rootDirectory);
   }
 
+  async createStagingPutCapability(
+    key: StagingStorageKey,
+    expiresAt: Date,
+    contentLength: number,
+  ): Promise<StagingPutCapability> {
+    assertStagingStorageKey(key);
+    if (!Number.isSafeInteger(contentLength) || contentLength <= 0)
+      throw new AssetStorageError("Invalid staging content length.", "UNAVAILABLE");
+    return {
+      key,
+      url: `filesystem://staging-put/${key.slice("staging/".length)}`,
+      expiresAt,
+      contentLength,
+    };
+  }
+
   async putStagingObject(key: StagingStorageKey, bytes: Uint8Array): Promise<void> {
     const path = this.pathFor(assertStagingStorageKey(key));
     await mkdir(resolve(path, ".."), { recursive: true });
@@ -44,7 +67,36 @@ export class FilesystemAssetStorage implements AssetStorage {
   }
 
   async openPermanentRead(key: PermanentStorageKey) {
-    const path = this.pathFor(assertPermanentStorageKey(key));
+    return this.openRead(assertPermanentStorageKey(key));
+  }
+
+  async openStagingRead(key: StagingStorageKey) {
+    return this.openRead(assertStagingStorageKey(key));
+  }
+
+  async putPermanentFromStream(
+    key: PermanentStorageKey,
+    source: AsyncIterable<Uint8Array>,
+  ): Promise<void> {
+    const destination = this.pathFor(assertPermanentStorageKey(key));
+    const temporaryDestination = `${destination}.upload-${randomUUID()}`;
+    try {
+      await mkdir(resolve(destination, ".."), { recursive: true });
+      await pipeline(
+        Readable.from(source),
+        createWriteStream(temporaryDestination, { flags: "wx", mode: 0o600 }),
+      );
+      await link(temporaryDestination, destination);
+    } catch (error) {
+      if (isAlreadyExists(error)) return;
+      throw new AssetStorageError("Filesystem storage is unavailable.", "UNAVAILABLE");
+    } finally {
+      await rm(temporaryDestination, { force: true }).catch(() => undefined);
+    }
+  }
+
+  private async openRead(key: string) {
+    const path = this.pathFor(key);
     try {
       await stat(path);
       return createReadStream(path);
@@ -84,7 +136,7 @@ export class FilesystemAssetStorage implements AssetStorage {
     if (!(await this.getObjectMetadata(assertPermanentStorageKey(key))))
       throw new AssetStorageError("Private object is missing.", "NOT_FOUND");
     // A future authorized preview endpoint resolves this opaque capability.
-    return { token: randomUUID(), expiresAt };
+    return { url: `filesystem://private-read/${randomUUID()}`, expiresAt };
   }
 
   private pathFor(key: string): string {
