@@ -8,3 +8,7 @@ export * from "./upload-processing-handler";
 export * from "./external-url-service";
 export * from "./external-url-ingestion-handler";
 export * from "./asset-capability-service";
+export * from "./asset-capability-actions";
+export * from "./asset-library-repository";
+export * from "./asset-library-service";
+export * from "./asset-library-actions";

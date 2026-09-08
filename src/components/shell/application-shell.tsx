@@ -13,6 +13,7 @@ type ApplicationShellProps = Readonly<{
   contentDnaLabel: string;
   ideasLabel: string;
   contentLabel: string;
+  assetsLabel: string;
   workspaceLabel: string;
   userName: string;
   userEmail: string;
@@ -27,6 +28,7 @@ export function ApplicationShell({
   contentDnaLabel,
   ideasLabel,
   contentLabel,
+  assetsLabel,
   workspaceLabel,
   userName,
   userEmail,
@@ -89,6 +91,12 @@ export function ApplicationShell({
               href="/content"
             >
               {contentLabel}
+            </Link>
+            <Link
+              className="text-sm font-medium text-foreground underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              href="/assets"
+            >
+              {assetsLabel}
             </Link>
           </nav>
           {children}

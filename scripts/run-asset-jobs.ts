@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { resolve } from "node:path";
 
 import { db } from "@/db";
 import { logger } from "@/lib/logging/server";
@@ -12,11 +11,10 @@ import {
   createUploadProcessingHandler,
 } from "@/modules/assets/application/upload-processing-handler";
 import { createExternalUrlIngestionHandler } from "@/modules/assets/application/external-url-ingestion-handler";
-import { DefaultMediaInspector, FilesystemAssetStorage } from "@/modules/assets/infrastructure";
+import { DefaultMediaInspector } from "@/modules/assets/infrastructure";
+import { createRuntimeAssetStorage } from "@/modules/assets/infrastructure/runtime-asset-storage";
 
-const storage = new FilesystemAssetStorage(
-  process.env.ASSET_STORAGE_ROOT ?? resolve(process.cwd(), ".data", "asset-storage"),
-);
+const storage = createRuntimeAssetStorage();
 const registry = new MapAssetJobHandlerRegistry()
   .register(
     "PROCESS_UPLOAD",

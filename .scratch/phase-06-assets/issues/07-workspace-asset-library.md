@@ -7,7 +7,7 @@ introducing DAM-scale organization.
 **Blocked by:** 05 — Deliver direct HTTPS media ingestion; 06 — Deliver private
 Asset preview and download capabilities.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 ## Scope
 
@@ -89,24 +89,24 @@ Asset preview and download capabilities.
 
 ## Acceptance criteria
 
-- [ ] Authorized reads return only current-Workspace Assets with stable
+- [x] Authorized reads return only current-Workspace Assets with stable
       newest/ID pagination; cross-Workspace and removed-member access is
       nondisclosing.
-- [ ] Search/filter/page state round-trips through the URL, uses bounded escaped
+- [x] Search/filter/page state round-trips through the URL, uses bounded escaped
       database queries, and returns deterministic results.
-- [ ] Cards/details present exactly the approved lifecycle, metadata, safe
+- [x] Cards/details present exactly the approved lifecycle, metadata, safe
       provenance hostname, and distinct-Content reference count.
-- [ ] One-file upload and one-link creation expose progress/failure safely and
+- [x] One-file upload and one-link creation expose progress/failure safely and
       newly created Assets appear in the reusable Workspace Library.
-- [ ] Polling follows 5-second/15-second visibility rules and stops without
+- [x] Polling follows 5-second/15-second visibility rules and stops without
       leaking timers or adding realtime infrastructure.
-- [ ] READY image/video/audio previews and downloads reuse Ticket 06; non-READY
+- [x] READY image/video/audio previews and downloads reuse Ticket 06; non-READY
       media cannot acquire capabilities.
-- [ ] Rename preserves managed-media identity and Content equality and enforces
+- [x] Rename preserves managed-media identity and Content equality and enforces
       server-authoritative Unicode/bidi rules.
-- [ ] Full source URLs, storage keys, signed capabilities, raw failures, and
+- [x] Full source URLs, storage keys, signed capabilities, raw failures, and
       private response details are absent from ordinary list/detail UI.
-- [ ] English/LTR and Persian/RTL work with Persian, Latin, long, and
+- [x] English/LTR and Persian/RTL work with Persian, Latin, long, and
       mixed-direction names using keyboard-accessible responsive controls.
 
 ## Focused tests
@@ -121,3 +121,13 @@ Asset preview and download capabilities.
 - **E2E:** none here; Ticket 10 owns the two representative browser journeys.
 - **Manual QA:** deferred to Ticket 10, with focused component accessibility
   review required before this ticket completes.
+
+## Answer
+
+Resolved on 2026-09-08. Added the authorized `/assets` Workspace Library with
+server-side initial loading, bounded newest-first search/filter pagination,
+safe DTO projection and reference counts; reusable Ticket 04/05 creation
+actions; Ticket 06 private preview/download reuse; owner-only rename; and
+visibility-bounded lifecycle polling. Focused component and PostgreSQL tests
+cover the approved behaviors, with EN/FA, RTL, bidi isolation, and dialog
+accessibility review complete. No Ticket 08+ behavior was added.

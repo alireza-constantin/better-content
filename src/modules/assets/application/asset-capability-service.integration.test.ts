@@ -121,4 +121,63 @@ describe("Asset capabilities", () => {
       .where(eq(schema.assets.id, context.assetId));
     expect(asset?.sourceUrl).toBeNull();
   });
+  it("allows current members but nondiscloses foreign Assets and removed memberships", async () => {
+    const context = await seed();
+    const memberId = randomUUID();
+    const foreignUserId = randomUUID();
+    const foreignWorkspaceId = randomUUID();
+    await database.insert(schema.user).values([
+      { id: memberId, name: "Member", email: `${memberId}@test` },
+      { id: foreignUserId, name: "Foreign", email: `${foreignUserId}@test` },
+    ]);
+    await database.insert(schema.workspaceMembers).values({
+      workspaceId: context.workspaceId,
+      userId: memberId,
+      // Current V1 Workspace persistence accepts owner membership only.
+      role: "owner",
+    });
+    await database
+      .insert(schema.workspaces)
+      .values({ id: foreignWorkspaceId, name: "Foreign workspace" });
+    await database.insert(schema.workspaceMembers).values({
+      workspaceId: foreignWorkspaceId,
+      userId: foreignUserId,
+      role: "owner",
+    });
+
+    await expect(
+      createAssetCapabilityService({
+        database,
+        storage: context.storage,
+        getAuthenticatedUserId: async () => memberId,
+      }).issue({
+        workspaceId: context.workspaceId,
+        assetId: context.assetId,
+        operation: "PREVIEW",
+      }),
+    ).resolves.toMatchObject({ cacheControl: "private, no-store" });
+
+    await expect(
+      createAssetCapabilityService({
+        database,
+        storage: context.storage,
+        getAuthenticatedUserId: async () => foreignUserId,
+      }).issue({ workspaceId: foreignWorkspaceId, assetId: context.assetId, operation: "PREVIEW" }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+
+    await database
+      .delete(schema.workspaceMembers)
+      .where(eq(schema.workspaceMembers.userId, memberId));
+    await expect(
+      createAssetCapabilityService({
+        database,
+        storage: context.storage,
+        getAuthenticatedUserId: async () => memberId,
+      }).issue({
+        workspaceId: context.workspaceId,
+        assetId: context.assetId,
+        operation: "PREVIEW",
+      }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+  });
 });

@@ -76,6 +76,7 @@ describe("AssetStorage adapters", () => {
 
   it("keeps the S3-compatible adapter provider-neutral over a deterministic client", async () => {
     const objects = new Map<string, Buffer>();
+    let privateRead: { key: string; rangeAllowed: boolean } | undefined;
     const client: S3CompatiblePrivateObjectClient = {
       issueStagingPut: async (key, _expiresAt, contentLength) => ({
         url: `https://storage.test/${key}?length=${contentLength}`,
@@ -107,7 +108,10 @@ describe("AssetStorage adapters", () => {
       delete: async (key) => {
         objects.delete(key);
       },
-      issuePrivateRead: async (key) => ({ url: `https://storage.test/private/${key}` }),
+      issuePrivateRead: async (key, _expiresAt, options) => {
+        privateRead = { key, rangeAllowed: options.rangeAllowed };
+        return { url: `https://storage.test/private/${key}` };
+      },
     };
     const storage = new S3CompatibleAssetStorage(client);
     const staging = createStagingStorageKey();
@@ -124,6 +128,12 @@ describe("AssetStorage adapters", () => {
     expect(await storage.getObjectMetadata(permanent)).toEqual({ sizeBytes: bytes.byteLength });
     await storage.deletePermanentObject(permanent);
     await storage.deletePermanentObject(permanent);
+    await storage.createPrivateReadCapability(permanent, new Date("2026-09-07T00:01:00Z"), {
+      contentType: "video/mp4",
+      contentDisposition: "inline",
+      rangeAllowed: true,
+    });
+    expect(privateRead).toEqual({ key: permanent, rangeAllowed: true });
   });
 
   it("rejects traversal and namespace confusion before adapters resolve paths", () => {

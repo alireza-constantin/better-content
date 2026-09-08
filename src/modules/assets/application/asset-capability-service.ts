@@ -2,6 +2,7 @@ import "server-only";
 
 import { z } from "zod";
 
+import { assetCapabilityLifetimeMs } from "../domain/asset-capability-contracts";
 import { db } from "@/db";
 import { getServerSession } from "@/lib/auth/server";
 import { ApplicationError } from "@/lib/errors/app-error";
@@ -10,8 +11,10 @@ import type { AssetStorage, PrivateReadOptions } from "../infrastructure/asset-s
 import { assertPermanentStorageKey } from "../infrastructure/storage-keys";
 import { findAsset } from "./asset-repository";
 
-const capabilityLifetimeMs = 900_000;
-export const activeMediaRefreshLeadMs = 90_000;
+export {
+  activeMediaRefreshLeadMs,
+  assetCapabilityLifetimeMs,
+} from "../domain/asset-capability-contracts";
 const capabilityRequestSchema = z
   .object({ workspaceId: z.uuid(), assetId: z.uuid(), operation: z.enum(["PREVIEW", "DOWNLOAD"]) })
   .strict();
@@ -69,7 +72,7 @@ export function createAssetCapabilityService(
       );
       const capability = await dependencies.storage.createPrivateReadCapability(
         assertPermanentStorageKey(asset.permanentKey),
-        new Date(clock().getTime() + capabilityLifetimeMs),
+        new Date(clock().getTime() + assetCapabilityLifetimeMs),
         options,
       );
       return { ...capability, cacheControl: "private, no-store", ...options };

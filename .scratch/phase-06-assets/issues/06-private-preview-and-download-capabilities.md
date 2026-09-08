@@ -6,7 +6,7 @@ storage authority or proxying media through the application.
 
 **Blocked by:** 04 — Deliver the direct upload lifecycle.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
 ## Scope
 
@@ -78,23 +78,23 @@ storage authority or proxying media through the application.
 
 ## Acceptance criteria
 
-- [ ] Current authorized Workspace members can obtain one 15-minute capability
+- [x] Current authorized Workspace members can obtain one 15-minute capability
       for one READY Asset/operation; foreign, unauthenticated, removed-member,
       non-READY, and key-guessing attempts fail without disclosure.
-- [ ] Capabilities cannot list or mutate storage and cannot address another
+- [x] Capabilities cannot list or mutate storage and cannot address another
       object's key.
-- [ ] Image, native video, and native audio presentation uses authoritative MIME,
+- [x] Image, native video, and native audio presentation uses authoritative MIME,
       safe headers, and private/no-store handling.
-- [ ] Range/seek behavior is represented in the storage contract and works
+- [x] Range/seek behavior is represented in the storage contract and works
       through deterministic adapter coverage.
-- [ ] Active video/audio refresh reauthorizes about 90 seconds before expiry,
+- [x] Active video/audio refresh reauthorizes about 90 seconds before expiry,
       stops when irrelevant, handles expiry safely, and preserves practical
       playback state.
-- [ ] Download creates a fresh capability and safe ASCII/UTF-8 disposition
+- [x] Download creates a fresh capability and safe ASCII/UTF-8 disposition
       filename without mutating stored display name.
-- [ ] Signed URLs/parameters do not appear in PostgreSQL, Content, recovery
+- [x] Signed URLs/parameters do not appear in PostgreSQL, Content, recovery
       output, server/client caches, or structured logs.
-- [ ] DELETING or membership removal prevents all newly issued capabilities.
+- [x] DELETING or membership removal prevents all newly issued capabilities.
 
 ## Focused tests
 
@@ -109,3 +109,10 @@ storage authority or proxying media through the application.
   against fake/filesystem.
 - **E2E:** none; representative persisted preview/download behavior belongs to
   Ticket 10.
+
+## Answer
+
+Resolved after implementing the shared server-only filesystem/S3 AssetStorage
+composition, authenticated capability action, reusable private media/download
+primitives, and deterministic runtime, storage, service, and component tests.
+No Ticket 07+ product surface was added.
