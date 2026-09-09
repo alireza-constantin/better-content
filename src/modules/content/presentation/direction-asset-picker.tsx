@@ -42,8 +42,10 @@ type Props = Readonly<{
   onDetach: () => void;
 }>;
 
-const compatibleTypes = (directionType: EligibleDirection) =>
-  directionType === "BROLL_CUE" ? (["IMAGE", "VIDEO"] as const) : (["AUDIO"] as const);
+const compatibleTypes = {
+  BROLL_CUE: ["IMAGE", "VIDEO"],
+  SOUND_CUE: ["AUDIO"],
+} as const;
 
 /** Focused editor presentation over the Library's authorized query/action boundary. */
 export function DirectionAssetPicker({
@@ -66,7 +68,7 @@ export function DirectionAssetPicker({
   const [createdAssetIds, setCreatedAssetIds] = useState<string[]>([]);
   const [lifecycleAssets, setLifecycleAssets] = useState<readonly AssetLibraryItemDto[]>([]);
   const trigger = useRef<HTMLElement | null>(null);
-  const types = compatibleTypes(directionType);
+  const types = compatibleTypes[directionType];
 
   useEffect(() => {
     if (!open) return;
@@ -129,7 +131,7 @@ export function DirectionAssetPicker({
         <DialogBackdrop />
         <DialogViewport className="items-end p-0 sm:items-center sm:p-4">
           <DialogContent
-            className="max-h-[92dvh] max-w-3xl overflow-y-auto rounded-b-none sm:rounded-xl"
+            className="flex max-h-[92dvh] max-w-3xl flex-col gap-4 overflow-y-auto rounded-b-none sm:rounded-xl"
             dir={locale === "fa" ? "rtl" : "ltr"}
           >
             <DialogHeader>
@@ -158,7 +160,7 @@ export function DirectionAssetPicker({
                 defaultValue={search}
               />
               <Button type="submit" variant="outline">
-                <SearchIcon />
+                <SearchIcon aria-hidden="true" />
                 {t("search")}
               </Button>
             </form>
@@ -249,7 +251,7 @@ export function DirectionAssetPicker({
                 {t("next")}
               </Button>
             </div>
-            <DialogFooter>
+            <DialogFooter className="justify-end">
               {currentAssetId ? (
                 <Button
                   type="button"

@@ -5,6 +5,9 @@ const withNextIntl = createNextIntlPlugin("./src/i18n/request.ts");
 
 const nextConfig: NextConfig = {
   agentRules: false,
+  // Local browsers commonly use either hostname; permit both dev origins so
+  // the client bundle hydrates and interactive controls remain functional.
+  allowedDevOrigins: ["127.0.0.1"],
   // Browser tests use an independent Next.js build directory so they can run
   // beside a developer's local server without sharing its lock or cache.
   distDir: process.env.NEXT_DIST_DIR ?? ".next",
