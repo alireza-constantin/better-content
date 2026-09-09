@@ -3,6 +3,7 @@
 import {
   AlertCircleIcon,
   CheckCircle2Icon,
+  ClapperboardIcon,
   ClipboardCheckIcon,
   ClipboardIcon,
   FilePenLineIcon,
@@ -320,6 +321,35 @@ export function ContentEditor({ content, workspaceId }: Props) {
                 id="teleprompter-accept-first-help"
               >
                 {t("teleprompterAcceptFirst")}
+              </span>
+            </div>
+          )}
+          {acceptedVersionId ? (
+            <Link
+              aria-label={t("openEditGuideFor", { title: content.sourceIdea.title })}
+              className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+              href={`/content/${content.id}/edit-guide`}
+            >
+              <ClapperboardIcon aria-hidden="true" />
+              {t("openEditGuide")}
+            </Link>
+          ) : (
+            <div className="flex flex-col items-start gap-1">
+              <Button
+                aria-describedby="edit-guide-accept-first-help"
+                className="min-h-10"
+                disabled
+                type="button"
+                variant="outline"
+              >
+                <ClapperboardIcon aria-hidden="true" />
+                {t("openEditGuide")}
+              </Button>
+              <span
+                className="max-w-52 text-xs text-muted-foreground"
+                id="edit-guide-accept-first-help"
+              >
+                {t("editGuideAcceptFirst")}
               </span>
             </div>
           )}

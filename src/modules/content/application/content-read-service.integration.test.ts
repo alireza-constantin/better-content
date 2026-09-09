@@ -1803,6 +1803,16 @@ describe("Content read and Draft application services", () => {
       acceptedVersionId: firstAcceptance.acceptedVersion.id,
       scriptBlocks: [{ text: "Deterministic English short-video script." }],
     });
+    await expect(
+      reads.getEditGuide({
+        workspaceId: context.workspace.id,
+        contentId: generated.contentId,
+      }),
+    ).resolves.toMatchObject({
+      status: "READY",
+      acceptedVersionId: firstAcceptance.acceptedVersion.id,
+      scriptBlocks: [{ text: "Deterministic English short-video script.", editDirections: [] }],
+    });
 
     await database
       .update(schema.contentDrafts)
@@ -1818,6 +1828,16 @@ describe("Content read and Draft application services", () => {
       scriptBlocks: [{ text: "Deterministic English short-video script." }],
     });
     expect(JSON.stringify(afterDraftEdit)).not.toContain("Draft changed after acceptance");
+    await expect(
+      reads.getEditGuide({
+        workspaceId: context.workspace.id,
+        contentId: generated.contentId,
+      }),
+    ).resolves.toMatchObject({
+      status: "READY",
+      acceptedVersionId: firstAcceptance.acceptedVersion.id,
+      scriptBlocks: [{ text: "Deterministic English short-video script." }],
+    });
 
     const secondAcceptance = await acceptance.acceptContent({
       workspaceId: context.workspace.id,
@@ -1829,6 +1849,16 @@ describe("Content read and Draft application services", () => {
       contentId: generated.contentId,
     });
     expect(afterReacceptance).toMatchObject({
+      status: "READY",
+      acceptedVersionId: secondAcceptance.acceptedVersion.id,
+      scriptBlocks: [{ text: "Draft changed after acceptance" }],
+    });
+    await expect(
+      reads.getEditGuide({
+        workspaceId: context.workspace.id,
+        contentId: generated.contentId,
+      }),
+    ).resolves.toMatchObject({
       status: "READY",
       acceptedVersionId: secondAcceptance.acceptedVersion.id,
       scriptBlocks: [{ text: "Draft changed after acceptance" }],
@@ -1852,6 +1882,12 @@ describe("Content read and Draft application services", () => {
         contentId: generated.contentId,
       }),
     ).resolves.toMatchObject({ status: "NO_ACCEPTED_VERSION", acceptedVersionId: null });
+    await expect(
+      ownerReads.getEditGuide({
+        workspaceId: owner.workspace.id,
+        contentId: generated.contentId,
+      }),
+    ).resolves.toMatchObject({ status: "NO_ACCEPTED_VERSION", acceptedVersionId: null });
 
     const [initialVersion] = await database
       .select({ id: schema.contentVersions.id })
@@ -1868,9 +1904,21 @@ describe("Content read and Draft application services", () => {
         contentId: generated.contentId,
       }),
     ).resolves.toMatchObject({ status: "UNAVAILABLE", acceptedVersionId: null });
+    await expect(
+      ownerReads.getEditGuide({
+        workspaceId: owner.workspace.id,
+        contentId: generated.contentId,
+      }),
+    ).resolves.toMatchObject({ status: "UNAVAILABLE", acceptedVersionId: null });
 
     await expect(
       createReads(foreign).getTeleprompter({
+        workspaceId: foreign.workspace.id,
+        contentId: generated.contentId,
+      }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(
+      createReads(foreign).getEditGuide({
         workspaceId: foreign.workspace.id,
         contentId: generated.contentId,
       }),

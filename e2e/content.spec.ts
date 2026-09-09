@@ -465,12 +465,21 @@ test("Phase 5 EN journey persists structured editing, directions, acceptance, an
   await performance.getByRole("button", { name: "Add" }).click();
   await page.getByRole("dialog").getByRole("button", { name: "Add" }).click();
 
+  const edit = page.locator('section[aria-label="Edit"]');
+  await edit.getByRole("button", { name: "Add" }).click();
+  const editDialog = page.getByRole("dialog");
+  await editDialog.locator("#direction-type").selectOption("BROLL_CUE");
+  await editDialog.getByRole("textbox", { name: "Description" }).fill("Show the product");
+  await editDialog.getByRole("textbox", { name: "Search term (optional)" }).fill("product desk 42");
+  await editDialog.getByRole("button", { name: "Add" }).click();
+
   await expect(page.getByText("Revision 2", { exact: true })).toBeVisible({ timeout: 8_000 });
   await page.reload();
   await expect(page.getByRole("textbox", { name: "Script block 1 Script text" })).toHaveValue(
     "A persisted English paragraph for the structured editor.",
   );
   await expect(performance).toContainText("Pause");
+  await expect(page.locator('section[aria-label="Edit"]')).toContainText("Show the product");
 
   await page.getByRole("button", { name: "Accept Draft" }).click();
   await expect(page.getByText("Accepted", { exact: true })).toBeVisible({ timeout: 5_000 });
@@ -479,7 +488,17 @@ test("Phase 5 EN journey persists structured editing, directions, acceptance, an
   await expect(page.getByRole("dialog")).toContainText("Read only");
 
   await page.keyboard.press("Escape");
-  await page.getByRole("link", { name: /Open Teleprompter for/ }).click();
+  await page.getByRole("link", { name: /Open Edit Guide for/ }).click();
+  await expect(page).toHaveURL(new RegExp(`/en/content/${fixture.emptyContentId}/edit-guide$`));
+  await expect(page.getByRole("heading", { name: "Edit Guide" })).toBeVisible();
+  await expect(page.getByText("product desk 42", { exact: true })).toBeVisible();
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"], {
+    origin: new URL(page.url()).origin,
+  });
+  await page.getByRole("button", { name: "Copy search term" }).click();
+  await expect(page.getByRole("status")).toContainText("Search term copied.");
+
+  await page.goto(`/en/content/${fixture.emptyContentId}/teleprompter`);
   await expect(page).toHaveURL(new RegExp(`/en/content/${fixture.emptyContentId}/teleprompter$`));
   await expect(page.locator("html")).toHaveAttribute("lang", "en");
   await expect(page.locator("html")).toHaveAttribute("dir", "ltr");

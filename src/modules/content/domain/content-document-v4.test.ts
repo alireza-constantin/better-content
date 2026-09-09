@@ -7,6 +7,7 @@ import {
   projectContentDocumentV3ToV4,
   type ContentDocumentV3,
 } from "./content-script-contracts";
+import { extractAssetReferences } from "./asset-reference-projection";
 
 const id = (tail: string) => `00000000-0000-4000-8000-0000000000${tail}`;
 const v3: ContentDocumentV3 = {
@@ -84,5 +85,32 @@ describe("ContentDocumentV4", () => {
         },
       }),
     ).toThrow();
+  });
+
+  it("extracts attached Asset identities from V4 without exposing storage data", () => {
+    const v4 = projectContentDocumentV3ToV4(v3);
+    const document = contentDocumentV4Schema.parse({
+      ...v4,
+      script: {
+        blocks: [
+          {
+            ...v4.script.blocks[0],
+            editDirections: [
+              {
+                id: id("09"),
+                type: "BROLL_CUE",
+                description: "Show the image",
+                searchQuery: "creator desk",
+                assetId: id("10"),
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    expect(extractAssetReferences(document)).toEqual([
+      { assetId: id("10"), directionId: id("09") },
+    ]);
   });
 });

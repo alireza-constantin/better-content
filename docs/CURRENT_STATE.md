@@ -19,6 +19,7 @@ Workspace
   → Structured Draft
   → Acceptance / immutable Version
   → Teleprompter
+  → Edit Guide
 ```
 
 Publishing, Social Connections, and Analytics are not implemented. Automatic
@@ -31,7 +32,7 @@ media-provider integration.
 - Content DNA is the creator-profile input to idea generation.
 - Ideas is the decision surface; batches remain available as provenance.
 - Content contains the Production Queue, generated Content Library, structured
-  editor, Version History, and Teleprompter entry point.
+  editor, Version History, Teleprompter, and read-only Edit Guide entry points.
 - Assets is a workspace media library and attachment source, not a general file
   manager or a media-discovery product.
 
@@ -185,6 +186,26 @@ queue-exit lineage atomically. Invalid output creates no partial Content.
 - It creates no `RecordingSession` and persists no recording, playback,
   scroll-position, mirror, speed, or text-size state.
 
+## Edit Guide
+
+- Edit Guide reads the current immutable accepted Version, never mutable Draft
+  state. Missing or invalid accepted versions fail closed with a localized
+  accept-first or unavailable state.
+- The authorized read model projects V1–V4 documents into ordered Script blocks
+  with their anchored Edit Directions. It supports every existing Edit
+  Direction variant without duplicating Structured Editor mutation logic.
+- Desktop presents each Script block beside its Edit Directions; mobile stacks
+  the Script and its Directions. Creator-content language remains separate from
+  the EN/FA UI locale and preserves LTR/RTL and mixed bidi text.
+- `BROLL_CUE` presents its description, optional plain-text `searchQuery`, a
+  presentation-only Copy action, and an optional attached eligible Asset.
+  Copying never mutates Content or creates a Version.
+- Attached Asset presentation is workspace-authorized and safe-field only.
+  READY compatible Assets use the existing private preview capabilities; no
+  permanent object URLs or private storage fields enter the DTO.
+- Edit Guide is read-only in V1 and has no timeline, recording, completion,
+  collaboration, automatic-editing, or publishing behavior.
+
 ## Assets
 
 - Assets are workspace-owned immutable managed media: `IMAGE`, `VIDEO`, or
@@ -237,8 +258,9 @@ queue-exit lineage atomically. Invalid output creates no partial Content.
 
 ## Current status and roadmap
 
-Completed: Phases 1–6, Phase 5 Extension 08 (Teleprompter), and Phase 5
-Extension 09 (AI Production Directions and B-roll Search Queries).
+Completed: Phases 1–6, Phase 5 Extension 08 (Teleprompter), Phase 5
+Extension 09 (AI Production Directions and B-roll Search Queries), and Phase 5
+Extension 10 (Edit Guide).
 
 Not implemented: Automatic Media Discovery, Phase 7 Publishing, Phase 8 Social
 Connections, and Phase 9 Analytics. No implementation phase is currently

@@ -37,6 +37,42 @@ function deferred<T>() {
   return { promise, resolve };
 }
 describe("useContentDraftAutosave", () => {
+  it("flushes a dirty document immediately when Save now is requested", async () => {
+    vi.useFakeTimers();
+    const save = vi.fn().mockResolvedValue({ ok: true, draft: draft(2, "Changed") });
+    const { result } = renderHook(() =>
+      useContentDraftAutosave({
+        workspaceId: "w",
+        contentId: "c",
+        initialDocument: document("Initial"),
+        initialRevision: 1,
+        save,
+        reload: async () => ({ ok: true as const, draft: draft(2, "Server") }),
+      }),
+    );
+
+    act(() => result.current.onChange(document("Changed")));
+    expect(result.current.status).toBe("unsaved");
+
+    act(() => result.current.saveNow());
+
+    expect(save).toHaveBeenCalledOnce();
+    expect(save).toHaveBeenCalledWith({
+      workspaceId: "w",
+      contentId: "c",
+      baseRevision: 1,
+      document: document("Changed"),
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(result.current.status).toBe("saved");
+    expect(result.current.isDirty).toBe(false);
+    vi.useRealTimers();
+  });
+
   it("starts a projected V2 document clean and coalesces a later complete document", async () => {
     vi.useFakeTimers();
     const first = deferred<AutosaveSaveResult>();

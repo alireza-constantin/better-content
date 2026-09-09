@@ -5,9 +5,10 @@ entry point; full specifications remain historical reference and are not normal
 implementation context.
 
 There is no current approved implementation phase and no Phase 7 specification.
-Post-completion extensions are complete: Phase 5 Ticket 08 (Teleprompter /
-Recording Mode) and Ticket 09 (AI Production Directions and B-roll Search
-Queries).
+Completed post-completion extensions are Phase 5 Ticket 08 (Teleprompter /
+Recording Mode), Ticket 09 (AI Production Directions and B-roll Search
+Queries), and Ticket 10 (Edit Guide). These extensions do not create a new
+phase or a Phase 7 specification.
 
 | Phase | Status | Preferred summary | Historical full specification |
 | --- | --- | --- | --- |

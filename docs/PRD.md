@@ -56,6 +56,8 @@ locales, preserve logical direction, and support mixed Persian/Latin content.
 5. Generate Content from an accepted Idea and edit its structured Draft.
 6. Accept a meaningful Draft as an immutable Version; continue editing if needed.
 7. Read the current accepted Version in Teleprompter / Recording Mode.
+8. Follow the current accepted Version's Script and Edit Directions in the
+   read-only Edit Guide.
 
 Publishing, Social Connections, and Analytics are future capabilities and are
 not current workflow steps.
@@ -188,6 +190,20 @@ spoken Script content.
 
 It creates no `RecordingSession` and persists no recording, playback, scroll,
 mirror, speed, text-size, or countdown state.
+
+## Edit Guide
+
+The Edit Guide is an approved post-completion Phase 5 extension, with
+implementation pending. It reads the same current immutable accepted Version
+used by Teleprompter and presents ordered Script blocks with their anchored Edit
+Directions in a dedicated read-only post-production view.
+
+It will present the existing Edit Direction variants, B-roll descriptions and
+optional search queries with a presentation-only Copy action, and safe current
+Asset presentation/preview for attached B-roll and Sound Cue media. It never
+uses the mutable Draft as production authority, translates creator Content,
+creates a second editing path or checklist, performs Media Discovery, or adds
+video editing, timelines, rendering, or publishing.
 
 ## Assets
 

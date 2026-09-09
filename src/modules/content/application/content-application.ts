@@ -73,6 +73,7 @@ export const reorderProductionQueue = productionQueueApplicationService.reorderP
 export const getContentDraft = contentReadApplicationService.getContentDetail;
 export const getContentDetail = contentReadApplicationService.getContentDetail;
 export const getTeleprompter = contentReadApplicationService.getTeleprompter;
+export const getEditGuide = contentReadApplicationService.getEditGuide;
 export const getIdeaContentGenerationHistory =
   contentReadApplicationService.getIdeaContentGenerationHistory;
 export const getContentGenerationAttemptDetail =

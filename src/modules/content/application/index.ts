@@ -13,6 +13,7 @@ export {
   generateContentScript,
   getContentDetail,
   getTeleprompter,
+  getEditGuide,
   getContentGenerationAttemptDetail,
   getContentGenerationAttemptResult,
   getIdeaContentGenerationHistory,
@@ -109,6 +110,8 @@ export {
   type ContentReadApplicationServiceDependencies,
   type ContentSourceIdeaDto,
   type ContentTeleprompterResult,
+  type ContentEditGuideAssetPresentation,
+  type ContentEditGuideResult,
   type IdeaContentGenerationHistoryDto,
   type IdeaContentUsageDto,
 } from "./content-read-service";

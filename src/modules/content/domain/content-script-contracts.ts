@@ -655,6 +655,36 @@ export function projectContentDocumentToTeleprompter(
   }));
 }
 
+export type EditGuideEditDirection =
+  | ContentDocumentV2["script"]["blocks"][number]["editDirections"][number]
+  | ContentDocumentV3["script"]["blocks"][number]["editDirections"][number]
+  | ContentDocumentV4["script"]["blocks"][number]["editDirections"][number];
+
+export type EditGuideScriptBlockDto = Readonly<{
+  id: string;
+  text: string;
+  editDirections: readonly EditGuideEditDirection[];
+}>;
+
+/**
+ * Read-only production projection for the Edit Guide. V1 stays one exact
+ * Script block and has no directions; newer documents retain block and
+ * direction order without materializing or persisting a migrated shape.
+ */
+export function projectContentDocumentToEditGuide(
+  input: ContentDocument,
+): readonly EditGuideScriptBlockDto[] {
+  if (input.schemaVersion === 1) {
+    return [{ id: "legacy-script", text: input.script.text, editDirections: [] }];
+  }
+
+  return input.script.blocks.map((block) => ({
+    id: block.id,
+    text: block.text,
+    editDirections: block.editDirections,
+  }));
+}
+
 export const contentAcceptanceStateSchema = z.enum([
   "NOT_ACCEPTED",
   "ACCEPTED",

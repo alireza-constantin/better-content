@@ -7,6 +7,10 @@ import en from "../../../../messages/en.json";
 import type { ContentDocumentV2 } from "../domain";
 import { BlockProductionDirections } from "./block-production-directions";
 
+vi.mock("@/i18n/navigation", () => ({
+  useRouter: () => ({ push: () => undefined, refresh: () => undefined }),
+}));
+
 const document: ContentDocumentV2 = {
   schemaVersion: 2,
   script: {

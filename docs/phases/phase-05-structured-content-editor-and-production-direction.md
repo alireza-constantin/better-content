@@ -244,3 +244,50 @@ This extension adds no external media provider, Google/Pinterest integration,
 web search, result preview, licensing/provenance record, automatic import,
 automatic attachment, AI-generated media, new direction type, range anchoring,
 or Phase 7 Publishing behavior. Automatic Media Discovery remains future scope.
+
+## Post-completion extension — Edit Guide
+
+**Status:** Completed extension — Ticket 10 resolved
+
+This section records a new approved capability added after the historical Phase
+5 scope and after the completed Teleprompter and AI Production Direction
+extensions. It does not rewrite the Phase 5 implementation or acceptance
+record above. The implementation ticket is
+`.scratch/phase-05-structured-content-editor-and-production-direction/issues/10-edit-guide.md`.
+
+Edit Guide is the post-production counterpart to Teleprompter. It consumes the
+immutable `Content Version` named by the Content aggregate's current
+`acceptedVersionId`:
+
+```text
+Mutable Draft → Accept → immutable Content Version → Edit Guide
+```
+
+The normal entry point resolves that accepted Version server-side on every
+load, authorizes the existing Workspace/Content read, and projects a safe,
+read-only view of ordered Script blocks with their anchored Edit Directions.
+It never uses mutable Draft state as production authority, introduces an
+`EditSession` or checklist, or adds a document schema, Asset relationship, or
+direction variant.
+
+V1 presents the existing `TEXT_OVERLAY`, `ZOOM`, `CUT`, `BROLL_CUE`,
+`SOUND_CUE`, `CAPTION_EMPHASIS`, and `EDIT_NOTE` variants with semantic labels
+and their existing payloads. B-roll shows its description, an optional
+`searchQuery` with presentation-only Copy behavior, and safe attached Asset
+presentation when available. Sound cues reuse the existing safe Asset
+presentation and native audio primitive where applicable. Missing or
+unavailable Assets do not hide or mutate the direction. Existing V1/V2/V3/V4
+compatibility and historical immutability remain in force.
+
+The dedicated view is read-only and responsive: desktop pairs Script context
+with associated Edit Directions, while mobile stacks each Script block before
+its directions. It supports EN/LTR, FA/RTL, creator-language-independent
+content, mixed-direction text, logical CSS, keyboard access, visible focus,
+semantic headings/labels, and no color-only direction distinction. A small
+optional Performance Direction context control may exist only if it is simple
+and off by default.
+
+The detailed authorization, rendering, Asset, accessibility, testing,
+dependency, and exclusion requirements are defined by Ticket 10. No new ADR
+or database migration is expected; automatic Media Discovery, editing
+execution, and Phase 7 Publishing remain out of scope.

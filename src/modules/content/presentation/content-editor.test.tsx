@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import en from "../../../../messages/en.json";
 import { UnsavedChangesProvider } from "@/components/navigation/unsaved-changes-provider";
 import type { ContentDetailDto } from "../application/content-read-service";
+import { saveContentDraftAction } from "../application/content-actions";
 vi.mock("../application/content-actions", () => ({
   acceptContentAction: vi.fn(),
   getContentDraftAction: vi.fn(),
@@ -66,7 +67,10 @@ const content = (language: "en" | "fa" = "en"): ContentDetailDto => ({
   },
 });
 describe("ContentEditor", () => {
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    vi.clearAllMocks();
+  });
   it("uses the V1 projection without marking it dirty and gives blocks content language semantics", () => {
     render(
       <NextIntlClientProvider locale="en" messages={en}>
@@ -119,6 +123,30 @@ describe("ContentEditor", () => {
     expect(screen.getByText("Save the current Draft before accepting.")).toBeTruthy();
   });
 
+  it("saves immediately when Save now is clicked", async () => {
+    vi.mocked(saveContentDraftAction).mockResolvedValueOnce({
+      ok: true,
+      draft: content().draft,
+    });
+
+    render(
+      <NextIntlClientProvider locale="en" messages={en}>
+        <UnsavedChangesProvider>
+          <ContentEditor content={content()} workspaceId="w" />
+        </UnsavedChangesProvider>
+      </NextIntlClientProvider>,
+    );
+
+    fireEvent.change(screen.getAllByRole("textbox")[0], { target: { value: "Changed" } });
+    const saveNow = screen.getByRole("button", { name: "Save now" });
+    fireEvent.click(saveNow);
+
+    expect(saveContentDraftAction).toHaveBeenCalledOnce();
+    expect(saveContentDraftAction).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: "w", contentId: "c", baseRevision: 4 }),
+    );
+  });
+
   it("opens only the current accepted Version in Teleprompter", () => {
     const accepted = {
       ...content(),
@@ -140,5 +168,7 @@ describe("ContentEditor", () => {
 
     const link = screen.getByRole("link", { name: "Open Teleprompter for Idea" });
     expect(link.getAttribute("href")).toBe("/content/c/teleprompter");
+    const editGuide = screen.getByRole("link", { name: "Open Edit Guide for Idea" });
+    expect(editGuide.getAttribute("href")).toBe("/content/c/edit-guide");
   });
 });

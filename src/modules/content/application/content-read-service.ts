@@ -19,6 +19,7 @@ import {
   projectContentDocumentV4ToV3,
   extractAssetReferences,
   projectContentDocumentToTeleprompter,
+  projectContentDocumentToEditGuide,
   type ContentDocument,
   type ContentDocumentV2,
   type ContentDocumentV3,
@@ -27,6 +28,7 @@ import {
   type ContentScriptFormat,
   type GenerationLanguage,
 } from "../domain";
+import type { AssetMediaType } from "@/modules/assets/domain";
 import {
   parseStoredContentGenerationErrorCategory,
   parseStoredContentGenerationStatus,
@@ -129,6 +131,33 @@ export type ContentTeleprompterResult =
       acceptedVersionId: string | null;
     }>;
 
+export type ContentEditGuideAssetPresentation = Readonly<{
+  displayName: string;
+  mediaType: AssetMediaType;
+  width: number | null;
+  height: number | null;
+  previewable: boolean;
+}>;
+
+export type ContentEditGuideResult =
+  | Readonly<{
+      status: "READY";
+      contentId: string;
+      contentTitle: string;
+      contentLanguage: GenerationLanguage;
+      acceptedVersionId: string;
+      acceptedVersionNumber: number;
+      scriptBlocks: ReturnType<typeof projectContentDocumentToEditGuide>;
+      assetPresentations: Readonly<Record<string, ContentEditGuideAssetPresentation>>;
+    }>
+  | Readonly<{
+      status: "NO_ACCEPTED_VERSION" | "UNAVAILABLE";
+      contentId: string;
+      contentTitle: string;
+      contentLanguage: GenerationLanguage;
+      acceptedVersionId: string | null;
+    }>;
+
 async function loadAssetPresentations(
   database: Pick<typeof db, "select">,
   workspaceId: string,
@@ -148,6 +177,68 @@ async function loadAssetPresentations(
     .where(and(eq(assets.workspaceId, workspaceId), inArray(assets.id, ids)));
   return Object.fromEntries(
     rows.map((row) => [row.id, { displayName: row.displayName, mediaType: row.mediaType }]),
+  );
+}
+
+async function loadEditGuideAssetPresentations(
+  database: Pick<typeof db, "select">,
+  workspaceId: string,
+  document: ContentDocument,
+): Promise<Readonly<Record<string, ContentEditGuideAssetPresentation>>> {
+  if (document.schemaVersion !== 3 && document.schemaVersion !== 4) return {};
+
+  const allowedTypes = new Map<string, Set<AssetMediaType>>();
+  for (const block of document.script.blocks) {
+    for (const direction of block.editDirections) {
+      if ((direction.type !== "BROLL_CUE" && direction.type !== "SOUND_CUE") || !direction.assetId)
+        continue;
+      const types: readonly AssetMediaType[] =
+        direction.type === "BROLL_CUE" ? ["IMAGE", "VIDEO"] : ["AUDIO"];
+      const existing = allowedTypes.get(direction.assetId) ?? new Set<AssetMediaType>();
+      for (const type of types) existing.add(type);
+      allowedTypes.set(direction.assetId, existing);
+    }
+  }
+
+  const ids = [...allowedTypes.keys()];
+  if (!ids.length) return {};
+  const rows = await database
+    .select({
+      id: assets.id,
+      displayName: assets.displayName,
+      mediaType: assets.mediaType,
+      status: assets.status,
+      width: assets.width,
+      height: assets.height,
+    })
+    .from(assets)
+    .where(and(eq(assets.workspaceId, workspaceId), inArray(assets.id, ids)));
+
+  return Object.fromEntries(
+    rows
+      .filter(
+        (row) =>
+          row.status === "READY" &&
+          allowedTypes.get(row.id)?.has(row.mediaType as AssetMediaType) === true,
+      )
+      .map((row) => {
+        const mediaType = row.mediaType as AssetMediaType;
+        return [
+          row.id,
+          {
+            displayName: row.displayName,
+            mediaType,
+            width: row.width,
+            height: row.height,
+            previewable:
+              mediaType !== "IMAGE" ||
+              (typeof row.width === "number" &&
+                row.width > 0 &&
+                typeof row.height === "number" &&
+                row.height > 0),
+          },
+        ] as const;
+      }),
   );
 }
 
@@ -430,6 +521,7 @@ export function createContentReadApplicationService(
   getContentByIdea(input: unknown): Promise<ContentByIdeaDto>;
   getContentDetail(input: unknown): Promise<ContentDetailDto>;
   getTeleprompter(input: unknown): Promise<ContentTeleprompterResult>;
+  getEditGuide(input: unknown): Promise<ContentEditGuideResult>;
   getIdeaContentGenerationHistory(input: unknown): Promise<IdeaContentGenerationHistoryDto>;
   getContentGenerationAttemptDetail(input: unknown): Promise<ContentGenerationAttemptDetailDto>;
   getContentGenerationAttemptResult(input: unknown): Promise<ContentDetailDto | null>;
@@ -661,6 +753,97 @@ export function createContentReadApplicationService(
         return result;
       } catch {
         serviceLogger.warn("content.teleprompter.accepted_version_unavailable", {
+          userId,
+          workspaceId: parsedInput.workspaceId,
+          entityId: parsedInput.contentId,
+          module: "content",
+          operation: "contentRead",
+        });
+        return { ...base, acceptedVersionId: null, status: "UNAVAILABLE" };
+      }
+    },
+
+    async getEditGuide(input: unknown): Promise<ContentEditGuideResult> {
+      const { userId, input: parsedInput } = await authorizeRead(
+        input,
+        contentDetailInputSchema,
+        "The Edit Guide request is invalid.",
+      );
+      const record = await findContentForTeleprompter(
+        database,
+        parsedInput.workspaceId,
+        parsedInput.contentId,
+      );
+
+      if (!record) {
+        throw notFound("Content");
+      }
+
+      const contentLanguage = parseStoredContentLanguage(record.content.contentLanguage);
+      const base = {
+        contentId: record.content.id,
+        contentTitle: record.sourceIdea.title,
+        contentLanguage,
+        acceptedVersionId: record.content.acceptedVersionId,
+      } as const;
+
+      if (!record.content.acceptedVersionId) {
+        logRead(serviceLogger, "content.edit_guide.no_accepted_version", {
+          userId,
+          workspaceId: parsedInput.workspaceId,
+          entityId: parsedInput.contentId,
+        });
+        return { ...base, status: "NO_ACCEPTED_VERSION" };
+      }
+
+      const version = await findContentTeleprompterVersion(
+        database,
+        parsedInput.workspaceId,
+        record.content.id,
+        record.content.acceptedVersionId,
+      );
+      const parsedDocument = version
+        ? contentDocumentSchema.safeParse(version.version.document)
+        : null;
+      const isValidVersion =
+        version !== undefined &&
+        version.version.source === "CREATOR_ACCEPTED" &&
+        Number.isInteger(version.version.versionNumber) &&
+        version.version.versionNumber > 0 &&
+        parsedDocument?.success === true;
+
+      if (!isValidVersion || !parsedDocument?.success) {
+        serviceLogger.warn("content.edit_guide.accepted_version_unavailable", {
+          userId,
+          workspaceId: parsedInput.workspaceId,
+          entityId: parsedInput.contentId,
+          module: "content",
+          operation: "contentRead",
+        });
+        return { ...base, acceptedVersionId: null, status: "UNAVAILABLE" };
+      }
+
+      try {
+        const result: ContentEditGuideResult = {
+          ...base,
+          status: "READY",
+          acceptedVersionId: record.content.acceptedVersionId,
+          acceptedVersionNumber: version.version.versionNumber,
+          scriptBlocks: projectContentDocumentToEditGuide(parsedDocument.data),
+          assetPresentations: await loadEditGuideAssetPresentations(
+            database,
+            parsedInput.workspaceId,
+            parsedDocument.data,
+          ),
+        };
+        logRead(serviceLogger, "content.edit_guide.loaded", {
+          userId,
+          workspaceId: parsedInput.workspaceId,
+          entityId: parsedInput.contentId,
+        });
+        return result;
+      } catch {
+        serviceLogger.warn("content.edit_guide.accepted_version_unavailable", {
           userId,
           workspaceId: parsedInput.workspaceId,
           entityId: parsedInput.contentId,

@@ -6,7 +6,7 @@ export type ExtractedAssetReference = Readonly<{ assetId: string; directionId: s
 export function extractAssetReferences(
   document: ContentDocument,
 ): readonly ExtractedAssetReference[] {
-  if (document.schemaVersion !== 3) return [];
+  if (document.schemaVersion !== 3 && document.schemaVersion !== 4) return [];
   return document.script.blocks.flatMap((block) =>
     block.editDirections.flatMap((direction) =>
       (direction.type === "BROLL_CUE" || direction.type === "SOUND_CUE") && direction.assetId

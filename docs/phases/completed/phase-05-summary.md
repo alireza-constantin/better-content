@@ -39,6 +39,15 @@ Architecture, accepted ADRs, or a current approved phase specification.
 - `BROLL_CUE.searchQuery` is creator-editable canonical Content data; copying is
   presentation-only. AI never generates an `assetId` or media URL.
 
+## Extension 10 — Edit Guide
+
+- Completed after the Teleprompter and AI Production Direction extensions. Edit
+  Guide reads the current immutable accepted Version and projects every V1–V4
+  Script/Edit Direction pairing as a responsive, read-only production view.
+- B-roll descriptions, optional search queries with presentation-only Copy, and
+  safe workspace-authorized Asset previews reuse existing Content and Asset
+  boundaries. No new Content schema or persistence/session model was added.
+
 ## Deferred / excluded
 
 - Automatic Media Discovery, provider search/import, timelines, collaboration,
