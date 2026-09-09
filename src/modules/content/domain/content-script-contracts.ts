@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 import { z } from "zod";
 
@@ -88,6 +88,7 @@ export const productionDirectionLimits = {
   note: 500,
   overlay: 280,
   soundCue: 280,
+  searchQuery: 200,
 } as const;
 export const performanceDirectionTypes = [
   "PAUSE",
@@ -325,6 +326,10 @@ export const contentDocumentV2Schema = z
 export type ContentDocumentV2 = z.infer<typeof contentDocumentV2Schema>;
 
 const assetIdSchema = z.uuid().optional();
+const searchQuerySchema = z
+  .string()
+  .refine((value) => Array.from(value).length <= productionDirectionLimits.searchQuery)
+  .refine((value) => value.trim() === value && value.length > 0 && !/[\r\n]/u.test(value));
 const editDirectionV3Schema = z.discriminatedUnion("type", [
   z
     .object({
@@ -436,12 +441,219 @@ export const contentDocumentV3Schema = z
   });
 export type ContentDocumentV3 = z.infer<typeof contentDocumentV3Schema>;
 
+const editDirectionV4Schema = z.discriminatedUnion("type", [
+  z
+    .object({
+      id: directionIdSchema,
+      type: z.literal("TEXT_OVERLAY"),
+      text: z.string().max(productionDirectionLimits.overlay),
+      placement: z.enum(productionDirectionValues.placement),
+      nuance: nuanceSchema,
+    })
+    .strict(),
+  z
+    .object({
+      id: directionIdSchema,
+      type: z.literal("ZOOM"),
+      mode: z.enum(productionDirectionValues.zoomMode),
+      intensity: z.enum(productionDirectionValues.zoomIntensity),
+      nuance: nuanceSchema,
+    })
+    .strict(),
+  z
+    .object({
+      id: directionIdSchema,
+      type: z.literal("CUT"),
+      style: z.enum(productionDirectionValues.cut),
+      nuance: nuanceSchema,
+    })
+    .strict(),
+  z
+    .object({
+      id: directionIdSchema,
+      type: z.literal("BROLL_CUE"),
+      description: z.string().max(productionDirectionLimits.note),
+      searchQuery: searchQuerySchema.optional(),
+      nuance: nuanceSchema,
+      assetId: assetIdSchema,
+    })
+    .strict(),
+  z
+    .object({
+      id: directionIdSchema,
+      type: z.literal("SOUND_CUE"),
+      kind: z.enum(productionDirectionValues.soundKind),
+      description: z.string().max(productionDirectionLimits.soundCue),
+      nuance: nuanceSchema,
+      assetId: assetIdSchema,
+    })
+    .strict(),
+  z
+    .object({
+      id: directionIdSchema,
+      type: z.literal("CAPTION_EMPHASIS"),
+      style: z.enum(productionDirectionValues.caption),
+      nuance: nuanceSchema,
+    })
+    .strict(),
+  z
+    .object({
+      id: directionIdSchema,
+      type: z.literal("EDIT_NOTE"),
+      text: z.string().max(productionDirectionLimits.note),
+    })
+    .strict(),
+]);
+
+/** V4 adds only creator-editable B-roll search text; asset identity remains unchanged. */
+export const contentDocumentV4Schema = z
+  .object({
+    schemaVersion: z.literal(4),
+    script: z
+      .object({
+        blocks: z
+          .array(
+            z
+              .object({
+                id: z.uuid(),
+                type: z.literal("paragraph"),
+                text: z.string().refine((value) => !/[\r\n]/.test(value)),
+                performanceDirections: z
+                  .array(performanceDirectionSchema)
+                  .max(productionDirectionLimits.perBlockCategory),
+                editDirections: z
+                  .array(editDirectionV4Schema)
+                  .max(productionDirectionLimits.perBlockCategory),
+              })
+              .strict(),
+          )
+          .min(1)
+          .max(1000),
+      })
+      .strict(),
+  })
+  .strict()
+  .superRefine((document, context) => {
+    const v3Shape = {
+      ...document,
+      schemaVersion: 3,
+      script: {
+        blocks: document.script.blocks.map((block) => ({
+          ...block,
+          editDirections: block.editDirections.map((direction) => {
+            const next = { ...direction } as typeof direction & { searchQuery?: string };
+            delete next.searchQuery;
+            return next;
+          }),
+        })),
+      },
+    };
+    const result = contentDocumentV3Schema.safeParse(v3Shape);
+    if (!result.success)
+      for (const issue of result.error.issues) context.addIssue({ ...issue, path: issue.path });
+  });
+export type ContentDocumentV4 = z.infer<typeof contentDocumentV4Schema>;
+
 export const contentDocumentSchema = z.union([
   contentScriptDocumentSchema,
   contentDocumentV2Schema,
   contentDocumentV3Schema,
+  contentDocumentV4Schema,
 ]);
 export type ContentDocument = z.infer<typeof contentDocumentSchema>;
+
+export type TeleprompterPerformanceHintDto = Readonly<{
+  id: string;
+  type: (typeof performanceDirectionTypes)[number];
+  values: readonly string[];
+  text?: string;
+  nuance?: string;
+}>;
+
+export type TeleprompterScriptBlockDto = Readonly<{
+  id: string;
+  text: string;
+  performanceHints: readonly TeleprompterPerformanceHintDto[];
+}>;
+
+/**
+ * Read-only presentation projection for the immersive prompting surface.
+ * V1 intentionally keeps a legacy V1 Script as one block; unlike the editor
+ * projection this function does not materialize or persist a migrated shape.
+ */
+export function projectContentDocumentToTeleprompter(
+  input: ContentDocument,
+): readonly TeleprompterScriptBlockDto[] {
+  if (input.schemaVersion === 1) {
+    return [
+      {
+        id: "legacy-script",
+        text: input.script.text,
+        performanceHints: [],
+      },
+    ];
+  }
+
+  return input.script.blocks.map((block) => ({
+    id: block.id,
+    text: block.text,
+    performanceHints: block.performanceDirections.map((direction) => {
+      switch (direction.type) {
+        case "PAUSE":
+          return {
+            id: direction.id,
+            type: direction.type,
+            values: [direction.duration],
+            ...(direction.nuance === undefined ? {} : { nuance: direction.nuance }),
+          };
+        case "EMPHASIS":
+          return {
+            id: direction.id,
+            type: direction.type,
+            values: [direction.strength],
+            ...(direction.nuance === undefined ? {} : { nuance: direction.nuance }),
+          };
+        case "DELIVERY":
+          return {
+            id: direction.id,
+            type: direction.type,
+            values: [direction.tone, direction.pace].filter(
+              (value): value is Exclude<typeof value, undefined> => value !== undefined,
+            ),
+            ...(direction.nuance === undefined ? {} : { nuance: direction.nuance }),
+          };
+        case "GESTURE":
+          return {
+            id: direction.id,
+            type: direction.type,
+            values: [direction.kind],
+            ...(direction.nuance === undefined ? {} : { nuance: direction.nuance }),
+          };
+        case "POSITION":
+          return {
+            id: direction.id,
+            type: direction.type,
+            values: [direction.action],
+            ...(direction.nuance === undefined ? {} : { nuance: direction.nuance }),
+          };
+        case "GAZE":
+          return {
+            id: direction.id,
+            type: direction.type,
+            values: [direction.target],
+            ...(direction.nuance === undefined ? {} : { nuance: direction.nuance }),
+          };
+        case "PERFORMANCE_NOTE":
+          return {
+            id: direction.id,
+            type: direction.type,
+            values: [],
+            text: direction.text,
+          };
+      }
+    }),
+  }));
+}
 
 export const contentAcceptanceStateSchema = z.enum([
   "NOT_ACCEPTED",
@@ -504,6 +716,63 @@ export function canonicalizeContentDocumentV3(input: unknown): ContentDocumentV3
   });
 }
 
+export function canonicalizeContentDocumentV4(input: unknown): ContentDocumentV4 {
+  const normalized =
+    typeof input === "object" && input !== null
+      ? {
+          ...(input as Record<string, unknown>),
+          script: {
+            ...((input as { script?: Record<string, unknown> }).script ?? {}),
+            blocks: Array.isArray((input as { script?: { blocks?: unknown[] } }).script?.blocks)
+              ? (input as { script: { blocks: unknown[] } }).script.blocks.map((block) => {
+                  if (typeof block !== "object" || block === null) return block;
+                  const record = block as Record<string, unknown>;
+                  return {
+                    ...record,
+                    editDirections: Array.isArray(record.editDirections)
+                      ? record.editDirections.map((direction) => {
+                          if (typeof direction !== "object" || direction === null) return direction;
+                          const next = { ...(direction as Record<string, unknown>) };
+                          if (next.type === "BROLL_CUE" && typeof next.searchQuery === "string") {
+                            const searchQuery = next.searchQuery.trim();
+                            if (searchQuery) next.searchQuery = searchQuery;
+                            else delete next.searchQuery;
+                          }
+                          return next;
+                        })
+                      : record.editDirections,
+                  };
+                })
+              : undefined,
+          },
+        }
+      : input;
+  const document = contentDocumentV4Schema.parse(normalized);
+  const blocks = document.script.blocks.filter(
+    (block) =>
+      block.text.trim().length > 0 ||
+      block.performanceDirections.length > 0 ||
+      block.editDirections.length > 0,
+  );
+  return contentDocumentV4Schema.parse({
+    ...document,
+    script: {
+      blocks:
+        blocks.length > 0
+          ? blocks
+          : [
+              {
+                id: document.script.blocks[0].id,
+                type: "paragraph",
+                text: "",
+                performanceDirections: [],
+                editDirections: [],
+              },
+            ],
+    },
+  });
+}
+
 /** Pure, deterministic, lossless V2 view upgrade. It intentionally performs no persistence. */
 export function projectContentDocumentV2ToV3(input: ContentDocumentV2): ContentDocumentV3 {
   const document = canonicalizeContentDocumentV2(input);
@@ -532,13 +801,41 @@ export function projectContentDocumentV3ToV2(input: ContentDocumentV3): ContentD
   });
 }
 
-/** Pure editor projection for every persisted document version. */
-export function projectContentDocumentToV3(input: ContentDocument): ContentDocumentV3 {
-  if (input.schemaVersion === 1)
-    return projectContentDocumentV2ToV3(materializeContentDocumentV2(input));
-  if (input.schemaVersion === 2) return projectContentDocumentV2ToV3(input);
-  return canonicalizeContentDocumentV3(input);
+/** Pure, lossless V3 compatibility projection. It never writes a Draft or Version. */
+export function projectContentDocumentV3ToV4(input: ContentDocumentV3): ContentDocumentV4 {
+  const document = canonicalizeContentDocumentV3(input);
+  return contentDocumentV4Schema.parse({ ...document, schemaVersion: 4 });
 }
+export function projectContentDocumentV4ToV3(input: ContentDocumentV4): ContentDocumentV3 {
+  const document = canonicalizeContentDocumentV4(input);
+  return contentDocumentV3Schema.parse({
+    ...document,
+    schemaVersion: 3,
+    script: {
+      blocks: document.script.blocks.map((block) => ({
+        ...block,
+        editDirections: block.editDirections.map((direction) => {
+          const next = { ...direction } as typeof direction & { searchQuery?: string };
+          delete next.searchQuery;
+          return next;
+        }),
+      })),
+    },
+  });
+}
+
+/** Pure editor projection for every persisted document version. */
+export function projectContentDocumentToV4(input: ContentDocument): ContentDocumentV4 {
+  if (input.schemaVersion === 1)
+    return projectContentDocumentV3ToV4(
+      projectContentDocumentV2ToV3(materializeContentDocumentV2(input)),
+    );
+  if (input.schemaVersion === 2)
+    return projectContentDocumentV3ToV4(projectContentDocumentV2ToV3(input));
+  if (input.schemaVersion === 3) return projectContentDocumentV3ToV4(input);
+  return canonicalizeContentDocumentV4(input);
+}
+export const projectContentDocumentToV3 = projectContentDocumentToV4;
 
 export function parseContentDocument(input: unknown): ContentDocument {
   const parsed = contentDocumentSchema.parse(input);
@@ -546,7 +843,9 @@ export function parseContentDocument(input: unknown): ContentDocument {
     ? canonicalizeContentDocumentV2(parsed)
     : parsed.schemaVersion === 3
       ? canonicalizeContentDocumentV3(parsed)
-      : parsed;
+      : parsed.schemaVersion === 4
+        ? canonicalizeContentDocumentV4(parsed)
+        : parsed;
 }
 
 export function segmentContentDocumentV1(document: ContentDocumentV1): readonly string[] {
@@ -637,6 +936,7 @@ export function exportContentDocumentV3Recovery(
   }
   return lines.join("\n");
 }
+export const exportContentDocumentV4Recovery = exportContentDocumentV3Recovery;
 
 function appendNuance(summary: string, nuance: string | undefined): string {
   return nuance === undefined ? summary : `${summary} — ${nuance}`;
@@ -676,7 +976,10 @@ function describeEditDirection(direction: EditDirection): string {
     case "CUT":
       return appendNuance(`Cut (${direction.style})`, direction.nuance);
     case "BROLL_CUE":
-      return appendNuance(`B-roll cue: ${direction.description}`, direction.nuance);
+      return appendNuance(
+        `B-roll cue: ${direction.description}${"searchQuery" in direction && direction.searchQuery ? `; Search query: ${direction.searchQuery}` : ""}`,
+        direction.nuance,
+      );
     case "SOUND_CUE":
       return appendNuance(
         `Sound cue (${direction.kind}): ${direction.description}`,
@@ -697,6 +1000,10 @@ export function contentDocumentsEqual(left: unknown, right: unknown): boolean {
     return contentDocumentsEqual(projectContentDocumentV2ToV3(leftDocument), rightDocument);
   if (leftDocument.schemaVersion === 3 && rightDocument.schemaVersion === 2)
     return contentDocumentsEqual(leftDocument, projectContentDocumentV2ToV3(rightDocument));
+  if (leftDocument.schemaVersion === 3 && rightDocument.schemaVersion === 4)
+    return contentDocumentsEqual(projectContentDocumentV3ToV4(leftDocument), rightDocument);
+  if (leftDocument.schemaVersion === 4 && rightDocument.schemaVersion === 3)
+    return contentDocumentsEqual(leftDocument, projectContentDocumentV3ToV4(rightDocument));
 
   if (leftDocument.schemaVersion !== rightDocument.schemaVersion) return false;
 
@@ -754,6 +1061,197 @@ export function parseGeneratedContentScriptDocument(input: unknown): ContentScri
       schemaVersion: 1,
       script: { text: normalizeLineEndings(document.script.text).trim() },
     });
+}
+
+const generatedNuanceSchema = z.string().max(productionDirectionLimits.nuance).optional();
+const generatedPerformanceDirectionSchema = z.discriminatedUnion("type", [
+  z
+    .object({
+      type: z.literal("PAUSE"),
+      duration: z.enum(productionDirectionValues.duration),
+      nuance: generatedNuanceSchema,
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("EMPHASIS"),
+      strength: z.enum(productionDirectionValues.strength),
+      nuance: generatedNuanceSchema,
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("DELIVERY"),
+      tone: z.enum(productionDirectionValues.tone).optional(),
+      pace: z.enum(productionDirectionValues.pace).optional(),
+      nuance: generatedNuanceSchema,
+    })
+    .strict()
+    .refine((value) => value.tone !== undefined || value.pace !== undefined),
+  z
+    .object({
+      type: z.literal("GESTURE"),
+      kind: z.enum(productionDirectionValues.gesture),
+      nuance: generatedNuanceSchema,
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("POSITION"),
+      action: z.enum(productionDirectionValues.position),
+      nuance: generatedNuanceSchema,
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("GAZE"),
+      target: z.enum(productionDirectionValues.gaze),
+      nuance: generatedNuanceSchema,
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("PERFORMANCE_NOTE"),
+      text: z.string().max(productionDirectionLimits.note),
+    })
+    .strict(),
+]);
+const generatedEditDirectionSchema = z.discriminatedUnion("type", [
+  z
+    .object({
+      type: z.literal("TEXT_OVERLAY"),
+      text: z.string().max(productionDirectionLimits.overlay),
+      placement: z.enum(productionDirectionValues.placement),
+      nuance: generatedNuanceSchema,
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("ZOOM"),
+      mode: z.enum(productionDirectionValues.zoomMode),
+      intensity: z.enum(productionDirectionValues.zoomIntensity),
+      nuance: generatedNuanceSchema,
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("CUT"),
+      style: z.enum(productionDirectionValues.cut),
+      nuance: generatedNuanceSchema,
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("BROLL_CUE"),
+      description: z.string().min(1).max(productionDirectionLimits.note),
+      searchQuery: searchQuerySchema,
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("SOUND_CUE"),
+      kind: z.enum(productionDirectionValues.soundKind),
+      description: z.string().max(productionDirectionLimits.soundCue),
+      nuance: generatedNuanceSchema,
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal("CAPTION_EMPHASIS"),
+      style: z.enum(productionDirectionValues.caption),
+      nuance: generatedNuanceSchema,
+    })
+    .strict(),
+  z
+    .object({ type: z.literal("EDIT_NOTE"), text: z.string().max(productionDirectionLimits.note) })
+    .strict(),
+]);
+export const generatedContentDocumentV4Schema = z
+  .object({
+    schemaVersion: z.literal(1),
+    script: z
+      .object({
+        blocks: z
+          .array(
+            z
+              .object({
+                type: z.literal("paragraph"),
+                text: z
+                  .string()
+                  .min(1)
+                  .max(50_000)
+                  .refine((value) => !/[\r\n]/u.test(value)),
+                performanceDirections: z
+                  .array(generatedPerformanceDirectionSchema)
+                  .max(productionDirectionLimits.perBlockCategory),
+                editDirections: z
+                  .array(generatedEditDirectionSchema)
+                  .max(productionDirectionLimits.perBlockCategory),
+              })
+              .strict(),
+          )
+          .min(1)
+          .max(1000),
+      })
+      .strict(),
+  })
+  .strict();
+
+/** Validates untrusted provider structure, then creates all persistent IDs locally. */
+export function parseGeneratedContentDocumentV4(input: unknown): ContentDocumentV4 {
+  const normalized =
+    typeof input === "object" && input !== null
+      ? {
+          ...(input as Record<string, unknown>),
+          script:
+            typeof (input as { script?: unknown }).script === "object" &&
+            (input as { script: { blocks?: unknown } }).script !== null
+              ? {
+                  ...(input as { script: Record<string, unknown> }).script,
+                  blocks: Array.isArray((input as { script: { blocks?: unknown[] } }).script.blocks)
+                    ? (input as { script: { blocks: unknown[] } }).script.blocks.map((block) =>
+                        typeof block === "object" &&
+                        block !== null &&
+                        typeof (block as { text?: unknown }).text === "string"
+                          ? {
+                              ...(block as Record<string, unknown>),
+                              text: (block as { text: string }).text.replace(/\r\n?/g, "\n").trim(),
+                            }
+                          : block,
+                      )
+                    : (input as { script: { blocks?: unknown } }).script.blocks,
+                }
+              : (input as Record<string, unknown>).script,
+        }
+      : input;
+  const generated = generatedContentDocumentV4Schema.parse(normalized);
+  for (const block of generated.script.blocks)
+    for (const direction of block.editDirections)
+      if (
+        direction.type === "BROLL_CUE" &&
+        (/(?:https?:\/\/|www\.)/iu.test(direction.searchQuery) ||
+          /(?:pexels|pixabay|unsplash|pinterest)\s*(?:id|\d+)/iu.test(direction.searchQuery))
+      )
+        throw new z.ZodError([
+          { code: "custom", path: [], message: "Generated B-roll query is not plain search text." },
+        ]);
+  return canonicalizeContentDocumentV4({
+    schemaVersion: 4,
+    script: {
+      blocks: generated.script.blocks.map((block) => ({
+        ...block,
+        id: randomUUID(),
+        performanceDirections: block.performanceDirections.map((direction) => ({
+          ...direction,
+          id: randomUUID(),
+        })),
+        editDirections: block.editDirections.map((direction) => ({
+          ...direction,
+          id: randomUUID(),
+        })),
+      })),
+    },
+  });
 }
 
 /**

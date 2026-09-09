@@ -7,6 +7,7 @@ import {
   ClipboardIcon,
   FilePenLineIcon,
   LoaderCircleIcon,
+  MonitorPlayIcon,
   RefreshCwIcon,
   SaveIcon,
 } from "lucide-react";
@@ -14,6 +15,7 @@ import { useTranslations } from "next-intl";
 import { useCallback, useEffect, useState } from "react";
 
 import { useUnsavedChanges } from "@/components/navigation/unsaved-changes-provider";
+import { Link } from "@/i18n/navigation";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -32,7 +34,7 @@ import {
 } from "../application/content-actions";
 import type { ContentDetailDto } from "../application/content-read-service";
 import { deriveContentAcceptanceState, exportContentDocumentV3Recovery } from "../domain";
-import type { ContentDocumentV3 } from "../domain";
+import type { ContentDocumentV4 } from "../domain";
 import { ContentVersionHistory } from "./content-version-history";
 import { StructuredScriptEditor } from "./structured-script-editor";
 import {
@@ -276,7 +278,7 @@ export function ContentEditor({ content, workspaceId }: Props) {
             </p>
           ) : null}
         </div>
-        <div className="flex shrink-0 flex-wrap gap-2">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
           <Button
             aria-describedby={acceptanceUnavailableReason ? "content-acceptance-help" : undefined}
             className="min-h-10"
@@ -292,6 +294,35 @@ export function ContentEditor({ content, workspaceId }: Props) {
             assetPresentations={content.assetPresentations}
             versions={versions}
           />
+          {acceptedVersionId ? (
+            <Link
+              aria-label={t("openTeleprompterFor", { title: content.sourceIdea.title })}
+              className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-transparent bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/80 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+              href={`/content/${content.id}/teleprompter`}
+            >
+              <MonitorPlayIcon aria-hidden="true" />
+              {t("openTeleprompter")}
+            </Link>
+          ) : (
+            <div className="flex flex-col items-start gap-1">
+              <Button
+                aria-describedby="teleprompter-accept-first-help"
+                className="min-h-10"
+                disabled
+                type="button"
+                variant="outline"
+              >
+                <MonitorPlayIcon aria-hidden="true" />
+                {t("openTeleprompter")}
+              </Button>
+              <span
+                className="max-w-52 text-xs text-muted-foreground"
+                id="teleprompter-accept-first-help"
+              >
+                {t("teleprompterAcceptFirst")}
+              </span>
+            </div>
+          )}
         </div>
       </section>
       <Card>
@@ -309,7 +340,7 @@ export function ContentEditor({ content, workspaceId }: Props) {
         <CardContent>
           <StructuredScriptEditor
             disabled={autosave.status === "conflict"}
-            document={autosave.document as ContentDocumentV3}
+            document={autosave.document as ContentDocumentV4}
             language={content.contentLanguage}
             labels={{
               region: t("scriptLabel"),

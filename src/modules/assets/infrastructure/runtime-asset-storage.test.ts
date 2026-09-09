@@ -30,6 +30,7 @@ const s3Environment = {
   ASSET_S3_ACCESS_KEY_ID: "test-access-key",
   ASSET_S3_SECRET_ACCESS_KEY: "test-secret",
   ASSET_S3_FORCE_PATH_STYLE: "true",
+  ASSET_STORAGE_VERSIONING: "disabled",
 };
 
 describe("runtime AssetStorage composition", () => {
@@ -64,5 +65,14 @@ describe("runtime AssetStorage composition", () => {
     expect(() =>
       createRuntimeAssetStorage({ ...s3Environment, ASSET_S3_FORCE_PATH_STYLE: "sometimes" }),
     ).toThrow("ASSET_S3_FORCE_PATH_STYLE");
+    expect(() =>
+      createRuntimeAssetStorage({ ...s3Environment, ASSET_STORAGE_VERSIONING: "enabled" }),
+    ).toThrow("ASSET_STORAGE_VERSIONING");
+    expect(() =>
+      createRuntimeAssetStorage({
+        ...s3Environment,
+        NEXT_PUBLIC_ASSET_S3_SECRET_ACCESS_KEY: "leaked",
+      }),
+    ).toThrow("ASSET_S3_SECRET_ACCESS_KEY");
   });
 });

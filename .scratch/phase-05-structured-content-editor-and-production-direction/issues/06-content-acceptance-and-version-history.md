@@ -4,7 +4,12 @@
 
 **Blocked by:** 04 — Cut shared Content generation over to V2 mutable Drafts; 05 — Deliver block-local Production Direction authoring.
 
-**Status:** ready-for-agent
+**Status:** resolved
+
+## Status reconciliation
+
+The approved Phase 5 completion record establishes this ticket as completed.
+Its original scope and unchecked historical checklist are preserved.
 
 - [ ] Deliver expected-revision acceptance against the authoritative persisted Draft, with canonical equality idempotency for the currently accepted Version only.
 - [ ] Create serialized `CREATOR_ACCEPTED` Versions, update the same-Content accepted pointer atomically, and preserve the accepted pointer while later autosaves diverge.

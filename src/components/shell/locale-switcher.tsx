@@ -17,7 +17,7 @@ export function LocaleSwitcher() {
 
   return (
     <nav aria-label={t("label")}>
-      <ul className="flex items-center gap-1 rounded-full border border-border bg-background p-1 shadow-sm">
+      <ul className="flex items-center rounded-md border border-border bg-background p-0.5">
         {localeOptions.map((option) => {
           const isActive = option.locale === locale;
 
@@ -26,15 +26,16 @@ export function LocaleSwitcher() {
               <Link
                 aria-current={isActive ? "page" : undefined}
                 className={cn(
-                  "inline-flex min-h-8 items-center rounded-full px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+                  "inline-flex min-h-11 min-w-11 items-center justify-center rounded px-1.5 text-xs font-semibold tracking-wide transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                   isActive
                     ? "bg-foreground text-background"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground",
                 )}
                 href={pathname}
                 locale={option.locale}
+                title={t(option.labelKey)}
               >
-                {t(option.labelKey)}
+                <span lang={option.locale}>{option.locale === "en" ? "EN" : "فا"}</span>
               </Link>
             </li>
           );

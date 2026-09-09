@@ -113,6 +113,27 @@
       "when": 1788836000000,
       "tag": "0015_asset_deletion_evidence",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1788869993083,
+      "tag": "0016_better_auth_issuer_nullable",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1788870033674,
+      "tag": "0017_better_auth_drop_issuer",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1788871000000,
+      "tag": "0018_content_generation_v4",
+      "breakpoints": true
     }
   ]
 }

@@ -7,7 +7,7 @@ tests and without cloud credentials in local development.
 **Blocked by:** 01 — Establish the Asset domain, persistence, and
 ContentDocumentV3 foundation.
 
-**Status:** resloved
+**Status:** resolved
 
 ## Scope
 

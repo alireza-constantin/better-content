@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDownIcon, ChevronUpIcon, PlusIcon, Trash2Icon } from "lucide-react";
+import { ChevronDownIcon, ChevronUpIcon, CopyIcon, PlusIcon, Trash2Icon } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import { useState } from "react";
 
@@ -26,6 +26,7 @@ import {
   productionDirectionValues,
   type ContentDocumentV2,
   type ContentDocumentV3,
+  type ContentDocumentV4,
 } from "../domain";
 import {
   addDirection,
@@ -39,12 +40,12 @@ import { setDirectionAsset } from "./direction-operations";
 import { DirectionAssetPicker } from "./direction-asset-picker";
 
 type Props = Readonly<{
-  block: (ContentDocumentV2 | ContentDocumentV3)["script"]["blocks"][number];
-  document: ContentDocumentV2 | ContentDocumentV3;
+  block: (ContentDocumentV2 | ContentDocumentV3 | ContentDocumentV4)["script"]["blocks"][number];
+  document: ContentDocumentV2 | ContentDocumentV3 | ContentDocumentV4;
   workspaceId?: string;
   disabled: boolean;
   language: "en" | "fa";
-  onChange: (document: ContentDocumentV2 | ContentDocumentV3) => void;
+  onChange: (document: ContentDocumentV2 | ContentDocumentV3 | ContentDocumentV4) => void;
 }>;
 type EditorState = Readonly<{
   category: DirectionCategory;
@@ -134,7 +135,11 @@ function DirectionForm({
       </select>
     </label>
   );
-  const text = (key: "text" | "description" | "nuance", maxLength: number, required = true) => (
+  const text = (
+    key: "text" | "description" | "nuance" | "searchQuery",
+    maxLength: number,
+    required = true,
+  ) => (
     <div className="grid gap-1.5">
       <Label htmlFor={`direction-${key}`}>
         {t(`directionField${key[0].toUpperCase()}${key.slice(1)}`)}
@@ -239,6 +244,7 @@ function DirectionForm({
           id,
           type,
           description: value("description"),
+          ...(value("searchQuery").trim() ? { searchQuery: value("searchQuery").trim() } : {}),
           ...shared,
         } as ProductionDirection;
         break;
@@ -326,7 +332,12 @@ function DirectionForm({
                 </div>
               )}
               {type === "CUT" && option("style", productionDirectionValues.cut)}
-              {type === "BROLL_CUE" && text("description", productionDirectionLimits.note)}
+              {type === "BROLL_CUE" && (
+                <>
+                  {text("description", productionDirectionLimits.note)}
+                  {text("searchQuery", productionDirectionLimits.searchQuery, false)}
+                </>
+              )}
               {type === "SOUND_CUE" && (
                 <>
                   {option("kind", productionDirectionValues.soundKind)}
@@ -373,6 +384,15 @@ export function BlockProductionDirections({
   });
   const [deleteCandidate, setDeleteCandidate] = useState<string | null>(null);
   const [assetDirectionId, setAssetDirectionId] = useState<string | null>(null);
+  const [copyStatus, setCopyStatus] = useState<"copied" | "failed" | null>(null);
+  const copyQuery = async (searchQuery: string) => {
+    try {
+      await navigator.clipboard.writeText(searchQuery);
+      setCopyStatus("copied");
+    } catch {
+      setCopyStatus("failed");
+    }
+  };
   const groups: readonly [DirectionCategory, readonly ProductionDirection[], string][] = [
     ["performanceDirections", block.performanceDirections, t("performanceDirections")],
     ["editDirections", block.editDirections, t("editDirections")],
@@ -381,7 +401,7 @@ export function BlockProductionDirections({
     (count, item) => count + item.performanceDirections.length + item.editDirections.length,
     0,
   );
-  const apply = (next: ContentDocumentV2 | ContentDocumentV3 | null) => {
+  const apply = (next: ContentDocumentV2 | ContentDocumentV3 | ContentDocumentV4 | null) => {
     if (next) onChange(next);
   };
   return (
@@ -455,7 +475,28 @@ export function BlockProductionDirections({
                   >
                     {summary(direction, t)}
                   </Button>
-                  {document.schemaVersion === 3 &&
+                  {direction.type === "BROLL_CUE" &&
+                  typeof (direction as unknown as { searchQuery?: unknown }).searchQuery ===
+                    "string" &&
+                  (direction as unknown as { searchQuery: string }).searchQuery ? (
+                    <Button
+                      aria-label={t("copySearchQuery")}
+                      className="min-h-9 sm:min-h-6"
+                      disabled={disabled}
+                      onClick={() =>
+                        void copyQuery(
+                          (direction as unknown as { searchQuery: string }).searchQuery,
+                        )
+                      }
+                      size="xs"
+                      type="button"
+                      variant="ghost"
+                    >
+                      <CopyIcon />
+                      {t("copySearchQuery")}
+                    </Button>
+                  ) : null}
+                  {(document.schemaVersion === 3 || document.schemaVersion === 4) &&
                   (direction.type === "BROLL_CUE" || direction.type === "SOUND_CUE") ? (
                     <Button
                       aria-label={t("manageDirectionAsset", { direction: summary(direction, t) })}
@@ -548,12 +589,17 @@ export function BlockProductionDirections({
           }}
         />
       ) : null}
+      {copyStatus ? (
+        <p aria-live="polite" className="sr-only">
+          {t(copyStatus === "copied" ? "searchQueryCopied" : "searchQueryCopyFailed")}
+        </p>
+      ) : null}
       {assetDirectionId
         ? (() => {
             const direction = block.editDirections.find((item) => item.id === assetDirectionId);
             if (
               !direction ||
-              document.schemaVersion !== 3 ||
+              (document.schemaVersion !== 3 && document.schemaVersion !== 4) ||
               (direction.type !== "BROLL_CUE" && direction.type !== "SOUND_CUE") ||
               !workspaceId
             )

@@ -30,6 +30,11 @@ type AssetS3Configuration = Readonly<{
   forcePathStyle: boolean;
 }>;
 
+const serverOnlyAssetEnvironmentKeys = [
+  "ASSET_S3_ACCESS_KEY_ID",
+  "ASSET_S3_SECRET_ACCESS_KEY",
+] as const;
+
 export type RuntimeAssetStorageDependencies = Readonly<{
   /** Deterministic seam for tests; production uses the private AWS SDK adapter below. */
   createS3ObjectClient?: (configuration: AssetS3Configuration) => S3CompatiblePrivateObjectClient;
@@ -40,6 +45,10 @@ export function createRuntimeAssetStorage(
   environment: Environment = process.env,
   dependencies: RuntimeAssetStorageDependencies = {},
 ): AssetStorage {
+  for (const key of serverOnlyAssetEnvironmentKeys) {
+    if (environment[`NEXT_PUBLIC_${key}`])
+      throw new Error(`${key} must not be exposed through NEXT_PUBLIC_ environment variables.`);
+  }
   const driver = environment.ASSET_STORAGE_DRIVER;
   if (driver === "filesystem")
     return new FilesystemAssetStorage(
@@ -48,6 +57,8 @@ export function createRuntimeAssetStorage(
   if (driver !== "s3") throw new Error("ASSET_STORAGE_DRIVER must explicitly be filesystem or s3.");
 
   const configuration = s3Configuration(environment);
+  if (environment.ASSET_STORAGE_VERSIONING !== "disabled")
+    throw new Error("ASSET_STORAGE_VERSIONING must be disabled for managed media.");
   return new S3CompatibleAssetStorage(
     dependencies.createS3ObjectClient?.(configuration) ??
       createAwsS3PrivateObjectClient(configuration),

@@ -13,7 +13,8 @@ import {
 import {
   contentScriptFormatSchema,
   contentScriptGenerationKindSchema,
-  parseGeneratedContentScriptDocument,
+  parseGeneratedContentDocumentV4,
+  type ContentDocumentV4,
   type ContentScriptDocument,
   type ContentScriptFormat,
   type ContentScriptGenerationKind,
@@ -86,7 +87,7 @@ export function parseGenerateContentScriptRequest(input: unknown): GenerateConte
 const canonicalGenerateContentScriptSuccessResultSchema = z
   .object({
     ok: z.literal(true),
-    output: z.custom<ContentScriptDocument>(),
+    output: z.custom<ContentScriptDocument | ContentDocumentV4>(),
     usage: providerNeutralUsageSchema.optional(),
     providerRequestCorrelation: safeProviderRequestCorrelationSchema.optional(),
   })
@@ -121,7 +122,7 @@ export const generateContentScriptResultSchema =
     }
 
     try {
-      const output = parseGeneratedContentScriptDocument(result.output);
+      const output = parseGeneratedContentDocumentV4(result.output);
 
       return canonicalGenerateContentScriptSuccessResultSchema.parse({
         ok: true,
@@ -179,4 +180,9 @@ export interface GenerateContentScriptProvider {
 export type GenerateContentScript = GenerateContentScriptProvider;
 
 export { providerNeutralUsageSchema, safeProviderRequestCorrelationSchema };
-export type { ContentScriptDocument, ProviderNeutralUsage, SafeProviderRequestCorrelation };
+export type {
+  ContentDocumentV4,
+  ContentScriptDocument,
+  ProviderNeutralUsage,
+  SafeProviderRequestCorrelation,
+};

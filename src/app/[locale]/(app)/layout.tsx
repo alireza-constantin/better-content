@@ -38,8 +38,10 @@ export default async function ProtectedApplicationLayout({
       dashboardLabel={t("dashboard")}
       contentDnaLabel={t("contentDna")}
       ideasLabel={t("ideas")}
+      menuLabel={t("menu")}
       contentLabel={t("content")}
       assetsLabel={t("assets")}
+      closeMenuLabel={t("closeMenu")}
       productName={t("productName")}
       skipToContentLabel={t("skipToContent")}
       userEmail={session.user.email}

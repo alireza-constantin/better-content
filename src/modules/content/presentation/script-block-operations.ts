@@ -1,11 +1,13 @@
 import {
   contentDocumentV2Schema,
   contentDocumentV3Schema,
+  contentDocumentV4Schema,
   type ContentDocumentV2,
   type ContentDocumentV3,
+  type ContentDocumentV4,
 } from "../domain";
 
-type EditorDocument = ContentDocumentV2 | ContentDocumentV3;
+type EditorDocument = ContentDocumentV2 | ContentDocumentV3 | ContentDocumentV4;
 type Block = EditorDocument["script"]["blocks"][number];
 const freshBlock = (text = ""): Block => ({
   id: crypto.randomUUID(),
@@ -17,7 +19,12 @@ const freshBlock = (text = ""): Block => ({
 // Local editing retains a blank active paragraph; the save service is the canonical persistence boundary.
 const update = <T extends EditorDocument>(document: T, blocks: readonly Block[]): T | null => {
   try {
-    const schema = document.schemaVersion === 3 ? contentDocumentV3Schema : contentDocumentV2Schema;
+    const schema =
+      document.schemaVersion === 4
+        ? contentDocumentV4Schema
+        : document.schemaVersion === 3
+          ? contentDocumentV3Schema
+          : contentDocumentV2Schema;
     return schema.parse({
       ...document,
       script: { blocks: blocks.length ? blocks : [freshBlock()] },

@@ -2,7 +2,7 @@
 
 ## 1. Status
 
-- **Status:** Ready for implementation
+- **Status:** Completed
 - **Decision owners:** Product Architect / Technical Lead
 - **Prerequisites:** Phases 1–3 complete
 - **Required ADR:** ADR-016 accepted
@@ -1049,8 +1049,7 @@ reconciled, ADR-016 and ADR-017 are accepted, and the source-of-truth
 acceptance criteria are updated. No unresolved product or architecture
 contradiction remains for the queue decision.
 
-Phase 4 remains **Ready for implementation** at the corrected source-of-truth
-level. Ticket 11 cross-cutting hardening remains blocked until both Ticket 12
-and the future Ticket 13 Production Queue slice are resolved. Ticket 13 is not
-created by this documentation correction, and no Ticket 11 or Phase 5 work is
-authorized here. Final Product Architect review remains after Ticket 11.
+Phase 4 is **Completed**. The historical Ticket 11 status was reconciled after
+its dependencies and later approved Phase 5 prerequisite record established
+closure. Its original implementation checklist remains preserved in the local
+tracker as execution history.

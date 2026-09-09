@@ -22,6 +22,7 @@ import type { ContentVersionDto } from "../application/content-read-service";
 import type {
   ContentDocumentV2,
   ContentDocumentV3,
+  ContentDocumentV4,
   EditDirection,
   PerformanceDirection,
 } from "../domain";
@@ -80,7 +81,7 @@ function directionDetail(
     case "CUT":
       return t(`directionValue${direction.style}`);
     case "BROLL_CUE":
-      return `${direction.description}${"assetId" in direction && direction.assetId ? ` · ${t("historyAttachedMedia")}` : ""}`;
+      return `${direction.description}${"searchQuery" in direction && direction.searchQuery ? ` · ${t("searchQueryLabel")}: ${direction.searchQuery}` : ""}${"assetId" in direction && direction.assetId ? ` · ${t("historyAttachedMedia")}` : ""}`;
     case "SOUND_CUE":
       return `${t(`directionValue${direction.kind}`)} · ${direction.description}${"assetId" in direction && direction.assetId ? ` · ${t("historyAttachedMedia")}` : ""}`;
     case "CAPTION_EMPHASIS":
@@ -160,7 +161,7 @@ function V2Preview({
   contentLanguage,
   assetPresentations,
 }: Readonly<{
-  document: ContentDocumentV2 | ContentDocumentV3;
+  document: ContentDocumentV2 | ContentDocumentV3 | ContentDocumentV4;
   contentLanguage: "en" | "fa";
   assetPresentations?: Props["assetPresentations"];
 }>) {

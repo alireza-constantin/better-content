@@ -477,6 +477,19 @@ test("Phase 5 EN journey persists structured editing, directions, acceptance, an
   await page.getByRole("button", { name: "Open Version History" }).click();
   await expect(page.getByRole("dialog")).toContainText("Accepted");
   await expect(page.getByRole("dialog")).toContainText("Read only");
+
+  await page.keyboard.press("Escape");
+  await page.getByRole("link", { name: /Open Teleprompter for/ }).click();
+  await expect(page).toHaveURL(new RegExp(`/en/content/${fixture.emptyContentId}/teleprompter$`));
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  await expect(page.locator("html")).toHaveAttribute("dir", "ltr");
+  await expect(page.getByRole("region", { name: "Spoken Script" })).toContainText(
+    "A persisted English paragraph for the structured editor.",
+  );
+  await page.getByRole("button", { name: "Start", exact: true }).click();
+  await expect(page.getByText("Starting in 3", { exact: true })).toBeVisible();
+  await page.waitForTimeout(3_100);
+  await expect(page.getByRole("button", { name: "Pause" })).toBeVisible();
 });
 
 test("Phase 5 FA journey preserves RTL content semantics through persistence and history", async ({

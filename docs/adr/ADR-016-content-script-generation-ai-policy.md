@@ -13,6 +13,10 @@ ADR-011 requires every AI workflow to use the internal provider-neutral AI bound
 
 This ADR records the accepted Phase 4 AI policy. It does not create implementation tickets, migrations, code, Phase 5 editor work, or changes to other accepted ADRs.
 
+The post-completion amendment below governs new Content generation after the
+approved Phase 5 Ticket 09 cutover. The original policy remains the historical
+interpretation of existing `content_script_v1` runs and artifacts.
+
 ## Decision
 
 ### Workflow boundary
@@ -196,6 +200,55 @@ The smoke test must verify the real endpoint accepts the Responses-compatible st
 
 If AvalAI or `gpt-5.6-luna` cannot satisfy the exact contract, implementation stops and this ADR is revisited. Do not introduce a fallback silently.
 
+### Phase 5 post-completion amendment — structured Production Directions
+
+Ticket 09 extends the existing Content-generation operation; it does not add a
+second AI invocation or a separate generation workflow. New accepted operations
+continue to use generation kind `CONTENT_SCRIPT_GENERATION`, the same Attempt ↔
+AI Run lineage, AvalAI provider, `gpt-5.6-luna`, fixed settings, timeout, quota,
+privacy, error, idempotency, and transaction rules in this ADR.
+
+The cutover advances the code-owned prompt to
+`content-script-generation/v2` and the strict provider output contract to
+`generated_content_v4`, schema version 1. The provider payload describes one
+complete structured Content result without persistent IDs or Asset references,
+using the existing paragraph-block anchor and only the approved Performance and
+Edit Direction taxonomy. Directions are generated
+only where contextually useful. No prompt, output schema, or adapter may invent
+new direction types, range anchors, media URLs, provider result identities, or
+Asset identities.
+
+Provider output remains untrusted. The application strictly validates all
+blocks, direction variants, payloads, ordering, Script and document limits, then
+materializes fresh unique block and direction UUIDs at the trusted domain
+boundary. Provider output does not control persistent identifiers. The resulting
+canonical ContentDocumentV4 is stored identically in the completed AI Run output
+snapshot, immutable `AI_GENERATED` Version #1, and initial Draft in the existing
+all-or-nothing completion transaction.
+
+For every AI-generated `BROLL_CUE`, `description` and `searchQuery` are required
+and distinct. `description` is the human-facing production instruction.
+`searchQuery` is trimmed, non-empty, single-line concise English search text of
+at most 200 Unicode code points, including when `requestedLanguage` is Persian.
+The generation contract rejects a B-roll query containing URL syntax or a
+provider-specific result identity rather than persisting it. AI never emits `assetId` for
+`BROLL_CUE` or `SOUND_CUE`; V4 permits creator attachment later through the
+existing Asset application boundary.
+
+The AI may generate `SOUND_CUE` instructions under the existing taxonomy, but
+Ticket 09 adds no sound discovery or generated audio. Search queries exist only
+on `BROLL_CUE`. Script and creator-facing direction text follow the requested
+Content language; the English B-roll query is an explicit search-tool exception
+and never translates or mutates Script text.
+
+Old prompt/schema versions remain valid historical AI Run metadata. The reviewed
+Ticket 09 migration widens database constraints and validated output unions for
+the new prompt and output schema without rewriting any existing run, Draft, or
+Version. Normal CI uses the deterministic provider seam. An opt-in smoke test
+must prove AvalAI accepts the new strict schema and produces useful English and
+Persian Content with bounded valid directions before the cutover is considered
+complete.
+
 ## Rationale
 
 AvalAI and `gpt-5.6-luna` preserve the practical provider/cost direction selected for Phase 3 while keeping the workflow decision explicit. Medium reasoning balances quality and cost. The higher timeout and output limit reflect materially longer Script output. Strict structured output plus canonical Zod validation protects the domain boundary. Zero automatic retries avoids hidden duplicate cost and ambiguous execution.
@@ -235,4 +288,7 @@ AvalAI and `gpt-5.6-luna` preserve the practical provider/cost direction selecte
 - Automatic provider retries: rejected because they can obscure billable attempts.
 - Raw-prompt/provider-response retention: rejected for privacy and ownership clarity.
 - Automatic language detection: deferred until evidence justifies it.
-- AI regeneration, rewriting, inline editing, scoring, directions, blocks, background jobs, cancellation, and Phase 5 editor work: out of scope.
+- AI regeneration, rewriting, inline editing, scoring, background jobs, and
+  cancellation remain out of scope. The Phase 5 post-completion amendment above
+  supersedes only the original exclusion of generated blocks/directions for new
+  Content-generation operations.

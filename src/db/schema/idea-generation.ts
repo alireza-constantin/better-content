@@ -18,7 +18,10 @@ import type {
   GenerationLanguage,
 } from "@/modules/ideas/domain/idea-generation-contracts";
 import type { GenerationSettings, ProviderNeutralUsage } from "@/modules/ai/domain/ai-contracts";
-import type { ContentScriptDocument } from "@/modules/content/domain/content-script-contracts";
+import type {
+  ContentDocumentV4,
+  ContentScriptDocument,
+} from "@/modules/content/domain/content-script-contracts";
 
 import { contentDnaVersions } from "./content-dna";
 import { workspaces } from "./workspace";
@@ -46,7 +49,7 @@ export const aiRuns = pgTable(
     status: text("status").notNull(),
     errorCategory: text("error_category"),
     outputSnapshot: jsonb("output_snapshot").$type<
-      CanonicalIdeaGenerationOutput | ContentScriptDocument
+      CanonicalIdeaGenerationOutput | ContentScriptDocument | ContentDocumentV4
     >(),
     usage: jsonb("usage").$type<ProviderNeutralUsage>(),
     providerRequestCorrelation: text("provider_request_correlation"),
@@ -96,7 +99,7 @@ export const aiRuns = pgTable(
         ${table.kind} = 'IDEA_GENERATION' AND ${table.promptVersion} = 'idea-generation/v1'
       ) OR (
         ${table.kind} = 'CONTENT_SCRIPT_GENERATION'
-        AND ${table.promptVersion} = 'content-script-generation/v1'
+        AND ${table.promptVersion} IN ('content-script-generation/v1', 'content-script-generation/v2')
       )`,
     ),
     check(

@@ -12,6 +12,13 @@ Issues and specs for this repo live as markdown files in `.scratch/`.
 - Implementation-ready tickets must state required behavior, important
   invariants, and the appropriate test layer. Their E2E section lists only
   critical cross-boundary journeys; see `testing-standards.md`.
+- When architectural context is required, a ticket names its relevant ADRs or
+  reference section explicitly. It does not ask an implementation agent to
+  discover them by reading every ADR.
+- The current ticket is the execution artifact. Resolved tickets remain
+  historical execution records and are not loaded by default.
+- Preserve resolved-ticket Git history and status. Do not move or delete
+  resolved ticket trees except as explicit documentation-maintenance work.
 
 ## When a skill says "publish to the issue tracker"
 

@@ -1,15 +1,17 @@
 import {
   contentDocumentV2Schema,
   contentDocumentV3Schema,
+  contentDocumentV4Schema,
   type ContentDocumentV2,
   type ContentDocumentV3,
+  type ContentDocumentV4,
   type EditDirection,
   type PerformanceDirection,
 } from "../domain";
 
 export type DirectionCategory = "performanceDirections" | "editDirections";
 export type ProductionDirection = PerformanceDirection | EditDirection;
-export type EditorDocument = ContentDocumentV2 | ContentDocumentV3;
+export type EditorDocument = ContentDocumentV2 | ContentDocumentV3 | ContentDocumentV4;
 
 function updateBlock<T extends EditorDocument>(
   document: T,
@@ -20,7 +22,11 @@ function updateBlock<T extends EditorDocument>(
 ): T | null {
   if (!document.script.blocks.some((block) => block.id === blockId)) return null;
   const result = (
-    document.schemaVersion === 3 ? contentDocumentV3Schema : contentDocumentV2Schema
+    document.schemaVersion === 4
+      ? contentDocumentV4Schema
+      : document.schemaVersion === 3
+        ? contentDocumentV3Schema
+        : contentDocumentV2Schema
   ).safeParse({
     ...document,
     script: {
@@ -90,11 +96,11 @@ export function moveDirection<T extends EditorDocument>(
 
 /** Changes only the canonical optional V3 Asset identity on an eligible cue. */
 export function setDirectionAsset(
-  document: ContentDocumentV3,
+  document: ContentDocumentV3 | ContentDocumentV4,
   blockId: string,
   directionId: string,
   assetId: string | undefined,
-): ContentDocumentV3 | null {
+): ContentDocumentV3 | ContentDocumentV4 | null {
   return updateBlock(document, blockId, (block) => ({
     ...block,
     editDirections: block.editDirections.map((direction) =>

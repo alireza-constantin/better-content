@@ -4,7 +4,12 @@
 
 **Blocked by:** 02 — Deliver V2 Draft persistence and lazy legacy migration.
 
-**Status:** ready-for-agent
+**Status:** resolved
+
+## Status reconciliation
+
+The approved Phase 5 completion record establishes this ticket as completed.
+Its original scope and unchecked historical checklist are preserved.
 
 - [ ] Replace the plain Script textarea with a purpose-built React editor whose aggregate owns one canonical V2 working document and uses native textareas keyed by stable block ID.
 - [ ] Deliver composition-safe split, merge, multiline paste, block add/move/delete, canonical empty-block behavior, and deterministic caret/focus transfer.

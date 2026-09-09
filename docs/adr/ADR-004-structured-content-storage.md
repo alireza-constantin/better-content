@@ -127,8 +127,8 @@ No other Phase 6 direction contains an Asset reference. The document stores
 `assetId` only; Asset metadata, source URLs, storage keys, and access
 capabilities remain outside JSONB.
 
-The canonical V3 document is the sole authority for which Asset fulfills which
-Production Direction. Any relational Asset-reference rows are a
+The canonical V3 document, and V4 after its approved cutover, is the sole
+authority for which Asset fulfills which Production Direction. Any relational Asset-reference rows are a
 transactionally synchronized, rebuildable projection for integrity and query
 needs, never an independently editable source of truth.
 
@@ -139,13 +139,38 @@ acceptance persists canonical V3 through the existing optimistic-concurrency
 boundary. Existing V1 checkpoint behavior remains unchanged, and historical V1
 and V2 Versions are never rewritten.
 
+### Phase 5 post-completion resolution — V4 B-roll search queries
+
+ContentDocumentV4 preserves every V3 block, Script value, Performance Direction,
+Edit Direction, ID, order, payload, and optional `assetId`. It adds exactly one
+field to the existing taxonomy:
+
+```text
+BROLL_CUE.searchQuery?: concise creator-editable search text
+```
+
+`description` remains the production instruction describing the desired visual;
+`searchQuery` is a distinct phrase intended for copying into an external media
+search service. The optional field is canonical Content data. A present value is
+trimmed, non-empty, single-line Unicode with a bounded canonical length; an empty
+editor value canonicalizes to absence. The Ticket 09 contract fixes the exact
+bound and validation behavior before implementation.
+
+V3 Drafts project deterministically to V4 with no `searchQuery`. The projection
+preserves all existing data and is semantically equal to its V3 source. Reading,
+previewing, or copying from a projection creates no persistence, revision,
+checkpoint, Version, or dirty state. The first meaningful V4 save or acceptance
+persists V4 through the existing optimistic-concurrency and acceptance
+transactions. Historical V1, V2, and V3 Versions and AI Run snapshots are never
+rewritten.
+
 ## Schema evolution
 
 Every document contains `schemaVersion`.
 
 Breaking document-model changes require an explicit transform/migration path, for example:
 
-`Document V1 → transform → Document V2 → project → Document V3`
+`Document V1 → transform → Document V2 → project → Document V3 → project → Document V4`
 
 Old documents must never silently change meaning.
 

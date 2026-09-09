@@ -28,6 +28,32 @@ behavior must follow those sources; do not duplicate or infer domain rules from
 this file. Tickets are bounded execution units and may not redefine product or
 architecture requirements.
 
+### Default context loading
+
+Authority order is not a default reading list. For normal `/implement`, read:
+
+1. `AGENTS.md`
+2. `docs/CURRENT_STATE.md`, when it exists
+3. the current ticket
+4. the current approved phase specification
+5. ADRs explicitly referenced by the ticket
+6. relevant specialist standards
+
+`CURRENT_STATE.md` is a derived implementation map, not an authoritative
+source. Do not automatically load the full PRD, Architecture, or every ADR.
+Completed phase specifications and resolved tickets are historical reference;
+read them only for a concrete compatibility, migration, regression,
+contradiction, or architectural question.
+
+### Discovery and specification context
+
+Discovery, product, and architecture work may load broader context selectively:
+`AGENTS.md`, `CURRENT_STATE.md`, relevant PRD and Architecture sections, the
+ADR index and only relevant ADRs, then a relevant completed-phase summary.
+Read a full completed specification or resolved ticket only when a concrete
+question requires its historical detail. This remains distinct from authority:
+`CURRENT_STATE.md` is navigation, never an authority source.
+
 ## Decision and scope control
 
 ### Documentation conflicts
@@ -219,8 +245,6 @@ secrets. Do not create commits unless explicitly requested.
 
 ## Specialist documents
 
-- [Domain documentation](docs/agents/domain.md): use when exploring domain
-  terminology or relevant authority documents.
 - [Testing standards](docs/agents/testing-standards.md): use for test changes,
   test design, E2E selection, and test-related ticket requirements.
 - [Frontend standards](docs/agents/frontend-standards.md): use for any
@@ -249,3 +273,17 @@ remain unsatisfied.
 
 When scope is uncertain, preserve the architecture, avoid early implementation,
 and request direction.
+
+## Codebase discovery with Graft
+
+Use Graft as the preferred repository-navigation aid when available.
+
+For implementation:
+- use Graft to locate relevant modules, symbols, callers, and dependencies;
+- prefer targeted structural discovery over broad raw-file exploration;
+- open the actual source before modifying behavior;
+- do not treat Graft summaries as product or architectural authority;
+- fall back to normal repository search when Graft cannot answer reliably.
+
+Graft supplements the selective context-loading policy; it does not replace
+PRD, Architecture, ADRs, phase specifications, tickets, or source code.

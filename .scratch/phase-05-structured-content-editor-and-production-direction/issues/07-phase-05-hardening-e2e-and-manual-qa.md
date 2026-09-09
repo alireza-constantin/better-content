@@ -4,7 +4,13 @@
 
 **Blocked by:** 04 — Cut shared Content generation over to V2 mutable Drafts; 05 — Deliver block-local Production Direction authoring; 06 — Deliver Content acceptance and read-only Version History.
 
-**Status:** ready-for-review
+**Status:** resolved
+
+## Status reconciliation
+
+The implementation notes record completed verification, and the approved Phase
+5 specification records the phase as complete. Its original checklist is
+preserved as historical execution evidence.
 
 - [ ] Close cross-cutting gaps found in required unit, component, PostgreSQL integration, build, lint, typecheck, and formatting validation.
 - [ ] Add only the two approved critical persisted Playwright journeys: one representative EN/LTR and one representative FA/RTL structured-editor flow using deterministic provider wiring.

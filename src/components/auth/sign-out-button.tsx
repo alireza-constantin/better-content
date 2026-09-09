@@ -37,9 +37,13 @@ export function SignOutButton({ userName }: SignOutButtonProps) {
   }
 
   return (
-    <div className="flex flex-wrap items-center justify-end gap-2">
-      <span className="text-sm text-muted-foreground">{t("signedInAs", { name: userName })}</span>
+    <div className="flex flex-wrap items-center justify-end gap-1.5">
+      <span className="hidden max-w-44 truncate text-xs text-muted-foreground xl:inline">
+        {t("signedInAs", { name: userName })}
+      </span>
       <Button
+        aria-label={`${t("signOut")} · ${t("signedInAs", { name: userName })}`}
+        className="min-h-11 px-3 text-xs"
         disabled={isSubmitting}
         onClick={handleSignOut}
         size="sm"

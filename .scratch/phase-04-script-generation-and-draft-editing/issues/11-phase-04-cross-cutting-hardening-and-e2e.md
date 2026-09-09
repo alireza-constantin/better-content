@@ -4,7 +4,14 @@
 
 **Blocked by:** 09 — Deliver the reusable Generate Script UI and synchronous operation feedback; 10 — Deliver the Content list and Script editor with serialized autosave; 12 — Add the compact workspace-wide Idea Library and status views; 13 — Add the Content Production Queue and Idea-to-Content workflow.
 
-**Status:** ready-for-agent
+**Status:** resolved
+
+## Status reconciliation
+
+The approved Phase 5 specification records Phase 4 as complete, and this
+ticket's completed scope is reflected in that prerequisite and the later
+implementation record. Its original checklist remains historical execution
+evidence and is not retroactively rewritten here.
 
 ## Goal
 

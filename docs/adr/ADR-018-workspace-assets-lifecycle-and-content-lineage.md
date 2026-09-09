@@ -42,7 +42,7 @@ Once READY, the permanent bytes and storage key are immutable. Mutable
 creator-facing metadata is limited to approved metadata such as display name.
 There is no replace-in-place media operation.
 
-### ContentDocumentV3 is authoritative
+### ContentDocumentV3/V4 is authoritative
 
 Asset attachment is part of canonical structured Content. `ContentDocumentV3`
 extends the Phase 5 document so:
@@ -63,6 +63,12 @@ No relational association may compete with the document as source of truth.
 A transactionally synchronized `asset_references` relation may exist only as a
 derived integrity/query projection. It cannot be edited independently and must
 be rebuildable from canonical Draft and Version documents.
+
+The approved Phase 5 post-completion extension advances current Content to
+ContentDocumentV4 by adding only optional `BROLL_CUE.searchQuery`. V4 preserves
+the V3 `assetId` relationships and all Asset validation, projection, deletion,
+and lineage rules. Search text is independent from Asset identity and does not
+create a second Asset relationship.
 
 ### Draft, Version, and acceptance lineage
 
@@ -156,8 +162,9 @@ relationships defined above.
 
 - An Asset belongs to exactly one Workspace.
 - A Content document references only READY Assets in the same Workspace.
-- ContentDocumentV3 is authoritative; `asset_references` is derived.
-- Every immutable V3 Version reference protects the referenced Asset.
+- The current canonical Content document (V3 or V4 according to its artifact)
+  is authoritative; `asset_references` is derived.
+- Every immutable V3 or V4 Version reference protects the referenced Asset.
 - READY media identity and bytes never change.
 - No deletion rewrites or silently detaches a Draft or Version.
 - Asset identity is its ID; identical media may coexist.

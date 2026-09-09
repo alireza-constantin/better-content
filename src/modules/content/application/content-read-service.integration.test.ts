@@ -16,6 +16,7 @@ import {
 import { createContentGenerationApplicationService } from "./content-generation-service";
 import { contentScriptGenerationSettings } from "./content-generation-repository";
 import { createContentDraftApplicationService } from "./content-draft-service";
+import { createContentAcceptanceApplicationService } from "./content-acceptance-service";
 import { createContentReadApplicationService } from "./content-read-service";
 
 vi.mock("@/db", () => ({ db: {} }));
@@ -233,6 +234,17 @@ function createDrafts(
     database,
     getAuthenticatedUserId: async () => userId,
     clock,
+    logger: { info: vi.fn(), warn: vi.fn() },
+  });
+}
+
+function createAcceptances(
+  context: Awaited<ReturnType<typeof createContext>>,
+  userId = context.user.id,
+) {
+  return createContentAcceptanceApplicationService({
+    database,
+    getAuthenticatedUserId: async () => userId,
     logger: { info: vi.fn(), warn: vi.fn() },
   });
 }
@@ -1764,5 +1776,104 @@ describe("Content read and Draft application services", () => {
       }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(JSON.stringify(foreign)).not.toContain("Use a practical example.");
+  });
+
+  it("reads the current accepted Version only, keeps Draft edits isolated, and follows re-acceptance", async () => {
+    const context = await createContext();
+    const generated = await createGeneration(
+      context,
+      new FakeGenerateContentScriptProvider(),
+      () => new Date("2026-09-01T10:00:00.000Z"),
+    ).generateContentScript(request(context));
+    if (!generated.contentId) throw new Error("Test Content was not created.");
+
+    const acceptance = createAcceptances(context);
+    const firstAcceptance = await acceptance.acceptContent({
+      workspaceId: context.workspace.id,
+      contentId: generated.contentId,
+      expectedDraftRevision: 1,
+    });
+    const reads = createReads(context);
+    const first = await reads.getTeleprompter({
+      workspaceId: context.workspace.id,
+      contentId: generated.contentId,
+    });
+    expect(first).toMatchObject({
+      status: "READY",
+      acceptedVersionId: firstAcceptance.acceptedVersion.id,
+      scriptBlocks: [{ text: "Deterministic English short-video script." }],
+    });
+
+    await database
+      .update(schema.contentDrafts)
+      .set({ document: structuredDocument("Draft changed after acceptance"), revision: 2 })
+      .where(eq(schema.contentDrafts.contentId, generated.contentId));
+    const afterDraftEdit = await reads.getTeleprompter({
+      workspaceId: context.workspace.id,
+      contentId: generated.contentId,
+    });
+    expect(afterDraftEdit).toMatchObject({
+      status: "READY",
+      acceptedVersionId: firstAcceptance.acceptedVersion.id,
+      scriptBlocks: [{ text: "Deterministic English short-video script." }],
+    });
+    expect(JSON.stringify(afterDraftEdit)).not.toContain("Draft changed after acceptance");
+
+    const secondAcceptance = await acceptance.acceptContent({
+      workspaceId: context.workspace.id,
+      contentId: generated.contentId,
+      expectedDraftRevision: 2,
+    });
+    const afterReacceptance = await reads.getTeleprompter({
+      workspaceId: context.workspace.id,
+      contentId: generated.contentId,
+    });
+    expect(afterReacceptance).toMatchObject({
+      status: "READY",
+      acceptedVersionId: secondAcceptance.acceptedVersion.id,
+      scriptBlocks: [{ text: "Draft changed after acceptance" }],
+    });
+  });
+
+  it("returns safe no-accepted, invalid-pointer, and foreign-workspace states", async () => {
+    const owner = await createContext();
+    const foreign = await createContext();
+    const generated = await createGeneration(
+      owner,
+      new FakeGenerateContentScriptProvider(),
+      () => new Date("2026-09-01T10:00:00.000Z"),
+    ).generateContentScript(request(owner));
+    if (!generated.contentId) throw new Error("Test Content was not created.");
+
+    const ownerReads = createReads(owner);
+    await expect(
+      ownerReads.getTeleprompter({
+        workspaceId: owner.workspace.id,
+        contentId: generated.contentId,
+      }),
+    ).resolves.toMatchObject({ status: "NO_ACCEPTED_VERSION", acceptedVersionId: null });
+
+    const [initialVersion] = await database
+      .select({ id: schema.contentVersions.id })
+      .from(schema.contentVersions)
+      .where(eq(schema.contentVersions.contentId, generated.contentId));
+    if (!initialVersion) throw new Error("Initial Content Version was not created.");
+    await database
+      .update(schema.contents)
+      .set({ acceptedVersionId: initialVersion.id })
+      .where(eq(schema.contents.id, generated.contentId));
+    await expect(
+      ownerReads.getTeleprompter({
+        workspaceId: owner.workspace.id,
+        contentId: generated.contentId,
+      }),
+    ).resolves.toMatchObject({ status: "UNAVAILABLE", acceptedVersionId: null });
+
+    await expect(
+      createReads(foreign).getTeleprompter({
+        workspaceId: foreign.workspace.id,
+        contentId: generated.contentId,
+      }),
+    ).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 });

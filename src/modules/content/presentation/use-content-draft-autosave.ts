@@ -11,13 +11,14 @@ import {
   exportContentDocumentV2Recovery,
   type ContentDocumentV2,
   type ContentDocumentV3,
+  type ContentDocumentV4,
 } from "../domain";
 
 export const CONTENT_DRAFT_AUTOSAVE_DEBOUNCE_MS = 850;
 export type ContentDraftAutosaveStatus = "unsaved" | "saving" | "saved" | "failed" | "conflict";
-export type AutosaveDocument = ContentDocumentV2 | ContentDocumentV3;
+export type AutosaveDocument = ContentDocumentV2 | ContentDocumentV3 | ContentDocumentV4;
 const defaultRecoveryExport = (document: AutosaveDocument) =>
-  document.schemaVersion === 3
+  document.schemaVersion === 3 || document.schemaVersion === 4
     ? exportContentDocumentV3Recovery(document)
     : exportContentDocumentV2Recovery(document);
 export type AutosaveSaveInput = Readonly<{
@@ -58,7 +59,7 @@ type Result = Readonly<{
   copyUnsaved: () => Promise<void>;
 }>;
 
-function requireV3(draft: ContentDraftDto): ContentDocumentV3 {
+function requireV3(draft: ContentDraftDto): ContentDocumentV3 | ContentDocumentV4 {
   return draft.editorDocument;
 }
 

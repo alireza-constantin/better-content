@@ -7,16 +7,20 @@ import {
   contentDocumentSchema,
   contentDocumentV2Schema,
   contentDocumentV3Schema,
+  contentDocumentV4Schema,
   contentVersionSourceSchema,
   canonicalizeContentDocumentV2,
   contentDocumentsEqual,
   materializeContentDocumentV2,
   projectContentDocumentV2ToV3,
+  projectContentDocumentV3ToV4,
   projectContentDocumentToV3,
   projectContentDocumentV3ToV2,
+  projectContentDocumentV4ToV3,
   canonicalizeContentDocumentV3,
+  canonicalizeContentDocumentV4,
   type ContentDocument,
-  type ContentDocumentV3,
+  type ContentDocumentV4,
 } from "../domain";
 import { getServerSession } from "@/lib/auth/server";
 import { ApplicationError } from "@/lib/errors/app-error";
@@ -95,7 +99,9 @@ function parseStoredStructuredDocument(value: unknown): ContentDocument {
     const document = contentDocumentSchema.parse(value);
     return document.schemaVersion === 2
       ? canonicalizeContentDocumentV2(contentDocumentV2Schema.parse(document))
-      : canonicalizeContentDocumentV3(contentDocumentV3Schema.parse(document));
+      : document.schemaVersion === 3
+        ? canonicalizeContentDocumentV3(contentDocumentV3Schema.parse(document))
+        : canonicalizeContentDocumentV4(contentDocumentV4Schema.parse(document));
   } catch {
     throw new ApplicationError("INTERNAL_ERROR", "The structured Content Draft is invalid.");
   }
@@ -114,7 +120,9 @@ function toDraftDto(
         ? materializeContentDocumentV2(document)
         : document.schemaVersion === 2
           ? document
-          : projectContentDocumentV3ToV2(document),
+          : projectContentDocumentV3ToV2(
+              document.schemaVersion === 4 ? projectContentDocumentV4ToV3(document) : document,
+            ),
     revision: draft.revision,
     updatedAt: draft.updatedAt,
   };
@@ -225,10 +233,10 @@ export function createContentAcceptanceApplicationService(
             );
           }
 
-          let migratedDocument: ContentDocumentV3;
+          let migratedDocument: ContentDocumentV4;
           try {
-            migratedDocument = projectContentDocumentV2ToV3(
-              materializeContentDocumentV2(storedDocument),
+            migratedDocument = projectContentDocumentV3ToV4(
+              projectContentDocumentV2ToV3(materializeContentDocumentV2(storedDocument)),
             );
           } catch {
             throw new ApplicationError(

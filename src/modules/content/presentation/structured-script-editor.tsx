@@ -17,7 +17,7 @@ import {
   AlertDialogViewport,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import type { ContentDocumentV3 } from "../domain";
+import type { ContentDocumentV4 } from "../domain";
 import { BlockProductionDirections } from "./block-production-directions";
 import {
   addBlock,
@@ -30,11 +30,11 @@ import {
 } from "./script-block-operations";
 
 type Props = Readonly<{
-  document: ContentDocumentV3;
+  document: ContentDocumentV4;
   workspaceId: string;
   language: "en" | "fa";
   disabled?: boolean;
-  onChange: (document: ContentDocumentV3) => void;
+  onChange: (document: ContentDocumentV4) => void;
   labels: Readonly<{
     region: string;
     block: string;
@@ -74,7 +74,7 @@ export function StructuredScriptEditor({
     }
     focusTarget.current = null;
   }, [document]);
-  const apply = (next: ContentDocumentV3 | null, target?: FocusTarget) => {
+  const apply = (next: ContentDocumentV4 | null, target?: FocusTarget) => {
     if (!next || disabled) return;
     if (target) focusTarget.current = target;
     onChange(next);
@@ -217,7 +217,7 @@ export function StructuredScriptEditor({
               workspaceId={workspaceId}
               language={language}
               onChange={(next) => {
-                if (next.schemaVersion === 3) onChange(next);
+                if (next.schemaVersion === 4) onChange(next);
               }}
             />
           </li>

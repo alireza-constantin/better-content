@@ -13,6 +13,9 @@ export class DefaultMediaInspector implements MediaInspector {
     private readonly imageInspector: MediaInspector = new SharpMediaInspector(),
     private readonly avInspector: MediaInspector = new FfprobeMediaInspector({
       executablePath: process.env.FFPROBE_PATH ?? "ffprobe",
+      ...(process.env.FFPROBE_EXPECTED_VERSION
+        ? { expectedVersion: process.env.FFPROBE_EXPECTED_VERSION }
+        : {}),
     }),
   ) {}
 

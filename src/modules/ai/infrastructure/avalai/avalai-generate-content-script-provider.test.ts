@@ -72,7 +72,12 @@ const request: GenerateContentScriptRequest = {
 };
 
 function validProviderOutput(text = "A clear, useful Script.") {
-  return { schemaVersion: 1, script: { text } };
+  return {
+    schemaVersion: 1,
+    script: {
+      blocks: [{ type: "paragraph", text, performanceDirections: [], editDirections: [] }],
+    },
+  };
 }
 
 function response(overrides: Record<string, unknown> = {}) {
@@ -115,7 +120,7 @@ describe("AvalAI Content Script adapter", () => {
     mockAvalAIClient.constructorOptions = undefined;
   });
 
-  it("sends the exact fixed Responses request and strict content_script_v1 schema", async () => {
+  it("sends the exact fixed Responses request and strict generated_content_v4 schema", async () => {
     const { client, create } = createClient(response());
     const provider = createAvalAIGenerateContentScriptProvider({
       userId: "user-123",
@@ -123,9 +128,12 @@ describe("AvalAI Content Script adapter", () => {
       client,
     });
 
-    await expect(provider.generateContentScript(request)).resolves.toEqual({
+    await expect(provider.generateContentScript(request)).resolves.toMatchObject({
       ok: true,
-      output: validProviderOutput(),
+      output: {
+        schemaVersion: 4,
+        script: { blocks: [{ type: "paragraph", text: "A clear, useful Script." }] },
+      },
       usage: {
         inputTokens: 11,
         outputTokens: 22,
@@ -199,7 +207,7 @@ describe("AvalAI Content Script adapter", () => {
 
     expect(format).toEqual({
       type: "json_schema",
-      name: "content_script_v1",
+      name: "generated_content_v4",
       strict: true,
       schema,
     });
@@ -215,10 +223,10 @@ describe("AvalAI Content Script adapter", () => {
     expect(script).toEqual({
       type: "object",
       properties: scriptProperties,
-      required: ["text"],
+      required: ["blocks"],
       additionalProperties: false,
     });
-    expect(scriptProperties).toEqual({ text: { type: "string" } });
+    expect(scriptProperties).toHaveProperty("blocks");
   });
 
   it.each([
@@ -312,7 +320,7 @@ describe("AvalAI Content Script adapter", () => {
     const onProviderRequestId = vi.fn();
     const transportResponse: AvalAITransportResponse = {
       data: response({
-        output_text: JSON.stringify(validProviderOutput("  First\r\nSecond  ")),
+        output_text: JSON.stringify(validProviderOutput("  First Second  ")),
         usage: { input_tokens: 1, output_tokens: "discarded" },
         raw_provider_field: "discarded",
       }),
@@ -326,9 +334,12 @@ describe("AvalAI Content Script adapter", () => {
       onProviderRequestId,
     });
 
-    await expect(provider.generateContentScript(request)).resolves.toEqual({
+    await expect(provider.generateContentScript(request)).resolves.toMatchObject({
       ok: true,
-      output: { schemaVersion: 1, script: { text: "First\nSecond" } },
+      output: {
+        schemaVersion: 4,
+        script: { blocks: [{ type: "paragraph", text: "First Second" }] },
+      },
       usage: { inputTokens: 1 },
       providerRequestCorrelation: "avalai-request-123",
     });
@@ -459,7 +470,7 @@ describe("AvalAI Content Script adapter", () => {
 
   it("keeps Content Script policy separate from Phase 3 settings", () => {
     expect(avalAIContentScriptGenerationSettings).toEqual({
-      structuredOutput: { schemaName: "content_script_v1", schemaVersion: 1 },
+      structuredOutput: { schemaName: "generated_content_v4", schemaVersion: 1 },
       reasoningEffort: "medium",
       maxOutputTokens: 16_000,
       timeoutSeconds: 90,

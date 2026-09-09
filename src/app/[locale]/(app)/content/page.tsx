@@ -44,11 +44,13 @@ export default async function ContentPage({
   const currentDna = await getDna({ workspaceId: workspace.id });
   const dna = toIdeasDnaSummary(currentDna);
   const header = (
-    <div className="border-b border-border pb-8">
-      <h1 className="max-w-2xl text-balance text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">
+    <div className="border-b border-border pb-3 sm:pb-8">
+      <h1 className="max-w-2xl text-balance text-2xl font-semibold tracking-tight text-foreground sm:text-5xl">
         {t("title")}
       </h1>
-      <p className="mt-5 max-w-2xl leading-7 text-muted-foreground">{t("description")}</p>
+      <p className="mt-2 max-w-2xl text-sm leading-5 text-muted-foreground sm:mt-5 sm:leading-7">
+        {t("description")}
+      </p>
     </div>
   );
 
@@ -77,7 +79,7 @@ export default async function ContentPage({
   return (
     <section className="mx-auto w-full max-w-[1360px]">
       {header}
-      <div className="mt-8 grid items-start gap-6 lg:grid-cols-2">
+      <div className="mt-3 grid items-start gap-3 sm:mt-8 sm:gap-6 lg:grid-cols-2">
         <ProductionQueue
           className="lg:sticky lg:top-6"
           dna={dna}

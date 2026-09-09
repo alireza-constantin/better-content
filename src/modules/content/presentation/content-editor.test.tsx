@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
+import type React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import en from "../../../../messages/en.json";
 import { UnsavedChangesProvider } from "@/components/navigation/unsaved-changes-provider";
@@ -9,6 +10,12 @@ vi.mock("../application/content-actions", () => ({
   acceptContentAction: vi.fn(),
   getContentDraftAction: vi.fn(),
   saveContentDraftAction: vi.fn(),
+}));
+vi.mock("@/i18n/navigation", () => ({
+  Link: (props: React.ComponentProps<"a">) => <a {...props} />,
+}));
+vi.mock("./direction-asset-picker", () => ({
+  DirectionAssetPicker: () => null,
 }));
 import { ContentEditor } from "./content-editor";
 import { projectContentDocumentV2ToV3 } from "../domain";
@@ -110,5 +117,28 @@ describe("ContentEditor", () => {
 
     expect(accept.hasAttribute("disabled")).toBe(true);
     expect(screen.getByText("Save the current Draft before accepting.")).toBeTruthy();
+  });
+
+  it("opens only the current accepted Version in Teleprompter", () => {
+    const accepted = {
+      ...content(),
+      acceptedVersionId: "version-1",
+      versions: content().versions.map((version) => ({
+        ...version,
+        source: "CREATOR_ACCEPTED" as const,
+        isCurrentAccepted: true,
+      })),
+    };
+
+    render(
+      <NextIntlClientProvider locale="en" messages={en}>
+        <UnsavedChangesProvider>
+          <ContentEditor content={accepted} workspaceId="w" />
+        </UnsavedChangesProvider>
+      </NextIntlClientProvider>,
+    );
+
+    const link = screen.getByRole("link", { name: "Open Teleprompter for Idea" });
+    expect(link.getAttribute("href")).toBe("/content/c/teleprompter");
   });
 });

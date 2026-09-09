@@ -44,6 +44,18 @@ export type ContentDetailRecord = Readonly<{
   draft: typeof contentDrafts.$inferSelect;
 }>;
 
+export type ContentTeleprompterRecord = Readonly<{
+  content: typeof contents.$inferSelect;
+  sourceIdea: Readonly<{
+    id: string;
+    title: string;
+  }>;
+}>;
+
+export type ContentTeleprompterVersionRecord = Readonly<{
+  version: typeof contentVersions.$inferSelect;
+}>;
+
 export type ContentGenerationAttemptReadRecord = Readonly<{
   attempt: typeof contentGenerationAttempts.$inferSelect;
   sourceIdea: Readonly<{
@@ -188,6 +200,55 @@ export async function findContentDetail(
       ),
     )
     .where(and(eq(contents.workspaceId, workspaceId), eq(contents.id, contentId)));
+
+  return record;
+}
+
+/**
+ * Load only the authorized Content identity for Teleprompter. The Draft is
+ * deliberately absent from this query so it cannot become the read authority.
+ */
+export async function findContentForTeleprompter(
+  database: ContentReadDatabase,
+  workspaceId: string,
+  contentId: string,
+): Promise<ContentTeleprompterRecord | undefined> {
+  const [record] = await database
+    .select({
+      content: contents,
+      sourceIdea: {
+        id: ideas.id,
+        title: ideas.title,
+      },
+    })
+    .from(contents)
+    .innerJoin(ideas, eq(ideas.id, contents.sourceIdeaId))
+    .innerJoin(
+      ideaGenerationBatches,
+      and(
+        eq(ideaGenerationBatches.id, ideas.batchId),
+        eq(ideaGenerationBatches.workspaceId, contents.workspaceId),
+      ),
+    )
+    .where(and(eq(contents.workspaceId, workspaceId), eq(contents.id, contentId)));
+
+  return record;
+}
+
+export async function findContentTeleprompterVersion(
+  database: ContentReadDatabase,
+  workspaceId: string,
+  contentId: string,
+  versionId: string,
+): Promise<ContentTeleprompterVersionRecord | undefined> {
+  const [record] = await database
+    .select({ version: contentVersions })
+    .from(contentVersions)
+    .innerJoin(
+      contents,
+      and(eq(contents.id, contentVersions.contentId), eq(contents.workspaceId, workspaceId)),
+    )
+    .where(and(eq(contentVersions.contentId, contentId), eq(contentVersions.id, versionId)));
 
   return record;
 }

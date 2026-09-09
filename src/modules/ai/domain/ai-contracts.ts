@@ -67,9 +67,18 @@ export const contentScriptGenerationSettingsSchema = z
   })
   .strict();
 
+export const contentScriptGenerationV4SettingsSchema = contentScriptGenerationSettingsSchema.extend(
+  {
+    structuredOutput: z
+      .object({ schemaName: z.literal("generated_content_v4"), schemaVersion: z.literal(1) })
+      .strict(),
+  },
+);
+
 export const generationSettingsSchema = z.union([
   ideaGenerationSettingsSchema,
   contentScriptGenerationSettingsSchema,
+  contentScriptGenerationV4SettingsSchema,
 ]);
 export type GenerationSettings = z.infer<typeof generationSettingsSchema>;
 

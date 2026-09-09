@@ -1,6 +1,6 @@
 # Phase 5 — Structured Content Editor and Production Direction
 
-**Status:** specification-approved / ready-for-ticketing
+**Status:** completed historical specification
 
 **Decision owners:** Product Architect / Technical Lead
 

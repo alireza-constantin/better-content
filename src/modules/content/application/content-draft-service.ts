@@ -12,14 +12,18 @@ import {
   contentDocumentSchema,
   contentDocumentV2Schema,
   contentDocumentV3Schema,
+  contentDocumentV4Schema,
   canonicalizeContentDocumentV2,
   canonicalizeContentDocumentV3,
+  canonicalizeContentDocumentV4,
   contentDocumentsEqual,
   materializeContentDocumentV2,
   parseHumanContentScriptDraft,
   projectContentDocumentToV3,
   projectContentDocumentV3ToV2,
+  projectContentDocumentV4ToV3,
   projectContentDocumentV2ToV3,
+  projectContentDocumentV3ToV4,
 } from "../domain";
 import type { ContentDraftDto } from "./content-read-service";
 import {
@@ -80,7 +84,9 @@ function parseSubmittedDraft(document: unknown) {
     if (parsed.schemaVersion === 1) return parseHumanContentScriptDraft(parsed);
     return parsed.schemaVersion === 2
       ? canonicalizeContentDocumentV2(contentDocumentV2Schema.parse(parsed))
-      : canonicalizeContentDocumentV3(contentDocumentV3Schema.parse(parsed));
+      : parsed.schemaVersion === 3
+        ? canonicalizeContentDocumentV3(contentDocumentV3Schema.parse(parsed))
+        : canonicalizeContentDocumentV4(contentDocumentV4Schema.parse(parsed));
   } catch {
     throw new ApplicationError("VALIDATION_ERROR", "The Content Draft document is invalid.");
   }
@@ -101,7 +107,11 @@ function toDraftDto(draft: ContentDraft): ContentDraftDto {
         ? materializeContentDocumentV2(document.data)
         : document.data.schemaVersion === 2
           ? document.data
-          : projectContentDocumentV3ToV2(document.data),
+          : projectContentDocumentV3ToV2(
+              document.data.schemaVersion === 4
+                ? projectContentDocumentV4ToV3(document.data)
+                : document.data,
+            ),
     revision: draft.revision,
     updatedAt: draft.updatedAt,
   };
@@ -205,10 +215,14 @@ export function createContentDraftApplicationService(
             );
           }
           documentToPersist =
-            document.schemaVersion === 2 ? projectContentDocumentV2ToV3(document) : document;
+            document.schemaVersion === 2
+              ? projectContentDocumentV3ToV4(projectContentDocumentV2ToV3(document))
+              : document.schemaVersion === 3
+                ? projectContentDocumentV3ToV4(document)
+                : document;
           if (contentDocumentsEqual(storedDocument.data, documentToPersist))
             return toDraftDto(target.draft);
-        } else if (document.schemaVersion === 1 || document.schemaVersion === 2) {
+        } else if (document.schemaVersion !== 4) {
           throw new ApplicationError(
             "VALIDATION_ERROR",
             "A structured Content Draft requires a structured document.",

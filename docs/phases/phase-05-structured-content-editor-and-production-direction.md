@@ -159,8 +159,88 @@ The editor is a purpose-built React block editor. It uses one native textarea pe
 
 ## Further Notes
 
-- ADR-003 and ADR-004 have been reconciled with the accepted-pointer lifecycle, meaningful Version sources, conditional AI Run linkage, V2 embedded-block model, canonical limits, and preserved V1 history. ADR-016 remains Script-generation-only; it does not authorize AI-generated directions.
+- At original Phase 5 completion, ADR-016 remained Script-generation-only and
+  did not authorize AI-generated directions. The approved Ticket 09 amendment
+  below supersedes that historical exclusion only for new Content generation.
 - The Phase 5 architecture/spec must explicitly reconcile the Phase 4 rule that AI output, Version #1, and initial Draft shared V1 serialization. After Phase 5, AI output and Version #1 retain their exact stored V1 document values while new mutable Drafts are V2 deterministic editor representations. Historical V1 Versions and AI Run outputs are never rewritten into V2.
 - Preserve all existing workspace authorization requirements: authenticated user, workspace membership, and Content ownership are required for every private read or mutation.
-- No implementation tickets are created by this specification. Ticket decomposition and review occur only after this specification and ADR amendments are approved.
+- No historical implementation tickets were created by this original specification; its ticket decomposition was reviewed separately after approval.
 
+## Post-completion extension — Teleprompter / Recording Mode
+
+**Status:** Completed extension — Ticket 08 resolved
+
+This section records an approved capability added after the historical Phase 5
+scope was completed. It does not rewrite the Phase 5 implementation or
+acceptance record above. The implementation ticket is
+`.scratch/phase-05-structured-content-editor-and-production-direction/issues/08-teleprompter-recording-mode.md`.
+
+Teleprompter / Recording Mode consumes the immutable `Content Version` named by
+the Content aggregate's current `acceptedVersionId`:
+
+```text
+Mutable Draft → Accept → immutable Content Version → Teleprompter
+```
+
+The normal entry point must resolve the current accepted Version on the server
+and project a safe, read-only Teleprompter DTO. It must never use mutable Draft
+state as the authority for the displayed Script, create a `RecordingSession`,
+modify `ContentDocumentV3`, or add a Performance Direction taxonomy.
+
+V1 renders Script blocks in stored order and the existing Phase 5 Performance
+Directions (`PAUSE`, `EMPHASIS`, `DELIVERY`, `GESTURE`, `POSITION`, `GAZE`, and
+`PERFORMANCE_NOTE`). Hints are visually and semantically distinct from spoken
+Script. Edit Directions are not spoken content and are not a V1 Teleprompter
+editing or playback surface. Existing V1, V2, and V3 accepted Version
+presentation/projection compatibility remains in force; historical artifacts
+are read without migration or mutation.
+
+The extension uses the existing Content authorization boundary: authentication,
+Workspace membership, and Content ownership are required. A Content without an
+accepted Version shows a localized accept-first state. A missing, mismatched, or
+invalid accepted Version fails closed without falling back to Draft content.
+Foreign Workspace behavior remains nondisclosing.
+
+The detailed V1 behavior, controls, accessibility, lifecycle, responsive,
+internationalization, test, dependency, and exclusion requirements are defined
+by ticket 08. V1 controls are ephemeral UI state only; no scroll position,
+speed, font size, mirror preference, countdown, or recording data is persisted.
+
+## Post-completion extension — AI Production Direction Generation and B-roll Search Queries
+
+**Status:** Completed extension — Ticket 09 resolved
+
+This extension changes new Content generation from Script-only output to a
+canonical ContentDocumentV4 containing the Script and contextually useful
+members of the existing approved Production Direction taxonomy. It changes no
+direction type, payload meaning, per-block anchoring rule, ordering rule, or
+document limit. The implementation ticket is
+`.scratch/phase-05-structured-content-editor-and-production-direction/issues/09-ai-production-direction-generation-and-b-roll-search-queries.md`.
+
+The existing `CONTENT_SCRIPT_GENERATION` Attempt and AI Run remain the one
+generation operation. After cutover, successful validated generation stores the
+same canonical V4 document as the AI Run output snapshot, immutable
+`AI_GENERATED` Version #1, and initial mutable Draft. The provider does not
+choose persistent block/direction IDs; the trusted application boundary
+materializes them. Existing V1/V2/V3 artifacts remain exact and readable.
+
+ContentDocumentV4 is V3 plus optional `BROLL_CUE.searchQuery`. V3 projects to V4
+without a query and without writes. Creator edits to a query are meaningful
+Content mutations governed by autosave, optimistic revision, equality,
+acceptance, recovery, and Version History. Copying a query is local presentation
+behavior only.
+
+Every AI-generated B-roll cue requires a human-facing `description` and a
+distinct concise English `searchQuery`, even for Persian Content. It never
+contains or generates `assetId`, a provider result ID, or a media URL. A manually
+authored B-roll cue may omit the query, and creators can edit description and
+query independently in any language.
+
+The editor presents a localized Search term field and Copy action within the
+existing B-roll editor. Search term rendering remains bidi-safe and follows its
+actual value; UI locale never translates or mutates creator Content.
+
+This extension adds no external media provider, Google/Pinterest integration,
+web search, result preview, licensing/provenance record, automatic import,
+automatic attachment, AI-generated media, new direction type, range anchoring,
+or Phase 7 Publishing behavior. Automatic Media Discovery remains future scope.

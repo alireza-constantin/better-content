@@ -2,7 +2,7 @@
 
 ## 1. Status, prerequisites, and authority
 
-- **Status:** Approved
+- **Status:** Completed
 - **Decision owners:** Product Architect / Technical Lead
 - **Prerequisite:** Phase 5 complete and approved
 - **Architecture reconciliation:** complete as recorded in Section 28
@@ -775,3 +775,14 @@ The pre-ticketing architecture reconciliation is complete:
    `docs/phases` set; scratch ticket history remains preserved.
 
 No Phase 6 implementation ticket may redefine these decisions. Ticket decomposition begins only after this specification and required ADR/documentation changes receive Product Architect approval.
+
+## 29. Post-completion compatibility note — ContentDocumentV4
+
+The approved Phase 5 Ticket 09 extension advances current Content to
+ContentDocumentV4 by adding only optional `BROLL_CUE.searchQuery`. V4 preserves
+all V3 `assetId` fields and does not change Asset type compatibility,
+authorization, reference projection, attachment, acceptance, deletion, storage,
+or lifecycle behavior in this completed Phase 6 specification. Asset reference
+extraction and integrity checks must support V4 alongside historical V3 without
+rewriting V1/V2/V3 artifacts. Automatic Media Discovery, provider imports, and
+Asset provenance remain outside this compatibility change.

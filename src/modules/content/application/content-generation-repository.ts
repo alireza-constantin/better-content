@@ -33,11 +33,7 @@ import {
 import { requireWorkspaceOwner } from "@/modules/workspace/application";
 import { lockWorkspaceForUpdate } from "@/modules/workspace/application";
 import type { GenerateContentScriptSuccess } from "@/modules/ai/domain/generate-content-script";
-import {
-  materializeContentDocumentV2,
-  projectContentDocumentV2ToV3,
-  type CanonicalContentScriptGenerationRequest,
-} from "../domain/content-script-contracts";
+import { type CanonicalContentScriptGenerationRequest } from "../domain/content-script-contracts";
 import { parseCanonicalIdea, type CanonicalIdea } from "@/modules/ideas/domain";
 import {
   clearIdeaProductionQueuePositionInTransaction,
@@ -47,7 +43,7 @@ import {
 const CONTENT_SCRIPT_GENERATION_KIND = "CONTENT_SCRIPT_GENERATION" as const;
 const CONTENT_SCRIPT_GENERATION_PROVIDER = "avalai" as const;
 const CONTENT_SCRIPT_GENERATION_MODEL = "gpt-5.6-luna" as const;
-const CONTENT_SCRIPT_GENERATION_PROMPT_VERSION = "content-script-generation/v1" as const;
+const CONTENT_SCRIPT_GENERATION_PROMPT_VERSION = "content-script-generation/v2" as const;
 const TEN_MINUTES_MS = 10 * 60 * 1_000;
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1_000;
 const PENDING_STALE_MS = 105 * 1_000;
@@ -56,7 +52,7 @@ const TEN_MINUTE_QUOTA = 2;
 const TWENTY_FOUR_HOUR_QUOTA = 8;
 
 export const contentScriptGenerationSettings: GenerationSettings = {
-  structuredOutput: { schemaName: "content_script_v1", schemaVersion: 1 },
+  structuredOutput: { schemaName: "generated_content_v4", schemaVersion: 1 },
   reasoningEffort: "medium",
   maxOutputTokens: 16_000,
   timeoutSeconds: 90,
@@ -626,18 +622,14 @@ export async function completeContentGenerationInvocation(
       return { completed: false, pair, contentId: content?.id ?? null };
     }
 
-    // Provider output remains the immutable V1 artifact. Only the mutable Draft
-    // crosses the current document boundary, and deriving it here keeps every success
-    // artifact (including the queue exit) in this one rollback boundary.
-    let draftDocument;
-    try {
-      draftDocument = projectContentDocumentV2ToV3(materializeContentDocumentV2(result.output));
-    } catch {
+    // The validated/materialized V4 value is the one canonical creation artifact.
+    if (result.output.schemaVersion !== 4) {
       throw new ApplicationError(
         "AI_OUTPUT_INVALID",
         "The AI result cannot be materialized as a valid Content Draft.",
       );
     }
+    const draftDocument = result.output;
 
     const completedAt = clock();
     const contentId = randomUUID();
@@ -682,7 +674,7 @@ export async function completeContentGenerationInvocation(
       .values({
         contentId,
         versionNumber: 1,
-        document: result.output,
+        document: draftDocument,
         source: "AI_GENERATED",
         aiRunId: pair.run.id,
         createdByUserId: userId,
@@ -701,7 +693,7 @@ export async function completeContentGenerationInvocation(
       .update(aiRuns)
       .set({
         status: "COMPLETED",
-        outputSnapshot: result.output,
+        outputSnapshot: draftDocument,
         usage: result.usage ?? null,
         providerRequestCorrelation: result.providerRequestCorrelation ?? null,
         completedAt,

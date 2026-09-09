@@ -4,7 +4,12 @@
 
 **Blocked by:** 03 — Replace the textarea with the structured Script block editor.
 
-**Status:** ready-for-agent
+**Status:** resolved
+
+## Status reconciliation
+
+The approved Phase 5 completion record establishes this ticket as completed.
+Its original scope and unchecked historical checklist are preserved.
 
 - [ ] Deliver typed direction chooser and focused forms for every approved Performance and Edit Direction type, payload, optional-note rule, and bounded text limit.
 - [ ] Render compact, Script-secondary direction chips and category summaries; preserve creator order with accessible move actions.

@@ -44,6 +44,7 @@ body {
   min-height: 100vh;
   background: #fafafa;
   color: #171717;
+  -webkit-tap-highlight-color: rgb(23 23 23 / 12%);
 }
 
 @theme inline {
@@ -148,4 +149,24 @@ body {
 
 :lang(fa) {
   font-family: var(--font-persian), var(--font-latin), sans-serif;
+}
+
+@layer components {
+  .app-navigation {
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    border-bottom: 1px solid var(--border);
+    padding-block: 0.5rem;
+    scrollbar-width: thin;
+  }
+
+  @media (min-width: 64rem) {
+    .app-navigation {
+      overflow: visible;
+      border-bottom: 0;
+      border-inline-end: 1px solid var(--border);
+      padding-block: 2.5rem;
+      padding-inline-end: 1.5rem;
+    }
+  }
 }

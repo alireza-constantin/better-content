@@ -68,6 +68,7 @@ export const reorderProductionQueue = productionQueueApplicationService.reorderP
 // Ticket 08 reuses Ticket 07's authorized Content-detail DTO as the editor read boundary.
 export const getContentDraft = contentReadApplicationService.getContentDetail;
 export const getContentDetail = contentReadApplicationService.getContentDetail;
+export const getTeleprompter = contentReadApplicationService.getTeleprompter;
 export const getIdeaContentGenerationHistory =
   contentReadApplicationService.getIdeaContentGenerationHistory;
 export const getContentGenerationAttemptDetail =

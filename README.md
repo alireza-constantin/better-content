@@ -61,6 +61,10 @@ npm run db:setup
 The application does not run database migrations at runtime or on application
 startup; apply committed migrations explicitly with `npm run db:setup`.
 
+Phase 6 production worker, private S3-compatible storage, ffprobe provisioning,
+CORS, logging, alerting, and reconciliation requirements are documented in
+[`docs/phase-06-assets-deployment.md`](docs/phase-06-assets-deployment.md).
+
 The Compose credentials and port in `.env.example` are for local development
 only. Do not commit `.env.local` or use those credentials in production.
 

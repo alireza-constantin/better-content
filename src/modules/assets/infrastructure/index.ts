@@ -1,4 +1,5 @@
 export * from "./asset-storage";
+export * from "./asset-worker-preflight";
 export * from "./fake-asset-storage";
 export * from "./ffprobe-media-inspector";
 export * from "./filesystem-asset-storage";

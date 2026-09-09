@@ -67,6 +67,20 @@ Version protects the referenced Asset, not only the current accepted Version.
 Publications continue to reference immutable Content Versions and therefore
 inherit the exact Asset identities recorded by the selected Version.
 
+### Phase 5 post-completion clarification — V4 generation and search queries
+
+The approved AI Production Direction extension makes `BROLL_CUE.searchQuery` a
+canonical Content field in ContentDocumentV4. Editing the query is a meaningful
+Draft mutation governed by the existing revision, equality, autosave,
+acceptance, recovery, and Version History rules. Copying it is presentation-only
+behavior and creates no mutation.
+
+New successful Content generation persists one canonical V4 output as the AI
+Run output snapshot, immutable `AI_GENERATED` Version #1, and initial Draft.
+Existing Content and historical V1, V2, and V3 Versions remain unchanged. A
+deterministic V3-to-V4 projection adds no query, performs no write when read, and
+is semantically equal to its V3 source until a meaningful V4 change occurs.
+
 ## Consequences
 
 ### Positive
@@ -94,6 +108,9 @@ inherit the exact Asset identities recorded by the selected Version.
 - An Asset attachment change never mutates an existing Content Version.
 - Every surviving immutable V3 Version retains and protects its recorded Asset
   identities.
+- Every surviving immutable V4 Version retains and protects its recorded Asset
+  identities, and preserves its accepted B-roll search queries as Content
+  history.
 
 ## Rejected alternatives
 

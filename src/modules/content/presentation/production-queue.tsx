@@ -219,26 +219,26 @@ export function ProductionQueue({
 
   return (
     <>
-      <Card className={`overflow-hidden shadow-sm ${className ?? "mt-8"}`}>
-        <CardHeader className="border-b bg-muted/20 px-4 sm:px-5">
-          <div className="flex flex-wrap items-start justify-between gap-3">
+      <Card className={`gap-0 overflow-hidden py-0 shadow-sm ${className ?? "mt-5 sm:mt-8"}`}>
+        <CardHeader className="border-b bg-muted/20 px-3 py-3 [&.border-b]:pb-3 sm:px-5 sm:py-5 sm:[&.border-b]:pb-5">
+          <div className="flex flex-wrap items-start justify-between gap-2.5 sm:gap-3">
             <div>
-              <CardTitle className="text-lg">
-                <h2 className="flex items-center gap-2">
-                  <SparklesIcon aria-hidden="true" className="size-5 text-amber-600" />
+              <CardTitle className="text-base sm:text-lg">
+                <h2 className="flex items-center gap-1.5 sm:gap-2">
+                  <SparklesIcon aria-hidden="true" className="size-4 text-amber-600 sm:size-5" />
                   {t("productionQueueTitle")}
                 </h2>
               </CardTitle>
-              <CardDescription className="mt-1 max-w-sm text-sm leading-6">
+              <CardDescription className="mt-1 max-w-sm text-xs leading-5 sm:text-sm sm:leading-6">
                 {t("productionQueueDescription")}
               </CardDescription>
             </div>
-            <div className="flex flex-wrap items-center justify-end gap-2">
+            <div className="flex flex-wrap items-center justify-end gap-1.5 sm:gap-2">
               <Badge variant="outline">{t("queueCount", { count: items.length })}</Badge>
               {nextIdea ? (
                 <Button
                   aria-label={t("generateNextFor", { title: nextIdea.title })}
-                  className="min-h-11 shrink-0 px-3 text-sm"
+                  className="min-h-10 shrink-0 px-2.5 text-xs sm:min-h-11 sm:px-3 sm:text-sm"
                   disabled={busyAction !== null || !canGenerateNext}
                   onClick={() => openGenerate(nextIdea)}
                   type="button"
@@ -252,7 +252,7 @@ export function ProductionQueue({
         </CardHeader>
         <CardContent className="p-0">
           {notice ? (
-            <div className="px-6 pt-6">
+            <div className="px-3 pt-3 sm:px-6 sm:pt-6">
               <ContentGenerationActionNotice
                 notice={notice}
                 onReload={() => {
@@ -265,7 +265,7 @@ export function ProductionQueue({
           ) : null}
 
           {items.length === 0 ? (
-            <div className="grid gap-2 px-6 py-10">
+            <div className="grid gap-2 px-4 py-7 sm:px-6 sm:py-10">
               <h3 className="font-semibold">{t("productionQueueEmptyTitle")}</h3>
               <p className="max-w-xl text-sm leading-6 text-muted-foreground">
                 {t("productionQueueEmptyDescription")}
@@ -287,7 +287,7 @@ export function ProductionQueue({
 
                   return (
                     <li
-                      className="group grid min-w-0 gap-3 px-4 py-4 transition-colors hover:bg-muted/30 sm:px-5"
+                      className="group grid min-w-0 gap-2 px-3 py-2.5 transition-colors hover:bg-muted/30 sm:gap-3 sm:px-5 sm:py-4"
                       draggable={!isBusy}
                       key={item.id}
                       onDragEnd={() => {
@@ -313,12 +313,12 @@ export function ProductionQueue({
                         draggedIdeaIdRef.current = null;
                       }}
                     >
-                      <div className="flex min-w-0 items-start gap-3">
+                      <div className="grid min-w-0 grid-cols-[2.5rem_minmax(0,1fr)_2.5rem] items-start gap-2 sm:flex sm:gap-3">
                         <div
                           aria-label={t("dragQueueItem", { title: item.title })}
                           aria-describedby="production-queue-reorder-help"
                           aria-keyshortcuts="ArrowUp ArrowDown"
-                          className="flex size-11 shrink-0 cursor-grab items-center justify-center rounded-md border border-dashed text-muted-foreground transition-colors hover:border-foreground/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing"
+                          className="flex size-10 shrink-0 cursor-grab items-center justify-center rounded-md border border-dashed text-muted-foreground transition-colors hover:border-foreground/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing sm:size-11"
                           onKeyDown={(event) => {
                             if (event.key === "ArrowUp") {
                               event.preventDefault();
@@ -334,7 +334,7 @@ export function ProductionQueue({
                           <GripVerticalIcon aria-hidden="true" />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <div className="flex min-w-0 items-baseline gap-2">
+                          <div className="flex min-w-0 items-baseline gap-1.5 sm:gap-2">
                             <span className="shrink-0 text-xs font-medium tabular-nums text-muted-foreground/70">
                               {t("queueOrder", { position: String(index + 1).padStart(2, "0") })}
                             </span>
@@ -377,11 +377,11 @@ export function ProductionQueue({
                             ) : null}
                           </div>
                         </div>
-                        <div className="flex shrink-0 items-start gap-2">
+                        <div className="flex shrink-0 items-start justify-end gap-1.5 sm:gap-2">
                           {item.lastAttempt?.status === "FAILED" ? (
                             <Button
                               aria-label={t("retryGeneration")}
-                              className="size-11 min-h-11 shrink-0 px-0"
+                              className="size-10 min-h-10 shrink-0 px-0 sm:size-11 sm:min-h-11"
                               disabled={isBusy}
                               onClick={() => void retry(item.lastAttempt!.id, item.id)}
                               title={t("retryGenerationFor", { title: item.title })}
@@ -394,14 +394,14 @@ export function ProductionQueue({
                           <details className="relative shrink-0">
                             <summary
                               aria-label={t("moreActionsFor", { title: item.title })}
-                              className="flex size-11 cursor-pointer list-none items-center justify-center rounded-md border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden"
+                              className="flex size-10 cursor-pointer list-none items-center justify-center rounded-md border text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [&::-webkit-details-marker]:hidden sm:size-11"
                               title={t("moreActionsFor", { title: item.title })}
                             >
                               <span aria-hidden="true" className="text-lg leading-none">
                                 …
                               </span>
                             </summary>
-                            <div className="absolute end-0 top-12 z-10 grid min-w-44 gap-1 rounded-md border bg-popover p-1 text-popover-foreground shadow-md">
+                            <div className="absolute end-0 top-11 z-10 grid min-w-44 gap-1 rounded-md border bg-popover p-1 text-popover-foreground shadow-md sm:top-12">
                               <button
                                 className="min-h-10 rounded-sm px-3 text-start text-sm font-medium transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                 disabled={isBusy}

@@ -16,10 +16,13 @@ import {
   materializeContentDocumentV2,
   projectContentDocumentToV3,
   projectContentDocumentV3ToV2,
+  projectContentDocumentV4ToV3,
   extractAssetReferences,
+  projectContentDocumentToTeleprompter,
   type ContentDocument,
   type ContentDocumentV2,
   type ContentDocumentV3,
+  type ContentDocumentV4,
   type ContentVersionSource,
   type ContentScriptFormat,
   type GenerationLanguage,
@@ -46,6 +49,8 @@ import {
   type ContentGenerationAttemptReadRecord,
   type ContentListRecord,
   type ContentVersionReadRecord,
+  findContentForTeleprompter,
+  findContentTeleprompterVersion,
 } from "./content-read-repository";
 import { requireWorkspaceMembership } from "@/modules/workspace/application";
 import { decisionStateSchema, type DecisionState } from "@/modules/ideas/domain";
@@ -74,8 +79,8 @@ export type ContentListItemDto = Readonly<{
 export type ContentDraftDto = Readonly<{
   /** The authoritative persisted document; legacy schemas remain unchanged on read. */
   document: ContentDocument;
-  /** The deterministic, read-only editor projection. It is always V3. */
-  editorDocument: ContentDocumentV3;
+  /** The deterministic, read-only editor projection. It is always V4. */
+  editorDocument: ContentDocumentV3 | ContentDocumentV4;
   /** A pre-Asset compatibility view for the existing structured editor. */
   v2Projection?: ContentDocumentV2;
   revision: number;
@@ -105,6 +110,24 @@ export type ContentDetailDto = Readonly<{
     Record<string, Readonly<{ displayName: string; mediaType: string }>>
   >;
 }>;
+
+export type ContentTeleprompterResult =
+  | Readonly<{
+      status: "READY";
+      contentId: string;
+      contentTitle: string;
+      contentLanguage: GenerationLanguage;
+      acceptedVersionId: string;
+      acceptedVersionNumber: number;
+      scriptBlocks: ReturnType<typeof projectContentDocumentToTeleprompter>;
+    }>
+  | Readonly<{
+      status: "NO_ACCEPTED_VERSION" | "UNAVAILABLE";
+      contentId: string;
+      contentTitle: string;
+      contentLanguage: GenerationLanguage;
+      acceptedVersionId: string | null;
+    }>;
 
 async function loadAssetPresentations(
   database: Pick<typeof db, "select">,
@@ -243,7 +266,9 @@ function toDraftDto(record: ContentDetailRecord["draft"]): ContentDraftDto {
           ? materializeContentDocumentV2(document)
           : document.schemaVersion === 2
             ? document
-            : projectContentDocumentV3ToV2(document),
+            : projectContentDocumentV3ToV2(
+                document.schemaVersion === 4 ? projectContentDocumentV4ToV3(document) : document,
+              ),
       revision: record.revision,
       updatedAt: record.updatedAt,
     };
@@ -404,6 +429,7 @@ export function createContentReadApplicationService(
   listContent(input: unknown): Promise<readonly ContentListItemDto[]>;
   getContentByIdea(input: unknown): Promise<ContentByIdeaDto>;
   getContentDetail(input: unknown): Promise<ContentDetailDto>;
+  getTeleprompter(input: unknown): Promise<ContentTeleprompterResult>;
   getIdeaContentGenerationHistory(input: unknown): Promise<IdeaContentGenerationHistoryDto>;
   getContentGenerationAttemptDetail(input: unknown): Promise<ContentGenerationAttemptDetailDto>;
   getContentGenerationAttemptResult(input: unknown): Promise<ContentDetailDto | null>;
@@ -559,6 +585,92 @@ export function createContentReadApplicationService(
       };
     },
 
+    async getTeleprompter(input: unknown): Promise<ContentTeleprompterResult> {
+      const { userId, input: parsedInput } = await authorizeRead(
+        input,
+        contentDetailInputSchema,
+        "The Teleprompter request is invalid.",
+      );
+      const record = await findContentForTeleprompter(
+        database,
+        parsedInput.workspaceId,
+        parsedInput.contentId,
+      );
+
+      if (!record) {
+        throw notFound("Content");
+      }
+
+      const contentLanguage = parseStoredContentLanguage(record.content.contentLanguage);
+      const base = {
+        contentId: record.content.id,
+        contentTitle: record.sourceIdea.title,
+        contentLanguage,
+        acceptedVersionId: record.content.acceptedVersionId,
+      } as const;
+
+      if (!record.content.acceptedVersionId) {
+        logRead(serviceLogger, "content.teleprompter.no_accepted_version", {
+          userId,
+          workspaceId: parsedInput.workspaceId,
+          entityId: parsedInput.contentId,
+        });
+        return { ...base, status: "NO_ACCEPTED_VERSION" };
+      }
+
+      const version = await findContentTeleprompterVersion(
+        database,
+        parsedInput.workspaceId,
+        record.content.id,
+        record.content.acceptedVersionId,
+      );
+      const parsedDocument = version
+        ? contentDocumentSchema.safeParse(version.version.document)
+        : null;
+      const isValidVersion =
+        version !== undefined &&
+        version.version.source === "CREATOR_ACCEPTED" &&
+        Number.isInteger(version.version.versionNumber) &&
+        version.version.versionNumber > 0 &&
+        parsedDocument?.success === true;
+
+      if (!isValidVersion || !parsedDocument?.success) {
+        serviceLogger.warn("content.teleprompter.accepted_version_unavailable", {
+          userId,
+          workspaceId: parsedInput.workspaceId,
+          entityId: parsedInput.contentId,
+          module: "content",
+          operation: "contentRead",
+        });
+        return { ...base, acceptedVersionId: null, status: "UNAVAILABLE" };
+      }
+
+      try {
+        const result: ContentTeleprompterResult = {
+          ...base,
+          status: "READY",
+          acceptedVersionId: record.content.acceptedVersionId,
+          acceptedVersionNumber: version.version.versionNumber,
+          scriptBlocks: projectContentDocumentToTeleprompter(parsedDocument.data),
+        };
+        logRead(serviceLogger, "content.teleprompter.loaded", {
+          userId,
+          workspaceId: parsedInput.workspaceId,
+          entityId: parsedInput.contentId,
+        });
+        return result;
+      } catch {
+        serviceLogger.warn("content.teleprompter.accepted_version_unavailable", {
+          userId,
+          workspaceId: parsedInput.workspaceId,
+          entityId: parsedInput.contentId,
+          module: "content",
+          operation: "contentRead",
+        });
+        return { ...base, acceptedVersionId: null, status: "UNAVAILABLE" };
+      }
+    },
+
     async getIdeaContentGenerationHistory(
       input: unknown,
     ): Promise<IdeaContentGenerationHistoryDto> {
@@ -682,7 +794,15 @@ export function createContentReadApplicationService(
         result.content.id,
       );
 
-      return toContentDetail(result, versions);
+      const detail = toContentDetail(result, versions);
+      return {
+        ...detail,
+        assetPresentations: await loadAssetPresentations(
+          database,
+          parsedInput.workspaceId,
+          detail.versions,
+        ),
+      };
     },
 
     async getIdeaContentUsage(input: unknown): Promise<IdeaContentUsageDto> {

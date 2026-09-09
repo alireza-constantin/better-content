@@ -2,1925 +2,253 @@
 
 ## Product Requirements Document
 
-**Version:** 0.2
-**Status:** Approved for V1
-**Product stage:** V1 definition
+**Status:** Approved V1 product truth
 
----
+This document defines current product behavior and V1 scope. It does not define
+implementation mechanics; those belong in [Architecture](ARCHITECTURE.md),
+[ADRs](adr/README.md), and specialist standards. Derived documentation never
+overrides this PRD.
 
-# 1. Product Vision
+## Product vision
 
-Better Content is an AI-assisted content creation, publishing-workflow, analytics, and learning platform.
-
-The product helps creators move through the complete content lifecycle:
-
-```text
-Content DNA
-    ↓
-Idea Generation
-    ↓
-Idea Selection
-    ↓
-Content Generation
-    ↓
-Human Editing
-    ↓
-Production Planning
-    ↓
-Acceptance
-    ↓
-External Publishing
-    ↓
-Publication Registration
-    ↓
-Automatic Analytics Collection
-    ↓
-Performance Insights
-    ↓
-Future AI Learning
-```
-
-The long-term differentiator is not simply generating content with AI.
-
-Better Content should understand the relationship between:
-
-* why an idea was generated,
-* which idea was selected,
-* what content was generated from it,
-* how the creator edited it,
-* which version was approved,
-* where that version was published,
-* how the publication performed,
-* and what can eventually be learned from that performance.
-
-The platform should preserve this entire lineage.
-
----
-
-# 2. Core Product Principle
-
-Every important entity must remain traceable throughout the content lifecycle.
-
-Conceptually:
+Better Content helps an individual creator turn creator-specific intent into
+traceable, repeatable content production. It is not merely an AI writer or a
+social dashboard: it preserves the decisions and artifacts that explain how an
+Idea became approved Content and, later, how it performed.
 
 ```text
-Content DNA Version
-        ↓
-Idea Generation Batch
-        ↓
-Idea
-        ↓
-Content
-        ↓
-Content Version
-        ↓
-Publication
-        ↓
-Analytics Snapshots
-        ↓
-Insight
-        ↓
-Future DNA / Skill / Memory Improvement
+Creator context → Ideas → selected production work → structured Content
+→ approved Version → creator recording → future publication and analytics
 ```
 
-This relationship must never be lost.
-
-A publication should always be traceable back to:
-
-* its exact content version,
-* the content's source idea,
-* the generation batch,
-* and the Content DNA version used.
-
----
-
-# 3. Target User
-
-V1 is designed primarily for individual creators who regularly produce social-media content.
-
-Examples include:
-
-* Instagram creators
-* TikTok creators
-* YouTube Shorts creators
-* educators
-* fashion creators
-* personal brands
-* small creator businesses
-
-V1 should optimize for a simple single-creator experience.
-
-The architecture should not prevent future:
-
-* teams
-* agencies
-* editors
-* approval workflows
-* multiple social accounts
-* multiple brands
-
-Advanced collaboration is not part of initial V1.
-
----
-
-# 4. Supported Languages
-
-V1 must support:
-
-* English
-* Persian
-
-Internationalization is a foundational architecture requirement.
-
-The application must correctly support:
-
-* LTR interfaces
-* RTL interfaces
-* English content
-* Persian content
-* mixed Persian and English text
-* locale-aware UI
-* proper RTL layout behavior
-
-Application language and content language must remain separate concepts.
-
-A user may use the Better Content interface in English while creating Persian content.
-
----
-
-# 5. Primary V1 Workflow
-
-The primary workflow is:
-
-```text
-Create Account
-      ↓
-Configure Content DNA
-      ↓
-Generate 20 Ideas
-      ↓
-Accept / Save / Reject Ideas
-      ↓
-Content Production Queue
-      ↓
-Prioritize and Generate
-      ↓
-Generated Content Library
-      ↓
-Edit Content
-      ↓
-Add Performance / Edit Directions
-      ↓
-Draft
-      ↓
-Accept
-      ↓
-Publishing Queue
-      ↓
-Creator Publishes Externally
-      ↓
-Add / Detect Published URL
-      ↓
-Publication Registered
-      ↓
-Automatic Analytics Sync
-      ↓
-Performance Dashboard
-```
-
----
-
-# 6. V1 Product Areas
-
-V1 consists of the following main product areas:
-
-1. Authentication and foundation
-2. Content DNA
-3. Idea generation
-4. Idea management
-5. AI content generation
-6. Content production workspace (Production Queue and Generated Content Library)
-7. Structured content editing
-8. Production Direction
-9. Content lifecycle
-10. Publishing queue
-11. External publication registration
-12. Social account connections
-13. Automatic social analytics synchronization
-14. Analytics history
-15. Traceability foundation for future AI learning
-
----
-
-# 7. Authentication
-
-Users must be able to:
-
-* create an account,
-* sign in,
-* sign out,
-* maintain authenticated sessions,
-* access only resources they own.
-
-Authentication will use:
-
-**Better Auth**
-
-unless a later approved ADR changes this decision.
-
-Authorization must always be enforced server-side.
-
----
-
-# 8. Workspace Model
-
-V1 should appear primarily as a single-user application.
-
-However, creator-owned data should belong to a workspace boundary internally so future collaboration does not require redesigning every table.
-
-A new user may automatically receive a default workspace.
-
-The exact workspace implementation will be defined in architecture.
-
-V1 does not require:
-
-* invitations,
-* workspace roles,
-* complex permissions,
-* team administration.
-
----
-
-# 9. Content DNA
-
-## 9.1 Purpose
-
-Content DNA represents persistent creator-specific context used by AI when generating ideas and content.
-
-It should describe how the creator thinks, communicates, and produces content.
-
-It must not be implemented as one uncontrolled giant prompt.
-
----
-
-# 10. V1 Content DNA Fields
-
-At minimum, Content DNA should support:
-
-* creator or brand description
-* target audience
-* primary topics
-* tone
-* content goals
-* preferred content formats
-* preferred content languages
-* preferred style
-* topics to avoid
-* approaches to avoid
-* additional creator instructions
-
-Future versions may include:
-
-* successful patterns
-* preferred hooks
-* vocabulary
-* visual identity
-* editing style
-* CTA preferences
-* learned creator behavior
-
----
-
-# 11. Content DNA Versioning
-
-Content DNA must be versioned.
-
-Example:
-
-```text
-DNA v1
-DNA v2
-DNA v3
-```
-
-Whenever a generation occurs, the system must preserve which DNA version was used.
-
-Editing today's DNA must never retroactively change the context associated with older ideas or content.
-
----
-
-# 12. Idea Generation
-
-Idea generation is a first-class feature and must exist before content generation.
-
-The user can request a new batch of ideas.
-
-The default V1 generation count is:
-
-**20 ideas**
-
-Each idea should be based on the active Content DNA.
-
----
-
-# 13. Idea Structure
-
-An idea should contain structured information.
-
-At minimum:
-
-* title
-* short description
-* language
-* topic/category where available
-* source generation batch
-* Content DNA version
-* generation timestamp
-* status
-
-Example:
-
-```text
-Title:
-Why Expensive Clothes Don't Always Look Expensive
-
-Description:
-A short educational Reel about the visual signals that make clothing appear premium regardless of price.
-```
-
----
-
-# 14. Idea Generation Batches
-
-Every accepted idea-generation operation creates a batch. Requests rejected
-before generation begins because authorization, validation, Content DNA
-freshness/readiness, or workspace generation limits fail create no batch. An
-idempotent replay returns the existing operation/batch and does not create
-another.
-
-Example:
-
-```text
-Generation Batch #42
-├── Idea 1
-├── Idea 2
-├── Idea 3
-├── ...
-└── Idea 20
-```
-
-The batch should preserve:
-
-* Content DNA version
-* generation date
-* requested language
-* generation configuration
-* model/provider metadata where appropriate
-* all generated ideas
-
-This will later allow us to measure AI idea-generation quality.
-
----
-
-## Workspace-wide Idea Library
-
-The primary Ideas experience is a workspace-wide Idea Library, not a list of
-generation batches. The Library must let a creator discover and organize Ideas
-across **all** generation batches in the current workspace without first
-opening a particular batch.
-
-The Library has two independent, server-applied filtering dimensions:
-
-1. **Idea status**
-2. **Generation run**
-
-The status filter provides these views or equivalent controls:
-
-* **All** — every Idea in the workspace
-* **New** — Ideas with status `NEW`
-* **Saved** — Ideas with status `SAVED`
-* **Accepted** — Ideas with status `ACCEPTED`
-* **Rejected** — Ideas with status `REJECTED`
-
-The generation-run filter provides **All runs** or one generation batch in the
-current workspace. Results always match the intersection of both filters. For
-example, `Saved + All runs` is the cross-batch backlog, while `Saved + Run A`
-contains only Saved Ideas from that generation run.
-
-The default is **New + All runs**, which favors active review of Ideas that
-have not yet been deliberately classified without selecting a batch. The other
-status views and Past Runs remain directly available; the default does not
-limit discovery.
-
-The **Saved** view is a useful backlog: it shows all Ideas deliberately kept
-for later across every generation batch without requiring batch navigation.
-
-A Library item may show useful existing facts such as its title, description,
-current decision state, Idea language, generation date, lightweight batch
-provenance, and derived Content existence or count. The Library preserves the
-existing Save, Accept, and Reject actions. For an `ACCEPTED` Idea with zero
-linked Content, the Library may show a compact planned-production indicator
-such as **In content queue**. It does not render the primary first-generation
-action or full Attempt history inline. For an Idea with linked Content, it
-shows a compact derived Content count such as **1 Content →** or
-**N Contents →**; the link opens the Content surface filtered by that source
-Idea where that filter is available. Generating another Content remains
-allowed from the Content production context. Accepting an Idea alone remains
-side-effect-free and never generates Content automatically.
-
-Past Runs are an integrated part of this one Idea Library experience, not a
-separate Generation History product surface. Selecting a run keeps the creator
-on `/ideas`, preserves the selected status where practical, and exposes that
-batch's safe provenance in the Library: batch date/time, requested language,
-Idea count, lifecycle facts, bound Content DNA version, AI Run lineage, and
-generated position/order. Clearing the run returns to **All runs** while
-preserving the selected status. Generation batches remain the authoritative
-provenance containers; the Library does not flatten or duplicate that lineage
-into Idea records merely for convenience.
-
-The Library URL preserves these filters with simple query state:
-
-```text
-/ideas                         → New + All runs
-/ideas?view=saved              → Saved + All runs
-/ideas?view=saved&batchId=...  → Saved + the selected owned batch
-```
-
-Unsupported status values normalize safely to `New`. A missing, invalid, or
-foreign-workspace `batchId` never discloses the batch and is treated as no
-selected run.
-
-The Library uses the existing Idea, batch, and Content relationships. It does
-not require a new persisted Idea status, a persisted Content count, or a
-`workspaceId` on Idea. Idea ownership continues to resolve through its
-generation batch and workspace. This correction does not add full-text or
-semantic search, embeddings, tags, folders, collections, separate favorites,
-custom statuses, Kanban/drag-and-drop, bulk actions, custom sorting,
-pagination architecture unless existing data-volume/query conventions require
-it, deletion/archive, AI recommendations, or learning from Saved or Rejected
-Ideas.
-
----
-
-# 15. Idea States
-
-V1 persists exactly these Idea decision states:
-
-```text
-NEW
-SAVED
-ACCEPTED
-REJECTED
-```
-
-## NEW
-
-Generated and not yet deliberately classified by the creator.
-
-## SAVED
-
-Interesting or worth keeping, but not currently approved for Content
-generation.
-
-## ACCEPTED
-
-The creator has committed to producing Content from this Idea. If it has zero
-linked Content, it is planned production work and belongs to the derived
-Content Production Queue. Acceptance does not itself create Content, an
-Attempt, or an AI Run.
-
-## REJECTED
-
-Deliberately unwanted or rejected by the creator. Rejected Ideas remain stored
-as historical and future-learning evidence and remain retrievable through the
-Rejected Library view.
-
-## USED (derived indicator)
-
-`USED` is not a persisted Idea status. Derive:
-
-```text
-hasContent = exists Content linked to this Idea
-```
-
-The Library may communicate this derived fact as **No content yet**, **Has
-content**, a Content count, or an equivalent presentation. An `ACCEPTED` Idea
-must make it easy to distinguish accepted planned work from accepted Ideas with
-one or more linked Content records. One Idea may have multiple Content
-records, and the count is never persisted.
-
-The UI may use **Reject** as the action label, but rejection is not deletion;
-the Idea record and its current rejection reason remain stored. No separate
-decision-event history is introduced.
-
----
-
-# 16. Rejected Ideas
-
-Rejected AI ideas must not normally be permanently destroyed.
-
-They represent valuable future learning data.
-
-Rejected Ideas should not dominate the creator's normal active workflow. They
-remain retrievable through the Rejected view of the workspace-wide Idea
-Library, and rejection does not become deletion or archive. Rejected Ideas are
-not used for AI learning in this correction; future learning remains out of
-scope.
-
-Optional V1 rejection reasons may include:
-
-* Too generic
-* Already covered
-* Not relevant
-* Not interesting
-* Difficult to produce
-* Wrong direction
-* Other
-
-Providing a reason should not be mandatory.
-
-The action should remain fast.
-
----
-
-# 17. Content Production Queue and Generate Content From an Idea
-
-V1 Content generation begins only from an `ACCEPTED` Idea and only after an
-explicit creator action in the Content Production Queue or the source-Idea
-Content context. The primary first-generation flow is:
-
-```text
-Idea Library
-      ↓ Accept
-Content Production Queue
-      ↓ prioritize
-Generate Script
-      ↓ success
-Generated Content Library / Script editor
-```
-
-Accepting an Idea does not automatically create Content or invoke AI. `NEW`,
-`SAVED`, and `REJECTED` Ideas are not eligible; a saved Idea must first be
-accepted.
-
-Queue membership is derived and is not an Idea status:
-
-```text
-isQueued = idea.status == ACCEPTED && linked Content count == 0
-```
-
-An accepted Idea with zero Content enters the end of the queue. Changing it to
-`SAVED` or `REJECTED`, or successfully creating its first Content, removes it
-from the derived queue. A failed generation leaves it `ACCEPTED` with zero
-Content, so it remains queued and its failed Attempt remains retryable. No
-explicit complete/remove action exists.
-
-Queue order is persisted as a nullable positive integer on the existing Idea
-aggregate (or equivalent narrowly scoped field); membership itself is not
-persisted. Reordering uses a transactionally verified authoritative ordered ID
-list and returns `CONFLICT` when membership is stale. The queue is not a
-separate top-level product or aggregate.
-
-The relationship must remain explicit:
-
-```text
-Idea
- ↓
-Content
-```
-
-Content must retain its originating Idea ID.
-
-Better Content must not simply copy the idea text into a content record and lose the relationship.
-
-One accepted Idea may produce multiple Content aggregates for different
-languages, formats, instructions, or creative approaches. After the first
-successful Content it leaves the initial Production Queue but remains
-`ACCEPTED`, and the creator may explicitly Generate Another from the
-Idea-filtered Content context. Creating Content does not freeze the Idea's
-decision state. Later Idea state changes do not invalidate already accepted
-generation operations or delete resulting Content. `USED` remains derived from
-the existence of linked Content and is never stored as an Idea status.
-
-The Content surface is the production workspace and contains:
-
-1. **Production Queue** — accepted Ideas with zero Content, in persisted
-   creator-prioritized order, with Generate and eligible Retry actions.
-2. **Generated Content Library** — generated Content, existing editor links,
-   and a narrow optional source-Idea filter such as `/content?ideaId=<id>`.
-
-The Content-by-Idea view supports zero, one, or multiple linked Content records
-and may expose compact generation activity. It must not turn every Idea Library
-card into an Attempt-history view.
-
----
-
-# 18. Content Generation Inputs
-
-The Phase 4 Content-generation request contains exactly:
-
-* workspace
-* source Idea
-* client-observed base Content DNA version
-* requested content language
-* requested format
-* optional creator instructions
-* idempotency key
-
-The only Phase 4 formats are `SHORT_VIDEO` and `LONG_VIDEO`. Instructions are
-optional, canonically trimmed, and limited to 1,000 characters. Content
-language is `en` or `fa`, is independent of Idea language and UI locale, and
-must be supported by the current authoritative AI-ready Content DNA.
-
-Before accepting a new operation, the server verifies that the submitted base
-DNA version is still current. A mismatch has no generation, quota, or provider
-side effects. Once accepted, the operation remains permanently bound to that
-immutable DNA version even if current DNA later changes. Content generation
-does not automatically reuse the historical DNA version that generated the
-Idea.
-
-Generated Content initially has one mutable Draft. In Phase 4, **Draft** is a
-descriptive authoring condition, not a persisted Content lifecycle status.
-
----
-
-# 19. Script and Production Direction
-
-Better Content content has one core Script with two categories of structured Production Direction.
-
-```text
-Content
-├── Script
-├── Performance Direction
-└── Edit Direction
-```
-
-## Script
-
-Represents what the creator says or communicates.
-
-## Performance Direction
-
-Represents how the creator should physically or vocally perform the relevant Script content while recording.
-
-Examples include:
-
-* pause
-* movement
-* posture/position
-* gesture
-* gaze
-* expression
-* vocal delivery
-* object interaction
-
-## Edit Direction
-
-Represents how the recorded footage should be edited.
-
-Examples include:
-
-* zoom
-* cut
-* image/video overlay
-* B-roll
-* text
-* sound
-* transition
-* visual emphasis
-
-Performance Direction and Edit Direction are not separate content types.
-
-They are structured production instructions associated with the same Script.
-
----
-
-# 20. Structured Content
-
-Content should not exist only as a giant opaque text field.
-
-Phase 4 begins with the smallest schema-versioned Script document:
-
-```json
-{
-  "schemaVersion": 1,
-  "script": {
-    "text": "..."
-  }
-}
-```
-
-The Script is plain Unicode text. Phase 4 does not define blocks, direction
-anchors, or Production Direction structure.
-
-The system must eventually understand individual content sections or blocks.
-
-Conceptually:
-
-```text
-Content
-├── Block
-├── Block
-├── Block
-└── Block
-```
-
-The later structured-editor schema, including blocks and direction anchoring,
-will be defined and explicitly transformed during Phase 5. Immutable Phase 4
-schema-v1 Content Versions retain their original interpretation.
-
-Structured content allows production instructions to reference specific parts of the content.
-
----
-
-# 21. Production Directions
-
-The content editor must support Performance Direction and Edit Direction.
-
-Performance Direction includes instructions for how the creator performs the Script while recording, such as:
-
-* Pause
-* Long pause
-
-Edit Direction includes post-production instructions, such as:
-
-* Zoom in
-* Zoom out
-* Image overlay
-* B-roll
-* Screenshot
-* Cut
-* Hold
-* Text emphasis
-* Sound effect
-* Transition
-
-The exact canonical V1 direction list will be intentionally limited.
-
-We should not attempt to recreate an entire professional video editing application in V1.
-
----
-
-# 22. Production Directions Are Structured Data
-
-Production Directions must not exist only as strings embedded into the Script.
-
-Avoid treating this as the canonical representation:
-
-```text
-This is the hook [ZOOM IN] and now...
-```
-
-The system should instead represent:
-
-```text
-Content Block
-      +
-Production Direction
-```
-
-The UI may visually display directions inline.
-
-The underlying data must remain structured.
-
----
-
-# 23. References and Assets
-
-Phase 6 provides a Workspace Asset Library for reusable creator media.
-
-An Asset is one managed IMAGE, VIDEO, or AUDIO object created from either:
-
-* a creator-uploaded media file, or
-* a supported direct HTTPS media link.
-
-The system stores a private managed copy and provides an in-product image,
-video, or audio preview for READY media. Media type describes the file itself,
-not its use; logos and screenshots remain IMAGE, B-roll clips remain VIDEO, and
-music or sound effects remain AUDIO.
-
-ContentDocumentV3 records Asset identity inside the relevant Production
-Direction. A B-roll cue may optionally select one IMAGE or VIDEO Asset; a sound
-cue may optionally select one AUDIO Asset. Assets are reusable within their
-owning Workspace, but cross-Workspace references are forbidden.
-
-Accepted and historical immutable Content Versions preserve the exact Asset IDs
-selected at snapshot time. READY media cannot be replaced in place, and an
-Asset referenced by a current Draft or any surviving immutable Version cannot
-be deleted.
-
-Phase 6 does not add documents/arbitrary files, folders, tags, rich DAM
-workflows, timeline editing, rendering, transcoding, generated media, stock
-media, social/hosted-media page imports, deduplication, or storage quotas.
-
----
-
-# 24. Content Editing
-
-Users must be able to:
-
-* view generated content,
-* edit AI-generated text,
-* add/remove structured sections where supported,
-* add Performance Directions and Edit Directions,
-* edit Performance Directions and Edit Directions,
-* save their work.
-
-Phase 4 implemented plain Script viewing/editing and autosave. Phase 5 added
-the approved block-scoped structured editor and bounded Performance/Edit
-Direction taxonomy. Phase 6 adds the approved Asset references without adding
-text-range anchoring or a media timeline.
-
-Human edits should remain distinguishable from the originally generated output where practical.
-
-This information will eventually become important learning data.
-
----
-
-# 25. Content Versioning
-
-Content must support version history.
-
-Initial AI Content generation creates immutable Content Version #1 and a
-mutable Draft initialized from the same canonical validated Script. Human
-autosaves change only the Draft and do not create versions. The immutable
-initial version preserves the generated artifact for future comparison.
-
-At minimum, Better Content must preserve the difference between:
-
-```text
-Current working version
-```
-
-and:
-
-```text
-Version actually approved/published
-```
-
-Editing a content item after publication must never silently alter the historical published version.
-
----
-
-# 26. Content Lifecycle
-
-The user-facing V1 lifecycle is:
-
-```text
-DRAFT
-  ↓
-ACCEPTED
-  ↓
-PUBLISHING QUEUE
-  ↓
-PUBLISHED
-```
-
-Additional internal states may be added where necessary for correctness.
-
----
-
-# 27. Draft
-
-A Draft is content still being created or edited.
-
-Draft content may be changed freely.
-
----
-
-# 28. Accepted
-
-When the creator approves content, it becomes Accepted.
-
-The system must identify the exact accepted version.
-
-Accepted content can enter the publishing queue.
-
----
-
-# 29. Publishing Queue
-
-The publishing queue contains content that has been accepted but has not yet been confirmed as externally published.
-
-The queue should help the creator understand:
-
-* what is ready,
-* where it is intended to be published,
-* what content version is approved,
-* which items are still awaiting publication.
-
----
-
-# 30. External Publishing
-
-Automatic social-platform publishing is **not part of initial V1**.
-
-Better Content will not initially publish posts directly to:
-
-* Instagram
-* TikTok
-* YouTube
-* LinkedIn
-* X
-* Facebook
-
-The creator publishes their content through the external social platform.
-
-After publication, Better Content registers the resulting publication.
-
----
-
-# 31. Publication Registration
-
-After externally publishing content, the creator should be able to associate the published post with the accepted Better Content item.
-
-Primary V1 interaction:
-
-```text
-Accepted Content
-       ↓
-Creator publishes externally
-       ↓
-Creator adds published URL
-       ↓
-Better Content identifies platform
-       ↓
-Publication registered
-```
-
-Where technically appropriate, Better Content may assist in detecting information from the pasted URL.
-
----
-
-# 32. Publication Entity
-
-Publication is a first-class domain entity.
-
-It must not be represented simply as:
-
-```text
-content.published = true
-```
-
-Conceptually:
-
-```text
-Content
-   ↓
-Content Version
-   ↓
-Publication
-```
-
-A publication should contain concepts such as:
-
-* platform
-* external URL
-* external content/post ID where available
-* connected platform account
-* publication timestamp
-* published content version
-* analytics synchronization state
-
----
-
-# 33. Multiple Publications
-
-The architecture must support the possibility that one content item is published more than once.
-
-Example:
-
-```text
-Content #25
-├── Instagram Publication
-├── TikTok Publication
-└── YouTube Publication
-```
-
-Even if all platforms are not supported initially, the data model must not assume one content item has exactly one publication.
-
----
-
-# 34. Social Account Connections
-
-Automatic analytics retrieval is part of V1.
-
-Therefore Better Content must support authenticated connections to supported social platforms where required.
-
-Conceptually:
-
-```text
-Creator
-   ↓
-Connected Social Account
-   ↓
-Platform API
-```
-
-A social account connection may contain:
-
-* platform
-* external account ID
-* account metadata
-* authorization state
-* granted permissions/scopes
-* credential/token references
-* token expiry
-* synchronization state
-
-Sensitive credentials must be stored securely and never exposed to the frontend unnecessarily.
-
----
-
-# 35. Published URL Is Not Sufficient for All Analytics
-
-The published post URL is important because it identifies the publication.
-
-However, the URL alone should not be assumed to provide access to private metrics such as:
-
-* reach
-* saves
-* detailed watch time
-* retention
-* private insights
-
-Where the platform requires authorization, Better Content must use the connected creator account and official supported API access.
-
-The product must never imply that analytics can always be retrieved purely from a URL.
-
----
-
-# 36. Automatic Social Analytics
-
-Automatic analytics synchronization is a V1 feature.
-
-Once a supported publication is registered and the required platform account is connected, Better Content should automatically retrieve available performance data.
-
-Potential metrics include:
-
-* views
-* reach
-* impressions
-* likes
-* comments
-* shares
-* saves
-* watch time
-* average watch duration
-* completion rate
-* audience retention
-* engagement-related metrics
-
-The exact metrics depend on what each external platform exposes.
-
----
-
-# 37. Platform-Specific Analytics
-
-Different social platforms have different metric definitions.
-
-Better Content must preserve original platform semantics.
-
-For example:
-
-```text
-Instagram Reach
-```
-
-must not silently become identical to:
-
-```text
-YouTube Views
-```
-
-We may later create normalized cross-platform metrics, but raw platform metrics must always remain available.
-
----
-
-# 38. Analytics Snapshots
-
-Analytics must be stored historically rather than overwriting one row every time numbers change.
-
-Example:
-
-```text
-Instagram Publication #82
-
-Day 1
-Views: 8,200
-Likes: 540
-
-Day 2
-Views: 17,300
-Likes: 910
-
-Day 7
-Views: 42,100
-Likes: 1,920
-```
-
-This enables later analysis of:
-
-* first-hour performance
-* first-day performance
-* seven-day performance
-* growth velocity
-* early vs final performance
-* content lifespan
-
----
-
-# 39. Analytics Synchronization
-
-Better Content should periodically update analytics for active supported publications.
-
-The exact refresh strategy will be determined during architecture.
-
-It must balance:
-
-* platform rate limits,
-* provider restrictions,
-* cost,
-* freshness,
-* publication age,
-* system complexity.
-
-We should not continuously poll every post forever.
-
----
-
-# 40. Analytics Synchronization States
-
-The product should support concepts such as:
-
-```text
-PENDING
-SYNCING
-SYNCED
-CONNECTION_REQUIRED
-PERMISSION_REQUIRED
-UNSUPPORTED
-FAILED
-```
-
-The final state model will be defined in architecture.
-
-Users should understand when analytics are unavailable and why.
-
----
-
-# 41. Unsupported Metrics
-
-Better Content must never fabricate metrics.
-
-If a platform does not expose a metric through available supported APIs, the UI should indicate:
-
-**Unavailable**
-
-rather than guessing it.
-
----
-
-# 42. Analytics Traceability
-
-Analytics belong to publications.
-
-Correct relationship:
-
-```text
-Idea
- ↓
-Content
- ↓
-Content Version
- ↓
-Instagram Publication
- ↓
-Instagram Analytics Snapshots
-```
-
-A TikTok publication of the same content has separate analytics:
-
-```text
-Same Content
- ↓
-TikTok Publication
- ↓
-TikTok Analytics Snapshots
-```
-
-This is essential because content may perform very differently across platforms.
-
----
-
-# 43. Analytics Dashboard
-
-V1 should allow creators to inspect publication performance.
-
-At minimum, users should be able to see:
-
-* publication
-* platform
-* publication date
-* latest available metrics
-* historical metric changes
-* synchronization status
-
-A more advanced cross-content analytics dashboard may be introduced after basic synchronization works reliably.
-
----
-
-# 44. AI Learning Loop
-
-The long-term goal is to use real content performance to improve future AI output.
-
-However, analytics must not directly rewrite creator DNA or AI behavior.
-
-We use:
-
-```text
-Analytics
-   ↓
-Analysis
-   ↓
-Insight
-   ↓
-Suggested Learning
-   ↓
-Creator Approval
-   ↓
-DNA / Skill / Memory Change
-```
-
-rather than:
-
-```text
-Views increased
-   ↓
-Automatically change AI
-```
-
----
-
-# 45. Automatic Learning Is Not Initial V1
-
-V1 must collect and preserve the information required for future learning.
-
-Initial V1 does not need to automatically:
-
-* generate behavioral rules,
-* update Content DNA,
-* modify AI memory,
-* modify AI skills,
-* optimize prompts.
-
-Those features follow once sufficient real-world data exists.
-
----
-
-# 46. Human Editing Signals
-
-The difference between AI output and creator-edited output is potentially valuable.
-
-Future analysis may answer questions such as:
-
-* Which AI hooks does the creator usually rewrite?
-* Which words do they remove?
-* Which sections do they shorten?
-* Which Performance Directions or Edit Directions do they change?
-* Which AI-generated structures survive to publication?
-
-V1 architecture must avoid destroying this information.
-
----
-
-# 47. AI Generation Traceability
-
-Meaningful AI generation operations use a durable product-operation entity
-paired one-to-one with an AI Run. The operation owns immutable canonical
-business inputs and source lineage. The AI Run owns safe provider/model/prompt
-configuration, execution state, neutral usage, and canonical validated output.
-Neither owns raw assembled prompts, raw provider envelopes, or hidden
-reasoning.
-
-Together they retain metadata needed for:
-
-* debugging
-* reproducibility
-* analysis
-* evaluation
-* future learning
-
-Potential metadata includes:
-
-* generation type
-* source entity
-* Content DNA version
-* model
-* provider
-* generation configuration
-* timestamp
-
-We should not necessarily expose all metadata in the normal UI.
-
----
-
-# 48. Primary V1 Screens
-
-V1 should contain the following main product areas.
-
-## Dashboard
-
-High-level current activity and workflow status.
-
-## Ideas
-
-Use the workspace-wide Idea Library to discover and manage Ideas across all
-generation batches. Its integrated Past Runs filter exposes batch provenance
-without leaving the Library.
-
-## Content
-
-The creator's production workspace: prioritize and generate from the Production
-Queue, then view/edit generated Content in the Content Library. The Content
-surface supports a narrow optional filter by source Idea.
-
-## Publishing Queue
-
-View accepted items awaiting external publication.
-
-## Published
-
-View registered publications and analytics.
-
-## Analytics
-
-Inspect publication performance.
+## Target creator and jobs
+
+The primary user is a solo creator making short or long video-oriented content
+in English, Persian, or mixed language. The creator needs to:
+
+- express audience, voice, goals, and constraints;
+- generate and decide among creator-specific Ideas;
+- prioritize accepted Ideas for production;
+- create, edit, approve, and record structured Content;
+- attach managed production media deliberately; and
+- later connect publication and analytics to source Content.
+
+V1 prioritizes creator control, traceability, and dependable production over
+autonomous publishing, generic collaboration, and media discovery.
+
+## Workspace and languages
+
+A user works in one personal Workspace in V1. Workspace records are private to
+their authorized member; V1 does not provide team administration, public
+creator records, or shared multi-workspace collaboration.
+
+The product supports English (`en`, LTR) and Persian (`fa`, RTL). UI locale and
+creator-content language are separate. Changing UI locale never translates,
+rewrites, or reverses creator content. All product surfaces work in both
+locales, preserve logical direction, and support mixed Persian/Latin content.
+
+## Current creator workflow
+
+1. Enter the authenticated Workspace.
+2. Create or update Content DNA until it is AI-ready.
+3. Generate Ideas, then save, accept, or reject them in the Workspace Library.
+4. Prioritize eligible accepted Ideas in the Production Queue.
+5. Generate Content from an accepted Idea and edit its structured Draft.
+6. Accept a meaningful Draft as an immutable Version; continue editing if needed.
+7. Read the current accepted Version in Teleprompter / Recording Mode.
+
+Publishing, Social Connections, and Analytics are future capabilities and are
+not current workflow steps.
 
 ## Content DNA
 
-Configure persistent AI context.
+Content DNA is the creator's versioned context for generation: audience,
+subject, voice, goals, constraints, and language context.
 
-## Connections
+- A Workspace has one current Content DNA and retains historical versions.
+- A creator can save incomplete but valid DNA. AI readiness is derived from its
+  current data rather than manually selected as a product lifecycle state.
+- Generation retains the exact DNA version it used; later DNA changes do not
+  rewrite prior Ideas or Content provenance.
+- Historical DNA is readable but not an editable substitute for current DNA.
 
-Connect supported social accounts used for analytics.
+## Ideas and Idea Library
 
-## Settings
+Generating Ideas creates exactly 20 creator-specific Ideas from current
+AI-ready Content DNA in the requested supported language. A generation batch is
+provenance, not a separate primary product surface.
 
-Manage application preferences including language.
+Each Idea has title, description, optional category, language, decision state,
+and generation provenance. Canonical states are:
 
----
+| State | Meaning |
+| --- | --- |
+| `NEW` | Generated and not yet decided. |
+| `SAVED` | Kept for later consideration. |
+| `ACCEPTED` | Selected as eligible production input. |
+| `REJECTED` | Retained historical feedback; an optional reason may be kept. |
 
-# 49. V1 Success Criteria
+`USED` is derived from linked Content; it is not a persisted decision state.
 
-V1 is successful when a creator can complete this complete workflow without developer intervention:
+The Workspace-wide Idea Library is the primary Ideas experience. It combines
+decision-state views with `All runs` or an owned historical-run filter. Its
+default is `New + All runs`. It does not add tags, folders, collections, custom
+states, bulk decision workflows, or a second batch-history product.
 
-1. Create an account.
-2. Configure Content DNA.
-3. Generate 20 ideas.
-4. Review Ideas in the workspace-wide Library without opening individual
-   generation batches.
-5. Accept, save, and reject Ideas.
-6. Accept an Idea so it becomes planned production work.
-7. Prioritize the Idea in the Content Production Queue.
-8. Generate Content from the queue.
-9. Edit the generated content.
-10. Add supported Performance Directions and Edit Directions.
-11. Save the content as Draft.
-12. Accept a specific content version.
-13. See the item enter the publishing queue.
-14. Publish the content manually on a supported external platform.
-15. Add the external published URL to Better Content.
-16. Connect the relevant social account if required.
-17. Register the external publication.
-18. Automatically retrieve available analytics.
-19. See updated analytics over time.
-20. Trace the publication back to its exact content version.
-21. Trace the content back to its originating Idea.
-22. Trace the Idea back to its generation batch and Content DNA version.
+## Production Queue
 
-If this complete loop works reliably, the V1 architecture has proven the central product thesis.
+The Production Queue belongs to the Content product and is not an Idea state. An
+Idea appears only when it is `ACCEPTED` and has no linked Content. Creators can
+prioritize queued Ideas; new eligible Ideas append after current queued work.
 
----
+Generating or otherwise linking Content removes an Idea from the derived queue.
+Creators do not separately complete, archive, or remove a queue entry. The
+Content product also provides a Generated Content Library and narrow source-Idea
+filtering. One Idea may deliberately lead to more than one Content item.
 
-# 50. V1 Non-Goals
+## AI Content generation
 
-The following are explicitly outside initial V1 unless later approved.
+Content generation starts only from an accepted Idea and eligible creator
+context. The creator chooses short-video or long-video format and may provide
+instructions, while the product retains authority over supported language,
+format, and document shape.
 
-## Automatic Social Publishing
+One successful current generation creates one traceable Content item with:
 
-No direct publishing from Better Content to:
+- ordered Script blocks;
+- contextually useful Performance Directions;
+- contextually useful Edit Directions; and
+- B-roll search queries only where a B-roll cue is useful.
 
-* Instagram
-* TikTok
-* YouTube
-* LinkedIn
-* X
-* Facebook
+Invalid or failed generation creates no partial Content. The creator receives
+safe feedback and may use supported retry or Generate Another behavior. AI
+output remains a Draft for creator review, not publication-ready output.
 
-## Automatic AI Learning
+## Structured Content and directions
 
-No automatic changes to:
+Content has one mutable working Draft. The current product document is
+`ContentDocumentV4`: ordered stable paragraph Script blocks with owned,
+block-local Production Directions. Creators can write, split, merge, reorder,
+add, and remove blocks while retaining directions that describe those blocks.
 
-* Content DNA
-* Skills
-* memories
-* prompts
+The editor is Script-first and reports save, failure, and conflict states. A
+conflict preserves unsaved work and offers intentional recovery; it never
+silently overwrites another edit. Historical V1, V2, and V3 artifacts remain
+readable without being rewritten.
 
-based purely on analytics.
+Performance Directions are `PAUSE`, `EMPHASIS`, `DELIVERY`, `GESTURE`,
+`POSITION`, `GAZE`, and `PERFORMANCE_NOTE`.
 
-## Full Video Editor
+Edit Directions are `TEXT_OVERLAY`, `ZOOM`, `CUT`, `BROLL_CUE`, `SOUND_CUE`,
+`CAPTION_EMPHASIS`, and `EDIT_NOTE`.
 
-Better Content is not attempting to replace:
+The product does not add range anchors, timeline tracks, generic direction
+types, or a second direction-generation operation.
 
-* CapCut
-* Premiere Pro
-* DaVinci Resolve
+## B-roll search queries and Asset attachment
 
-Production Directions describe performance and editing intent; they do not perform full video editing.
+A B-roll cue has a human-facing description and may have `searchQuery`. The
+fields are distinct; editing one never silently changes the other. A query is
+canonical Content data and participates in Draft editing, acceptance, and
+Version history.
 
-## Complex Team Collaboration
+For AI-generated B-roll, the description follows requested Content language and
+the query is a concise English search phrase. A query is not a URL, provider
+result identity, or media location. Creators may edit or remove it. Copying it
+is presentation-only and does not save Content or create a Version.
 
-No:
+Creators can attach eligible managed Assets: B-roll uses image/video and sound
+cues use audio. AI never creates an Asset attachment or selects media.
 
-* approval chains
-* complex workspace roles
-* editor assignments
-* internal discussions
-* enterprise permissions
+Automatic Media Discovery is deferred. The product does not search media
+providers, show results, import media automatically, track licensing
+provenance, or attach media from a query.
 
-## Advanced Experimentation
+## Acceptance and Version history
 
-No built-in A/B testing in initial V1.
+Accepting the current persisted Draft creates an immutable approved Version. The
+current accepted Version is the artifact future recording and publishing use.
+Creators may continue editing Draft without changing that Version.
 
-## Full Asset Management
+Version History is read-only and distinguishes generated, migration-preserved,
+and creator-accepted artifacts. V1 does not restore, edit, delete, branch,
+diff, or manually snapshot history. The product derives whether a Draft is
+accepted or has unaccepted changes, and prevents unsafe acceptance.
 
-No advanced DAM/media library system.
+## Teleprompter / Recording Mode
 
-## Campaign Management
+Teleprompter is implemented. It reads the current immutable accepted Version,
+never mutable Draft, and presents Script blocks plus Performance Directions as a
+read-only prompting surface.
 
-No advanced multi-post campaign orchestration.
+It supports accessible auto-scroll, playback/restart, speed and text size,
+progress, hint visibility, mirror, fullscreen where available, Wake Lock where
+available, keyboard access, and English/Persian use. Edit Directions are not
+spoken Script content.
 
----
+It creates no `RecordingSession` and persists no recording, playback, scroll,
+mirror, speed, text-size, or countdown state.
 
-# 51. Preferred Technology Stack
+## Assets
 
-The approved preferred stack is:
+Assets are reusable Workspace-owned managed media for production. The product
+supports image, video, and audio from direct upload or controlled external HTTPS
+ingestion.
 
-* Next.js
-* TypeScript
-* PostgreSQL
-* Drizzle ORM
-* shadcn/ui
-* Better Auth
+Assets visibly progress through `PENDING`, `PROCESSING`, `READY`, `FAILED`, and
+`DELETING`. Only ready media can be attached, previewed, or downloaded. The
+Workspace Asset Library lets creators find and manage available media.
 
-Significant stack changes require a documented architectural reason and an ADR.
+Assets referenced by a Draft or immutable Version are protected from unsafe
+deletion. V1 Assets are not a general document store: folders, tags, public
+permanent URLs, transformation, deduplication, quotas, AI-generated media, and
+automatic discovery are excluded.
 
----
+## Future Publishing
 
-# 52. Architecture Direction
+Publishing is a future V1 capability. It will connect an immutable accepted
+Content Version to a creator's external publication workflow while preserving
+the distinction between a publication plan and an actual external publication.
 
-V1 should use a:
+Direct automatic publishing is not current product behavior. Future work must
+resolve publication intent, platform capability, and connection experience
+without changing historical Content or accepted Versions.
 
-**Modular monolith**
+## Future Social Connections and Analytics
 
-rather than microservices.
+Social Connections are future work, separate from Better Content sign-in. They
+may authorize supported external accounts for future publication context or
+analytics.
 
-The default architecture should favor:
+Analytics are future V1 work. They will belong to external Publications rather
+than generic Content, preserve historical snapshots, and show only supported
+metrics. Initial platform, permissions, refresh behavior, and exact metrics
+remain deliberately unresolved until their future work is approved.
 
-* simple deployment
-* strong domain boundaries
-* understandable code
-* PostgreSQL transactions
-* maintainability
-* traceability
+## V1 scope and exclusions
 
-We should not introduce additional infrastructure without a concrete requirement.
+V1 currently delivers the creator workflow through Assets and Teleprompter. It
+does not yet deliver Publishing, Social Connections, or Analytics.
 
-Do not add technologies such as:
+The following remain excluded unless a later approved decision adds them:
 
-* Redis
-* Kafka
-* Elasticsearch
-* separate backend services
-* separate analytics services
-* microservices
+- automatic social publishing or scheduling;
+- automatic learning that modifies Content DNA;
+- full video editing, timelines, rendering, or transcoding;
+- automatic media discovery, provider search, or stock-media import;
+- generic collaboration, teams, campaigns, and multi-workspace administration;
+- advanced experiments, A/B testing, and campaign planning; and
+- user-selectable AI models, provider routing, and autonomous content actions.
 
-simply because they may be useful in the future.
+## Future direction and product success
 
----
+Possible future work includes Publishing, Social Connections, Analytics,
+creator-specific performance insights, suggested DNA improvements, skills,
+creator memory, experiments, scheduling, brand profiles, reference libraries,
+collaboration, campaigns, and advanced production timelines. These are not
+current requirements and do not authorize implementation work.
 
-# 53. Background Processing
-
-Some V1 features will require work that should not happen inside a normal browser request.
-
-Examples include:
-
-* analytics synchronization
-* token refresh
-* potentially long AI generation operations
-* retrying external platform requests
-* media ingestion and inspection
-
-V1 uses the accepted PostgreSQL-backed job architecture. A dedicated
-server-side runner executes durable work outside normal user-facing HTTP request
-lifetimes. The runner remains part of the modular monolith; V1 does not add
-Redis, a message broker, or a second backend.
-
----
-
-# 54. Security Requirements
-
-V1 must implement production-quality security fundamentals.
-
-At minimum:
-
-* server-side authentication validation
-* server-side authorization
-* workspace ownership validation
-* secure credential storage
-* protected OAuth/platform tokens
-* server-only AI provider credentials
-* input validation
-* secrets outside source control
-* careful public/private data separation
-* safe handling of uploaded and linked private media
-* SSRF-resistant direct-media ingestion
-* authorized, short-lived private media access
-* secure external integrations
-* rate limiting where necessary
-* protection against unauthorized publication/analytics access
-
----
-
-# 55. External Platform Security
-
-Social platform credentials and refresh tokens are sensitive.
-
-Better Content must:
-
-* never expose provider secrets to the browser,
-* request only necessary permissions,
-* support revoked/expired connections,
-* avoid logging credentials,
-* securely store required token material,
-* handle account disconnection cleanly.
-
-Platform integrations should use officially supported APIs wherever possible.
-
----
-
-# 56. Data Integrity
-
-Historical lineage has high product value.
-
-The database must preserve relationships such as:
-
-```text
-DNA Version
- ↓
-Generation Batch
- ↓
-Idea
- ↓
-Content
- ↓
-Content Version
- ↓
-Publication
- ↓
-Analytics Snapshot
-```
-
-Normal editing and deletion actions must not accidentally destroy this history.
-
-The production workflow must also preserve these queue invariants: membership
-is derived from `ACCEPTED` plus zero linked Content; queue order persists;
-newly queued Ideas append at the end; leaving `ACCEPTED` or creating first
-Content removes queue relevance; failed generation leaves the Idea queued;
-reordering is transactional and stale membership returns `CONFLICT`; foreign
-Idea IDs cannot enter an order; and positions remain deterministic. Content
-count and `USED` remain derived, and one successful generation cannot create
-duplicate queue semantics.
-
----
-
-# 57. Soft Deletion and Historical Records
-
-Objects with historical learning value should generally not be immediately hard-deleted.
-
-Examples:
-
-* rejected ideas
-* published content versions
-* publication records
-* analytics snapshots
-
-User-facing deletion behavior and permanent deletion/privacy requirements will be designed separately.
-
----
-
-# 58. Validation
-
-Important writes must be validated on the server.
-
-Validation includes:
-
-* ownership
-* state transitions
-* supported languages
-* allowed statuses
-* publication eligibility
-* URL/platform compatibility
-* connected account ownership
-* analytics relationship validity
-* AI generation inputs
-
-Frontend validation is useful for user experience but is not sufficient for correctness.
-
----
-
-# 59. Testing
-
-Each implementation phase must define acceptance tests.
-
-We should prioritize:
-
-* authorization tests
-* domain state-transition tests
-* data-integrity tests
-* integration tests
-* API/provider mapping tests
-* analytics synchronization tests
-* AI structured-output validation
-* critical end-to-end workflow tests
-
-The Production Queue correction additionally requires tests for derived
-membership, persistent append-at-end ordering, queue exit after state change or
-first Content, failed-generation retention, transactional reordering, stale
-`CONFLICT`, foreign-ID rejection, deterministic positions, multiple Content
-records, and derived Content/`USED` facts.
-
-The goal is confidence in important behavior, not maximizing test counts.
-
----
-
-# 60. Observability
-
-The application must provide enough observability to understand failures.
-
-We need logging for:
-
-* authentication failures
-* AI generation failures
-* publication registration failures
-* external API failures
-* token refresh failures
-* analytics synchronization failures
-* invalid state transitions
-* unexpected server errors
-
-Sensitive tokens, secrets, or private provider payloads must not be logged carelessly.
-
----
-
-# 61. Performance
-
-V1 does not need hyperscale architecture.
-
-We prioritize:
-
-1. correctness
-2. security
-3. maintainability
-4. data integrity
-5. product speed
-6. reasonable performance
-
-Optimization should follow evidence rather than speculation.
-
----
-
-# 62. Important Product Decisions
-
-The following decisions are currently established.
-
-## Decision 1 — Ideas are first-class entities
-
-Ideas are stored objects, not temporary AI text. They are primarily discovered
-through a workspace-wide Idea Library, while generation batches remain their
-provenance and history containers.
-
-## Decision 2 — Idea generation precedes content generation
-
-V1 Content generation requires an explicitly selected `ACCEPTED` Idea.
-Accepting an Idea alone does not generate Content.
-
-## Decision 3 — Generate 20 ideas by default
-
-Idea generation batches produce 20 creator-specific suggestions.
-
-## Decision 4 — Rejected ideas retain learning value
-
-Rejected Ideas remain stored and retrievable through the Library's Rejected
-view. A rejection action is not database deletion.
-
-## Decision 5 — Content DNA is versioned
-
-Historical generations retain their originating DNA version.
-
-## Decision 6 — Content remains linked to its idea
-
-The lineage must never be lost. One Idea may produce multiple Content
-aggregates, and `USED` remains derived from their existence.
-
-## Decision 7 — Production Directions are structured
-
-Better Content distinguishes:
-
-* Performance Direction
-* Edit Direction
-
-Both are structured data associated with the Script rather than merely annotations embedded in plain text.
-
-## Decision 8 — Content is versioned
-
-Initial AI output and published content must remain immutable historically.
-Content keeps one mutable Draft while meaningful snapshots are immutable
-Content Versions.
-
-## Decision 9 — Publication is a separate entity
-
-Content and publication are not the same object.
-
-## Decision 10 — Social publishing is manual in V1
-
-Better Content does not initially publish directly to external networks.
-
-## Decision 11 — Social analytics synchronization is V1
-
-Supported publication analytics should be retrieved automatically.
-
-## Decision 12 — External account authorization is allowed in V1
-
-Platform connections may be required for analytics.
-
-## Decision 13 — Analytics belong to publications
-
-Not directly to the generic content object.
-
-## Decision 14 — Analytics use historical snapshots
-
-Metric history should not be overwritten.
-
-## Decision 15 — AI learning is approval-based
-
-Performance does not directly modify creator DNA.
-
-## Decision 16 — English and Persian are foundational
-
-RTL/LTR support must exist from the beginning.
-
-## Decision 17 — Modular monolith
-
-V1 avoids unnecessary distributed architecture.
-
-## Decision 18 — Workspace-wide Idea Library
-
-The primary Ideas surface is one workspace-wide Library with `All`, `New`,
-`Saved`, `Accepted`, and `Rejected` status views plus an integrated `All runs`
-or owned-generation-run filter. The default is `New + All runs`. Generation
-batches remain separate provenance entities inside that Library experience,
-not a separate product surface, and the Library is implemented from existing
-Idea, batch, and Content relationships without a new Idea entity, persisted
-Content count, or persisted `USED` status. Idea cards are compact: accepted
-zero-Content Ideas may show **In content queue**, accepted Ideas with Content
-show a derived localized Content count/link, and full Attempt history plus the
-primary first-generation Generate action belong outside the card.
-
-## Decision 19 — Production Queue Membership and Ordering
-
-The Content product contains the Production Queue and Generated Content Library.
-Queue membership is derived as `ACCEPTED` plus zero linked Content; it is not a
-status and does not use a separate queue entity. Queue order is persisted as a
-nullable positive integer on the existing Idea aggregate, with new queued Ideas
-appended at the end and simple transactional integer reordering. Stale or
-foreign ordered-ID submissions return `CONFLICT`. This decision is recorded in
-ADR-017.
-
----
-
-# 63. Open Product Decisions
-
-The following items require explicit decisions before their implementation phases.
-
-## A. Production Direction Taxonomy
-
-The distinction between Performance Direction and Edit Direction is resolved.
-
-Before implementing the structured editor, we must define the exact V1 Performance Direction and Edit Direction types, parameters, and constraints.
-
-## B. Direction Anchoring
-
-We need to define how Performance Directions and Edit Directions attach to relevant Script content.
-
-Potential anchors may include:
-
-* an entire Script block
-* a text span
-* a word or phrase cue
-* before/after a block
-* relative timing
-
-The exact model will be approved before the structured-editor phase.
-
-## C. Initial Social Platform Implementation
-
-Automatic social analytics remains a V1 requirement.
-
-The first provider and implementation order are intentionally deferred until the Social Connections phase.
-
-At that time, current official provider APIs, permissions, app-review requirements, available metrics, test access, rate limits, and implementation complexity must be reviewed before choosing the first platform.
-
-## D. Analytics Refresh Strategy
-
-We need rules for how often publications are synchronized based on age and platform limitations.
-
-## E. AI Provider Strategy
-
-The provider-neutral application boundary is established by architecture.
-Provider/model and operating policies are selected per workflow rather than
-globally: ADR-014 as superseded in part by ADR-015 governs Phase 3 Idea
-generation, and ADR-016 governs Phase 4 Content Script generation. Future AI
-workflows or changes to an existing workflow still require deliberate
-provider/model, structured-output, retry/failure, privacy, usage/cost, and
-latency decisions before implementation.
-
-## F. Content Editor Data Structure
-
-We must finalize how Script blocks, Performance Directions, Edit Directions, timing, references, and direction anchors are represented within the structured document schema.
-
-## G. Publishing Queue UX
-
-We need to determine how users mark intent such as target platform before publishing.
-
-## H. Social Connection UX
-
-We need to define how connections, expired permissions, reconnecting, and unsupported account types are presented.
-
----
-
-# 64. Future Product Direction
-
-After the core V1 loop is reliable, Better Content may expand toward:
-
-```text
-Analytics
-   ↓
-AI Performance Analysis
-   ↓
-Creator-Specific Insights
-   ↓
-Suggested Rules
-   ↓
-Approved Skill / DNA Changes
-   ↓
-Better Idea Generation
-   ↓
-Better Content
-   ↓
-New Analytics
-   ↺
-```
-
-Likely future capabilities include:
-
-* AI performance insights
-* Content DNA learning
-* Skills
-* creator memory
-* cross-platform performance normalization
-* experiments
-* A/B testing
-* automatic publishing
-* scheduling
-* brand profiles
-* reference libraries
-* advanced asset management
-* team collaboration
-* campaign planning
-* advanced production timelines
-
-These are not automatically added to V1.
-
----
-
-# 65. Definition of V1
-
-Better Content V1 is not:
-
-> An AI writer with a social dashboard.
-
-It is:
-
-> **A traceable AI-assisted content production system that uses creator-specific DNA to generate ideas, turns selected ideas into structured content and production instructions, preserves human edits and approved versions, connects externally published posts back to their source content, automatically retrieves available social analytics, and preserves the complete data lineage required for future AI learning.**
+The product thesis is proven when a creator can build usable DNA, generate and
+decide among Ideas, turn an accepted Idea into structured editable Content,
+accept an immutable Version, attach needed managed media, and use that Version
+while recording—without losing lineage or creator control.

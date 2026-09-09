@@ -75,7 +75,7 @@ export async function validateReferencedAssets(
   for (const reference of references) {
     const asset = rows.find((row) => row.id === reference.assetId);
     const direction =
-      document.schemaVersion === 3
+      document.schemaVersion === 3 || document.schemaVersion === 4
         ? document.script.blocks
             .flatMap((block) => block.editDirections)
             .find((candidate) => candidate.id === reference.directionId)
