@@ -4,13 +4,28 @@ import { createLogEntry, type LogContext, type LogEntry, type LogLevel } from ".
 
 export type { LogContext };
 
-function formatDevelopmentLog(entry: LogEntry): string {
+const ansi = {
+  reset: "\u001b[0m",
+  bold: "\u001b[1m",
+  dim: "\u001b[2m",
+  red: "\u001b[31m",
+  yellow: "\u001b[33m",
+  green: "\u001b[32m",
+  cyan: "\u001b[36m",
+  white: "\u001b[37m",
+} as const;
+
+function colorize(value: string, color: string): string {
+  return `${color}${value}${ansi.reset}`;
+}
+
+export function formatDevelopmentLog(entry: LogEntry, now = new Date()): string {
   const time = new Intl.DateTimeFormat("en-GB", {
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
     hour12: false,
-  }).format(new Date());
+  }).format(now);
   const fields = [
     "operation",
     "stage",
@@ -25,10 +40,17 @@ function formatDevelopmentLog(entry: LogEntry): string {
     const value = entry[field];
     return value === undefined
       ? []
-      : [`${field === "safeErrorMessage" ? "error" : field}=${JSON.stringify(value)}`];
+      : [
+          `  ${colorize(field === "safeErrorMessage" ? "error" : field, ansi.cyan)}: ${String(value)}`,
+        ];
   });
 
-  return [time, entry.level.toUpperCase(), entry.event, ...renderedFields].join(" ");
+  const levelColor =
+    entry.level === "error" ? ansi.red : entry.level === "warn" ? ansi.yellow : ansi.green;
+  const title = `${colorize(time, ansi.dim)} ${colorize(entry.level.toUpperCase(), `${ansi.bold}${levelColor}`)} ${colorize(entry.event, `${ansi.bold}${ansi.white}`)}`;
+  const divider = colorize("────────────────────────────────────────────────────────", ansi.dim);
+
+  return [divider, title, ...renderedFields, divider].join("\n");
 }
 
 function writeLog(level: LogLevel, event: string, context: LogContext = {}): void {
