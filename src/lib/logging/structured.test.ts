@@ -20,4 +20,29 @@ describe("structured logging", () => {
       workspaceId: "workspace-1",
     });
   });
+
+  it("keeps approved Content-generation diagnostics while dropping unsafe details", () => {
+    const entry = createLogEntry("error", "content.generate.preflight_failed", {
+      module: "content",
+      operation: "generateContentScript",
+      stage: "create_attempt",
+      errorCode: "INTERNAL_ERROR",
+      errorName: "DatabaseConstraintViolation",
+      safeErrorMessage: "A database constraint rejected the generation preflight.",
+      prompt: "must-not-log",
+      authorization: "must-not-log",
+      databaseDetail: "must-not-log",
+    });
+
+    expect(entry).toEqual({
+      level: "error",
+      event: "content.generate.preflight_failed",
+      module: "content",
+      operation: "generateContentScript",
+      stage: "create_attempt",
+      errorCode: "INTERNAL_ERROR",
+      errorName: "DatabaseConstraintViolation",
+      safeErrorMessage: "A database constraint rejected the generation preflight.",
+    });
+  });
 });

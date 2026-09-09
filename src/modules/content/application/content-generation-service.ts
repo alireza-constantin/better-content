@@ -10,7 +10,6 @@ import { ApplicationError, type RateLimitSource } from "@/lib/errors/app-error";
 import { logger } from "@/lib/logging/server";
 import {
   createGenerateContentScriptFailure,
-  parseGenerateContentScriptResult,
   type GenerateContentScriptProvider,
   type GenerateContentScriptResult,
 } from "@/modules/ai/domain/generate-content-script";
@@ -40,6 +39,7 @@ import {
   startContentGenerationInvocation,
   completeContentGenerationInvocation,
   type ContentGenerationPair,
+  type ContentGenerationPreflightStage,
   type ContentGenerationPreflightResult,
 } from "./content-generation-repository";
 import {
@@ -182,6 +182,9 @@ function logOperation(
     errorCode?: ApplicationError["code"];
     errorCategory?: FailureCategory;
     transition?: string;
+    stage?: ContentGenerationPreflightStage;
+    errorName?: string;
+    safeErrorMessage?: string;
   }>,
 ): void {
   serviceLogger[level](event, {
@@ -194,7 +197,38 @@ function logOperation(
     ...(context.errorCode ? { errorCode: context.errorCode } : {}),
     ...(context.errorCategory ? { errorCategory: context.errorCategory } : {}),
     ...(context.transition ? { transition: context.transition } : {}),
+    ...(context.stage ? { stage: context.stage } : {}),
+    ...(context.errorName ? { errorName: context.errorName } : {}),
+    ...(context.safeErrorMessage ? { safeErrorMessage: context.safeErrorMessage } : {}),
   });
+}
+
+function safePreflightErrorDiagnostic(error: unknown): Readonly<{
+  errorName: string;
+  safeErrorMessage: string;
+}> {
+  if (error instanceof ApplicationError) {
+    return { errorName: "ApplicationError", safeErrorMessage: error.message };
+  }
+
+  if (isUniqueViolation(error)) {
+    return {
+      errorName: "DatabaseUniqueViolation",
+      safeErrorMessage: "A database uniqueness constraint rejected the generation preflight.",
+    };
+  }
+
+  if (typeof error === "object" && error !== null && "code" in error) {
+    const code = (error as { code?: unknown }).code;
+    if (code === "23514") {
+      return {
+        errorName: "DatabaseConstraintViolation",
+        safeErrorMessage: "A database constraint rejected the generation preflight.",
+      };
+    }
+  }
+
+  return { errorName: "UnexpectedError", safeErrorMessage: "An unexpected server error occurred." };
 }
 
 function isUniqueViolation(error: unknown): boolean {
@@ -260,22 +294,46 @@ export function createContentGenerationApplicationService(
     }
 
     const parsedInput = parseRequest(input);
-    await requireWorkspaceOwner(userId, parsedInput.workspaceId, database);
     const fingerprint = fingerprintContentScriptGenerationRequest(parsedInput);
     let preflight: ContentGenerationPreflightResult;
+    let preflightStage: ContentGenerationPreflightStage = "authorize";
 
     try {
       preflight = await database.transaction(async (transaction) =>
-        reserveContentGenerationOperation(transaction, userId, parsedInput, fingerprint, clock),
+        reserveContentGenerationOperation(
+          transaction,
+          userId,
+          parsedInput,
+          fingerprint,
+          clock,
+          (stage) => {
+            preflightStage = stage;
+          },
+        ),
       );
     } catch (error) {
       if (!isUniqueViolation(error)) {
-        logOperation(serviceLogger, "warn", "content.generate.preflight_failed", {
-          userId,
-          workspaceId: parsedInput.workspaceId,
-          errorCode: error instanceof ApplicationError ? error.code : "INTERNAL_ERROR",
-        });
-        throw error;
+        const diagnostic = safePreflightErrorDiagnostic(error);
+        logOperation(
+          serviceLogger,
+          error instanceof ApplicationError ? "warn" : "error",
+          "content.generate.preflight_failed",
+          {
+            userId,
+            workspaceId: parsedInput.workspaceId,
+            errorCode: error instanceof ApplicationError ? error.code : "INTERNAL_ERROR",
+            stage: preflightStage,
+            ...diagnostic,
+          },
+        );
+        if (error instanceof ApplicationError) {
+          throw error;
+        }
+
+        throw new ApplicationError(
+          "INTERNAL_ERROR",
+          "The Content generation preflight could not be completed.",
+        );
       }
 
       preflight = await resolveUniqueRace(
@@ -593,18 +651,16 @@ export function createContentGenerationApplicationService(
         throw new Error("The Content Script provider is not configured.");
       }
 
-      providerResult = parseGenerateContentScriptResult(
-        await provider.generateContentScript({
-          generationKind: "CONTENT_SCRIPT_GENERATION",
-          sourceIdea: acceptedInputs.sourceIdea,
-          contentDna: acceptedInputs.contentDna,
-          requestedLanguage: runningPair.attempt.requestedLanguage,
-          format: runningPair.attempt.format,
-          ...(runningPair.attempt.instructions === null
-            ? {}
-            : { instructions: runningPair.attempt.instructions }),
-        }),
-      );
+      providerResult = await provider.generateContentScript({
+        generationKind: "CONTENT_SCRIPT_GENERATION",
+        sourceIdea: acceptedInputs.sourceIdea,
+        contentDna: acceptedInputs.contentDna,
+        requestedLanguage: runningPair.attempt.requestedLanguage,
+        format: runningPair.attempt.format,
+        ...(runningPair.attempt.instructions === null
+          ? {}
+          : { instructions: runningPair.attempt.instructions }),
+      });
     } catch {
       providerResult = createGenerateContentScriptFailure("UNKNOWN");
     }

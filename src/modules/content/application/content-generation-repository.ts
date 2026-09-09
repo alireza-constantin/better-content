@@ -88,6 +88,16 @@ export type ContentGenerationPreflightResult =
     }>
   | Readonly<{ kind: "rate-limited" }>;
 
+export const contentGenerationPreflightStages = [
+  "authorize",
+  "load_existing_attempt",
+  "load_idea",
+  "load_dna_version",
+  "prepare_generation_context",
+  "create_attempt",
+] as const;
+export type ContentGenerationPreflightStage = (typeof contentGenerationPreflightStages)[number];
+
 function validationError(message: string): ApplicationError {
   return new ApplicationError("VALIDATION_ERROR", message);
 }
@@ -405,10 +415,13 @@ export async function reserveContentGenerationOperation(
   input: CanonicalContentScriptGenerationRequest,
   fingerprint: string,
   clock: () => Date,
+  onStage?: (stage: ContentGenerationPreflightStage) => void,
 ): Promise<ContentGenerationPreflightResult> {
+  onStage?.("authorize");
   await lockContentGenerationWorkspace(database, input.workspaceId);
   await requireWorkspaceOwner(userId, input.workspaceId, database);
 
+  onStage?.("load_existing_attempt");
   const existing = await findContentGenerationPairByIdempotencyKey(
     database,
     input.workspaceId,
@@ -426,10 +439,13 @@ export async function reserveContentGenerationOperation(
     return { kind: "replay", pair: existing };
   }
 
+  onStage?.("load_idea");
   const sourceIdea = await resolveAcceptedSourceIdea(database, input);
+  onStage?.("load_dna_version");
   const currentContentDna = await resolveCurrentContentDna(database, input);
   const acceptedAt = clock();
 
+  onStage?.("prepare_generation_context");
   await recoverStalePendingContentGenerationAttemptsInTransaction(
     database,
     input.workspaceId,
@@ -454,6 +470,7 @@ export async function reserveContentGenerationOperation(
     return { kind: "rate-limited" };
   }
 
+  onStage?.("create_attempt");
   const attemptId = randomUUID();
   const runId = randomUUID();
   const [run] = await database

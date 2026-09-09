@@ -250,7 +250,7 @@ async function seedInvokedContentReservation(
       kind: "CONTENT_SCRIPT_GENERATION",
       provider: "avalai",
       model: "gpt-5.6-luna",
-      promptVersion: "content-script-generation/v1",
+      promptVersion: "content-script-generation/v2",
       generationSettings: contentScriptGenerationSettings,
       status: "RUNNING",
       createdAt: invokedAt,
@@ -342,7 +342,7 @@ describe("content generation acceptance", () => {
       kind: "CONTENT_SCRIPT_GENERATION",
       provider: "avalai",
       model: "gpt-5.6-luna",
-      promptVersion: "content-script-generation/v1",
+      promptVersion: "content-script-generation/v2",
       status: "PENDING",
       outputSnapshot: null,
       usage: null,
@@ -375,6 +375,70 @@ describe("content generation acceptance", () => {
 
     expect(await countRows(schema.contentGenerationAttempts)).toBe(0);
     expect(await countRows(schema.workspaceContentGenerationQuotaReservations)).toBe(0);
+  });
+
+  it("logs an expected preflight denial with its safe stage and retains its stable code", async () => {
+    const context = await createContext();
+    const serviceLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    await database
+      .update(schema.ideas)
+      .set({ status: "SAVED" })
+      .where(eq(schema.ideas.id, context.idea.id));
+    const service = createContentGenerationApplicationService({
+      database,
+      getAuthenticatedUserId: async () => context.user.id,
+      logger: serviceLogger,
+    });
+
+    await expect(service.acceptContentGeneration(request(context))).rejects.toMatchObject({
+      code: "VALIDATION_ERROR",
+    });
+
+    expect(serviceLogger.warn).toHaveBeenCalledWith("content.generate.preflight_failed", {
+      userId: context.user.id,
+      workspaceId: context.workspace.id,
+      module: "content",
+      operation: "generateContentScript",
+      stage: "load_idea",
+      errorCode: "VALIDATION_ERROR",
+      errorName: "ApplicationError",
+      safeErrorMessage: "Only an accepted Idea can generate Content.",
+    });
+    expect(serviceLogger.error).not.toHaveBeenCalled();
+  });
+
+  it("maps an unexpected preflight exception to INTERNAL_ERROR and logs only a safe cause", async () => {
+    const context = await createContext();
+    const serviceLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const failingDatabase = Object.assign(Object.create(database), {
+      transaction: async () => {
+        throw Object.assign(new Error("INSERT leaked creator instruction"), { code: "23514" });
+      },
+    }) as typeof database;
+    const service = createContentGenerationApplicationService({
+      database: failingDatabase,
+      getAuthenticatedUserId: async () => context.user.id,
+      logger: serviceLogger,
+    });
+
+    await expect(
+      service.acceptContentGeneration(request(context, { instructions: "creator instruction" })),
+    ).rejects.toMatchObject({ code: "INTERNAL_ERROR" });
+
+    expect(serviceLogger.error).toHaveBeenCalledWith("content.generate.preflight_failed", {
+      userId: context.user.id,
+      workspaceId: context.workspace.id,
+      module: "content",
+      operation: "generateContentScript",
+      stage: "authorize",
+      errorCode: "INTERNAL_ERROR",
+      errorName: "DatabaseConstraintViolation",
+      safeErrorMessage: "A database constraint rejected the generation preflight.",
+    });
+    expect(JSON.stringify(serviceLogger.error.mock.calls)).not.toContain("creator instruction");
+    expect(JSON.stringify(serviceLogger.error.mock.calls)).not.toContain(
+      "INSERT leaked creator instruction",
+    );
   });
 
   it("replays before mutable validation and conflicts on a different canonical request", async () => {
@@ -821,7 +885,7 @@ describe("content generation execution", () => {
       contentId: result.contentId,
       revision: 1,
       document: {
-        schemaVersion: 3,
+        schemaVersion: 4,
         script: {
           blocks: [
             {
@@ -846,19 +910,12 @@ describe("content generation execution", () => {
     });
     expect(run).toMatchObject({
       status: "COMPLETED",
-      outputSnapshot: {
-        schemaVersion: 1,
-        script: { text: "Deterministic English short-video script." },
-      },
+      outputSnapshot: expect.objectContaining({ schemaVersion: 4 }),
       usage: { inputTokens: 12, outputTokens: 34, totalTokens: 46 },
       providerRequestCorrelation: "avalai-content-request-1",
     });
-    expect(version?.document).toEqual({
-      schemaVersion: 1,
-      script: { text: "Deterministic English short-video script." },
-    });
+    expect(version?.document).toEqual(draft?.document);
     expect(run?.outputSnapshot).toEqual(version?.document);
-    expect(version?.document).not.toEqual(draft?.document);
     expect(await countRows(schema.contentVersions)).toBe(1);
     expect(attempt?.status).toBe("COMPLETED");
     const [sourceIdea] = await database
@@ -1207,7 +1264,16 @@ describe("content generation execution", () => {
     );
     const generated = createGenerateContentScriptSuccess({
       schemaVersion: 1,
-      script: { text: "A canonical script." },
+      script: {
+        blocks: [
+          {
+            type: "paragraph",
+            text: "A canonical script.",
+            performanceDirections: [],
+            editDirections: [],
+          },
+        ],
+      },
     });
 
     if (!generated.ok) {

@@ -89,17 +89,44 @@ describe("GenerateContentScriptProvider contract", () => {
     }
   });
 
-  it("canonicalizes valid success output and retains only safe neutral metadata", () => {
+  it("retains only canonical V4 success output and safe neutral metadata", () => {
     expect(
       parseGenerateContentScriptResult({
         ok: true,
-        output: { schemaVersion: 1, script: { text: "  First\r\nSecond  " } },
+        output: {
+          schemaVersion: 1,
+          script: {
+            blocks: [
+              {
+                type: "paragraph",
+                text: "First Second",
+                performanceDirections: [],
+                editDirections: [],
+              },
+            ],
+          },
+        },
         usage: { inputTokens: 1, outputTokens: 2, totalTokens: 3 },
         providerRequestCorrelation: "request-123",
       }),
-    ).toEqual({
+    ).toMatchObject({
       ok: true,
-      output: { schemaVersion: 1, script: { text: "First\nSecond" } },
+      output: {
+        schemaVersion: 4,
+        script: {
+          blocks: [
+            {
+              id: expect.stringMatching(
+                /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+              ),
+              type: "paragraph",
+              text: "First Second",
+              performanceDirections: [],
+              editDirections: [],
+            },
+          ],
+        },
+      },
       usage: { inputTokens: 1, outputTokens: 2, totalTokens: 3 },
       providerRequestCorrelation: "request-123",
     });
@@ -119,13 +146,32 @@ describe("FakeGenerateContentScriptProvider", () => {
       const second = new FakeGenerateContentScriptProvider();
       const input = request({ requestedLanguage, format });
 
-      await expect(first.generateContentScript(input)).resolves.toEqual({
+      const result = await first.generateContentScript(input);
+      expect(result).toMatchObject({
         ok: true,
-        output: { schemaVersion: 1, script: { text } },
+        output: {
+          schemaVersion: 4,
+          script: {
+            blocks: [
+              {
+                type: "paragraph",
+                text,
+                performanceDirections: [],
+                editDirections: [],
+              },
+            ],
+          },
+        },
       });
-      await expect(second.generateContentScript(input)).resolves.toEqual(
-        await first.generateContentScript(input),
-      );
+      if (result.ok && result.output.schemaVersion === 4) {
+        expect(result.output.script.blocks[0]?.id).toMatch(
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+        );
+      }
+      await expect(second.generateContentScript(input)).resolves.toMatchObject({
+        ok: true,
+        output: { schemaVersion: 4 },
+      });
     },
   );
 

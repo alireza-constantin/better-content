@@ -152,11 +152,40 @@ describe("development database readiness", () => {
         };
       }
 
-      return { rows: [{ count: 1 }] };
+      return { rows: [{ count: 19 }] };
     });
 
     const result = await checkDatabaseReadiness(developmentEnvironment, clientFactory(query));
 
     expect(result).toMatchObject({ ok: true, code: "READY" });
+  });
+
+  it("reports pending reviewed migrations before development starts", async () => {
+    const query = vi.fn(async (statement: string) => {
+      if (statement.includes("current_database")) {
+        return { rows: [{ current_database: "better_content" }] };
+      }
+
+      if (statement.includes("information_schema")) {
+        return {
+          rows: [
+            { table_schema: "public", table_name: "account" },
+            { table_schema: "public", table_name: "session" },
+            { table_schema: "public", table_name: "user" },
+            { table_schema: "public", table_name: "verification" },
+            { table_schema: "public", table_name: "workspaces" },
+            { table_schema: "public", table_name: "workspace_members" },
+            { table_schema: "drizzle", table_name: "__drizzle_migrations" },
+          ],
+        };
+      }
+
+      return { rows: [{ count: 18 }] };
+    });
+
+    const result = await checkDatabaseReadiness(developmentEnvironment, clientFactory(query));
+
+    expect(result).toMatchObject({ code: "MIGRATIONS_PENDING" });
+    expect(result.message).toContain("npm run db:migrate");
   });
 });

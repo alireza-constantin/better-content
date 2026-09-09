@@ -69,7 +69,16 @@ function createDefaultOutput(request: GenerateContentScriptRequest): unknown {
 
   return {
     schemaVersion: 1,
-    script: { text: textByLanguageAndFormat[request.requestedLanguage][request.format] },
+    script: {
+      blocks: [
+        {
+          type: "paragraph",
+          text: textByLanguageAndFormat[request.requestedLanguage][request.format],
+          performanceDirections: [],
+          editDirections: [],
+        },
+      ],
+    },
   };
 }
 

@@ -1,3 +1,6 @@
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+
 import { Client } from "pg";
 
 const requiredApplicationTables = [
@@ -29,6 +32,7 @@ export type DatabaseCheckCode =
   | "DATABASE_NOT_FOUND"
   | "DATABASE_IDENTITY_MISMATCH"
   | "SCHEMA_MISSING"
+  | "MIGRATIONS_PENDING"
   | "DATABASE_ERROR";
 
 export type DatabaseCheckResult =
@@ -224,6 +228,17 @@ function schemaFailure(
   );
 }
 
+async function expectedMigrationCount(): Promise<number> {
+  const journalPath = fileURLToPath(new URL("../../drizzle/meta/_journal.json", import.meta.url));
+  const journal = JSON.parse(await readFile(journalPath, "utf8")) as { entries?: unknown };
+
+  if (!Array.isArray(journal.entries) || journal.entries.length === 0) {
+    throw new Error("The Drizzle migration journal is invalid.");
+  }
+
+  return journal.entries.length;
+}
+
 export async function checkDatabaseReadiness(
   environment: Readonly<Record<string, string | undefined>> = process.env,
   clientFactory: DatabaseClientFactory = createDatabaseClient,
@@ -283,13 +298,25 @@ export async function checkDatabaseReadiness(
       return schemaFailure(missingTables, !hasMigrationTable);
     }
 
-    const migrationResult = await client.query(
-      'SELECT count(*)::int AS count FROM "drizzle"."__drizzle_migrations"',
-    );
+    const [migrationResult, requiredMigrationCount] = await Promise.all([
+      client.query('SELECT count(*)::int AS count FROM "drizzle"."__drizzle_migrations"'),
+      expectedMigrationCount(),
+    ]);
     const migrationCount = Number(migrationResult.rows[0]?.count ?? 0);
 
     if (!Number.isFinite(migrationCount) || migrationCount < 1) {
       return schemaFailure([], true);
+    }
+
+    if (migrationCount < requiredMigrationCount) {
+      return failure(
+        "MIGRATIONS_PENDING",
+        "Better Content database migrations are pending (" +
+          migrationCount +
+          "/" +
+          requiredMigrationCount +
+          "). Run npm run db:migrate and retry.",
+      );
     }
 
     return {

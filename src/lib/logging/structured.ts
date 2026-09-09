@@ -8,7 +8,10 @@ const logContextKeys = [
   "aiRunId",
   "module",
   "operation",
+  "stage",
   "errorCode",
+  "errorName",
+  "safeErrorMessage",
   "transition",
   "errorCategory",
   "durationMs",
@@ -22,7 +25,10 @@ export type LogContext = Readonly<{
   aiRunId?: string;
   module?: string;
   operation?: string;
+  stage?: string;
   errorCode?: ApplicationErrorCode;
+  errorName?: string;
+  safeErrorMessage?: string;
   transition?: string;
   errorCategory?: string;
   durationMs?: number;
