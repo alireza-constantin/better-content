@@ -38,6 +38,11 @@ import {
   type AvalAITransportResponse,
 } from "./index";
 import type { GenerateContentScriptRequest } from "@/modules/ai/domain/generate-content-script";
+import {
+  editDirectionTypes,
+  performanceDirectionTypes,
+  productionDirectionValues,
+} from "@/modules/content/domain/content-script-contracts";
 
 const environment = {
   AVALAI_API_KEY: "avalai-test-only",
@@ -71,7 +76,19 @@ const request: GenerateContentScriptRequest = {
   instructions: "Open with a concrete example.",
 };
 
-function validProviderOutput(text = "A clear, useful Script.") {
+type ProviderOutputFixture = {
+  schemaVersion: 1;
+  script: {
+    blocks: Array<{
+      type: string;
+      text: string;
+      performanceDirections: Array<Record<string, unknown>>;
+      editDirections: Array<Record<string, unknown>>;
+    }>;
+  };
+};
+
+function validProviderOutput(text = "A clear, useful Script."): ProviderOutputFixture {
   return {
     schemaVersion: 1,
     script: {
@@ -112,6 +129,37 @@ function createClient(result: unknown): {
 
 function requestBody(create: ReturnType<typeof vi.fn>): Record<string, unknown> {
   return create.mock.calls[0]?.[0] as Record<string, unknown>;
+}
+
+function record(value: unknown): Record<string, unknown> {
+  return value as Record<string, unknown>;
+}
+
+function directionVariants(schema: unknown): Array<Record<string, unknown>> {
+  const candidate = record(schema);
+  const nested = candidate.anyOf;
+
+  if (Array.isArray(nested)) {
+    return nested.flatMap((item) => directionVariants(item));
+  }
+
+  return [candidate];
+}
+
+function arraySchemas(schema: unknown): Array<Record<string, unknown>> {
+  if (!schema || typeof schema !== "object" || Array.isArray(schema)) {
+    return [];
+  }
+
+  const candidate = schema as Record<string, unknown>;
+  const current = candidate.type === "array" ? [candidate] : [];
+  const nested = [
+    ...(candidate.items ? [candidate.items] : []),
+    ...(Array.isArray(candidate.anyOf) ? candidate.anyOf : []),
+    ...Object.values(candidate.properties ?? {}),
+  ];
+
+  return current.concat(nested.flatMap((item) => arraySchemas(item)));
 }
 
 describe("AvalAI Content Script adapter", () => {
@@ -249,6 +297,8 @@ describe("AvalAI Content Script adapter", () => {
     const input = body.input as Array<Record<string, unknown>>;
     const content = input[0]?.content as Array<Record<string, unknown>>;
     const inputText = content.map((item) => item.text).join("\n");
+    const schema = record(record(record(body.text).format).schema);
+    expect(arraySchemas(schema).every((arraySchema) => arraySchema.items !== undefined)).toBe(true);
 
     expect(instructions).toContain(`prompt policy ${AVALAI_CONTENT_SCRIPT_PROMPT_VERSION}`);
     expect(instructions).toContain(`requested content language: ${language}`);
@@ -313,6 +363,213 @@ describe("AvalAI Content Script adapter", () => {
           ),
         }),
       ]),
+    );
+  });
+
+  it("defines complete strict schemas for every V4 Production Direction variant", async () => {
+    const { client, create } = createClient(response());
+    const provider = createAvalAIGenerateContentScriptProvider({
+      userId: "user-123",
+      environment,
+      client,
+    });
+
+    await provider.generateContentScript(request);
+
+    const body = requestBody(create);
+    const text = record(body.text);
+    const format = record(text.format);
+    const schema = record(format.schema);
+    const script = record(record(schema.properties).script);
+    const block = record(record(script.properties).blocks);
+    const blockItem = record(block.items);
+    const performanceDirections = record(record(blockItem.properties).performanceDirections);
+    const editDirections = record(record(blockItem.properties).editDirections);
+    const performanceVariants = directionVariants(performanceDirections.items);
+    const editVariants = directionVariants(editDirections.items);
+
+    expect(performanceDirections.items).toBeDefined();
+    expect(editDirections.items).toBeDefined();
+    expect(performanceDirections.maxItems).toBe(12);
+    expect(editDirections.maxItems).toBe(12);
+    expect(block).toMatchObject({ minItems: 1, maxItems: 1000 });
+    expect(
+      performanceVariants.map((variant) => record(record(variant.properties).type).enum),
+    ).toEqual(performanceDirectionTypes.map((type) => [type]));
+    expect(editVariants.map((variant) => record(record(variant.properties).type).enum)).toEqual(
+      editDirectionTypes.map((type) => [type]),
+    );
+    for (const variant of [...performanceVariants, ...editVariants]) {
+      expect(variant.additionalProperties).toBe(false);
+    }
+
+    const brollVariant = editVariants.find((variant) => {
+      const typeSchema = record(record(variant.properties).type);
+      return Array.isArray(typeSchema.enum) && typeSchema.enum[0] === "BROLL_CUE";
+    });
+    expect(record(brollVariant?.properties)).toEqual(
+      expect.objectContaining({ description: expect.anything(), searchQuery: expect.anything() }),
+    );
+    expect(record(brollVariant?.properties).searchQuery).toMatchObject({ maxLength: 200 });
+    const variantByType = new Map(
+      [...performanceVariants, ...editVariants].map((variant) => {
+        const typeSchema = record(record(variant.properties).type);
+        return [Array.isArray(typeSchema.enum) ? typeSchema.enum[0] : undefined, variant] as const;
+      }),
+    );
+    expect(record(record(variantByType.get("PAUSE")?.properties).duration).enum).toEqual([
+      ...productionDirectionValues.duration,
+    ]);
+    expect(record(record(variantByType.get("EMPHASIS")?.properties).strength).enum).toEqual([
+      ...productionDirectionValues.strength,
+    ]);
+    expect(record(record(variantByType.get("DELIVERY")?.properties).tone).enum).toEqual([
+      ...productionDirectionValues.tone,
+    ]);
+    expect(record(record(variantByType.get("DELIVERY")?.properties).pace).enum).toEqual([
+      ...productionDirectionValues.pace,
+    ]);
+    expect(record(record(variantByType.get("GESTURE")?.properties).kind).enum).toEqual([
+      ...productionDirectionValues.gesture,
+    ]);
+    expect(record(record(variantByType.get("POSITION")?.properties).action).enum).toEqual([
+      ...productionDirectionValues.position,
+    ]);
+    expect(record(record(variantByType.get("GAZE")?.properties).target).enum).toEqual([
+      ...productionDirectionValues.gaze,
+    ]);
+    expect(record(record(variantByType.get("TEXT_OVERLAY")?.properties).placement).enum).toEqual([
+      ...productionDirectionValues.placement,
+    ]);
+    expect(record(record(variantByType.get("ZOOM")?.properties).intensity).enum).toEqual([
+      ...productionDirectionValues.zoomIntensity,
+    ]);
+    expect(record(record(variantByType.get("ZOOM")?.properties).mode).enum).toEqual([
+      ...productionDirectionValues.zoomMode,
+    ]);
+    expect(record(record(variantByType.get("CUT")?.properties).style).enum).toEqual([
+      ...productionDirectionValues.cut,
+    ]);
+    expect(record(record(variantByType.get("SOUND_CUE")?.properties).kind).enum).toEqual([
+      ...productionDirectionValues.soundKind,
+    ]);
+    expect(record(record(variantByType.get("CAPTION_EMPHASIS")?.properties).style).enum).toEqual([
+      ...productionDirectionValues.caption,
+    ]);
+    expect(arraySchemas(schema).every((arraySchema) => arraySchema.items !== undefined)).toBe(true);
+    expect(JSON.stringify(schema)).not.toContain('"assetId"');
+    expect(JSON.stringify(schema)).not.toContain('"id"');
+  });
+
+  it("normalizes only approved nullable optional direction fields before V4 parsing", async () => {
+    const output = validProviderOutput();
+    output.script.blocks[0] = {
+      type: "paragraph",
+      text: "A clear, useful Script.",
+      performanceDirections: [{ type: "DELIVERY", tone: null, pace: "slower", nuance: null }],
+      editDirections: [{ type: "TEXT_OVERLAY", text: "A title", placement: "top", nuance: null }],
+    };
+    const { client } = createClient(response({ output_text: JSON.stringify(output) }));
+    const provider = createAvalAIGenerateContentScriptProvider({
+      userId: "user-123",
+      environment,
+      client,
+    });
+
+    const result = await provider.generateContentScript(request);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    if (!("blocks" in result.output.script)) throw new Error("Expected canonical V4 output.");
+    const [block] = result.output.script.blocks;
+    expect(block?.performanceDirections[0]).toMatchObject({
+      type: "DELIVERY",
+      pace: "slower",
+    });
+    expect(block?.performanceDirections[0]).not.toHaveProperty("tone");
+    expect(block?.performanceDirections[0]).not.toHaveProperty("nuance");
+    expect(block?.editDirections[0]).not.toHaveProperty("nuance");
+
+    const invalidOutput = validProviderOutput();
+    invalidOutput.script.blocks[0] = {
+      type: "paragraph",
+      text: "A clear, useful Script.",
+      performanceDirections: [],
+      editDirections: [{ type: "BROLL_CUE", description: "Show a phone", searchQuery: null }],
+    };
+    const invalidClient = createClient(
+      response({ output_text: JSON.stringify(invalidOutput) }),
+    ).client;
+    const invalidProvider = createAvalAIGenerateContentScriptProvider({
+      userId: "user-123",
+      environment,
+      client: invalidClient,
+    });
+
+    await expect(invalidProvider.generateContentScript(request)).resolves.toEqual({
+      ok: false,
+      errorCategory: "INVALID_OUTPUT",
+    });
+  });
+
+  it("keeps the canonical V4 document-wide direction limit authoritative", async () => {
+    const output = {
+      schemaVersion: 1,
+      script: {
+        blocks: Array.from({ length: 26 }, () => ({
+          type: "paragraph",
+          text: "A clear, useful Script.",
+          performanceDirections: Array.from({ length: 12 }, () => ({
+            type: "PAUSE",
+            duration: "short",
+          })),
+          editDirections: [],
+        })),
+      },
+    };
+    const { client } = createClient(response({ output_text: JSON.stringify(output) }));
+    const provider = createAvalAIGenerateContentScriptProvider({
+      userId: "user-123",
+      environment,
+      client,
+    });
+
+    await expect(provider.generateContentScript(request)).resolves.toEqual({
+      ok: false,
+      errorCategory: "INVALID_OUTPUT",
+    });
+  });
+
+  it("reports only safe provider failure diagnostics", async () => {
+    const providerFailure = Object.assign(new Error("secret provider refusal body"), {
+      name: "BadRequestError",
+      status: 422,
+      headers: {
+        get: (name: string) => (name === "avalai-request-id" ? "avalai-request-422" : null),
+      },
+    });
+    const { client } = createClient(Promise.reject(providerFailure));
+    const onProviderFailure = vi.fn();
+    const provider = createAvalAIGenerateContentScriptProvider({
+      userId: "user-123",
+      environment,
+      client,
+      onProviderFailure,
+    });
+
+    await expect(provider.generateContentScript(request)).resolves.toEqual({
+      ok: false,
+      errorCategory: "UNKNOWN",
+    });
+    expect(onProviderFailure).toHaveBeenCalledOnce();
+    expect(onProviderFailure).toHaveBeenCalledWith({
+      errorCategory: "UNKNOWN",
+      httpStatus: 422,
+      providerErrorName: "BadRequestError",
+      providerRequestCorrelation: "avalai-request-422",
+    });
+    expect(JSON.stringify(onProviderFailure.mock.calls[0])).not.toContain(
+      "secret provider refusal body",
     );
   });
 

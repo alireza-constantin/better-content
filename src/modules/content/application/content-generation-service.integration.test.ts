@@ -1001,6 +1001,52 @@ describe("content generation execution", () => {
     },
   );
 
+  it("logs safe provider diagnostics at the terminating failure boundary", async () => {
+    const context = await createContext();
+    const serviceLogger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const provider = {
+      generateContentScript: vi.fn(async () => ({
+        ok: false as const,
+        errorCategory: "UNKNOWN" as const,
+      })),
+    };
+    const service = createContentGenerationApplicationService({
+      database,
+      getAuthenticatedUserId: async () => context.user.id,
+      logger: serviceLogger,
+      providerFactory: (_userId, onProviderFailure) => {
+        onProviderFailure?.({
+          errorCategory: "UNKNOWN",
+          httpStatus: 422,
+          providerErrorName: "BadRequestError",
+          providerRequestCorrelation: "avalai-request-422",
+        });
+        return provider;
+      },
+    });
+
+    await expect(service.generateContentScript(request(context))).rejects.toMatchObject({
+      code: "PROVIDER_ERROR",
+    });
+    expect(serviceLogger.error).toHaveBeenCalledWith(
+      "content.generate.failed",
+      expect.objectContaining({
+        operation: "generateContentScript",
+        stage: "invoke_provider",
+        errorCategory: "UNKNOWN",
+        httpStatus: 422,
+        providerErrorName: "BadRequestError",
+        providerRequestCorrelation: "avalai-request-422",
+        transition: "RUNNING->FAILED",
+      }),
+    );
+    expect(serviceLogger.warn).not.toHaveBeenCalledWith(
+      "content.generate.failed",
+      expect.anything(),
+    );
+    expect(JSON.stringify(serviceLogger.error.mock.calls)).not.toContain("provider refusal body");
+  });
+
   it("maps a defensively invalid oversized result to INVALID_OUTPUT without truncation", async () => {
     const context = await createContext();
     const fake = new FakeGenerateContentScriptProvider({

@@ -21,7 +21,11 @@ import {
   type ContentScriptFormat,
   type GenerationLanguage,
 } from "../domain/content-script-contracts";
-import type { FailureCategory, GenerationLifecycle } from "@/modules/ai/domain/ai-contracts";
+import type {
+  FailureCategory,
+  GenerationLifecycle,
+  ProviderFailureDiagnostic,
+} from "@/modules/ai/domain/ai-contracts";
 import { requireWorkspaceOwner } from "@/modules/workspace/application";
 
 import {
@@ -84,6 +88,7 @@ export type ContentGenerationApplicationServiceDependencies = Readonly<{
   getAuthenticatedUserId?: () => Promise<string | null>;
   providerFactory?: (
     userId: string,
+    onProviderFailure?: (diagnostic: ProviderFailureDiagnostic) => void,
   ) => GenerateContentScriptProvider | Promise<GenerateContentScriptProvider>;
   clock?: () => Date;
   logger?: Pick<typeof logger, "info" | "warn" | "error">;
@@ -182,9 +187,12 @@ function logOperation(
     errorCode?: ApplicationError["code"];
     errorCategory?: FailureCategory;
     transition?: string;
-    stage?: ContentGenerationPreflightStage;
+    stage?: string;
     errorName?: string;
     safeErrorMessage?: string;
+    httpStatus?: number;
+    providerErrorName?: string;
+    providerRequestCorrelation?: string;
   }>,
 ): void {
   serviceLogger[level](event, {
@@ -200,6 +208,11 @@ function logOperation(
     ...(context.stage ? { stage: context.stage } : {}),
     ...(context.errorName ? { errorName: context.errorName } : {}),
     ...(context.safeErrorMessage ? { safeErrorMessage: context.safeErrorMessage } : {}),
+    ...(context.httpStatus === undefined ? {} : { httpStatus: context.httpStatus }),
+    ...(context.providerErrorName ? { providerErrorName: context.providerErrorName } : {}),
+    ...(context.providerRequestCorrelation
+      ? { providerRequestCorrelation: context.providerRequestCorrelation }
+      : {}),
   });
 }
 
@@ -640,17 +653,23 @@ export function createContentGenerationApplicationService(
     const runningPair = invocation.pair;
 
     let providerResult: GenerateContentScriptResult;
+    let providerFailureDiagnostic: ProviderFailureDiagnostic | undefined;
+    let providerStage = "load_inputs";
 
     try {
       const acceptedInputs = await loadAcceptedContentGenerationInputs(database, runningPair);
+      providerStage = "create_provider";
       const provider = dependencies.providerFactory
-        ? await dependencies.providerFactory(userId)
+        ? await dependencies.providerFactory(userId, (diagnostic) => {
+            providerFailureDiagnostic = diagnostic;
+          })
         : undefined;
 
       if (!provider) {
         throw new Error("The Content Script provider is not configured.");
       }
 
+      providerStage = "invoke_provider";
       providerResult = await provider.generateContentScript({
         generationKind: "CONTENT_SCRIPT_GENERATION",
         sourceIdea: acceptedInputs.sourceIdea,
@@ -682,15 +701,31 @@ export function createContentGenerationApplicationService(
         getFailureCategory(failedPair),
         "provider",
       );
-      logOperation(serviceLogger, "warn", "content.generate.failed", {
-        userId,
-        workspaceId: parsedInput.workspaceId,
-        attemptId: failedPair.attempt.id,
-        aiRunId: failedPair.run.id,
-        errorCode: applicationError.code,
-        errorCategory: getFailureCategory(failedPair),
-        transition: "RUNNING->FAILED",
-      });
+      const failureCategory = getFailureCategory(failedPair);
+      logOperation(
+        serviceLogger,
+        failureCategory === "UNKNOWN" ? "error" : "warn",
+        "content.generate.failed",
+        {
+          userId,
+          workspaceId: parsedInput.workspaceId,
+          attemptId: failedPair.attempt.id,
+          aiRunId: failedPair.run.id,
+          errorCode: applicationError.code,
+          errorCategory: failureCategory,
+          transition: "RUNNING->FAILED",
+          stage: providerStage,
+          ...(providerFailureDiagnostic?.httpStatus === undefined
+            ? {}
+            : { httpStatus: providerFailureDiagnostic.httpStatus }),
+          ...(providerFailureDiagnostic?.providerErrorName
+            ? { providerErrorName: providerFailureDiagnostic.providerErrorName }
+            : {}),
+          ...(providerFailureDiagnostic?.providerRequestCorrelation
+            ? { providerRequestCorrelation: providerFailureDiagnostic.providerRequestCorrelation }
+            : {}),
+        },
+      );
       throw applicationError;
     }
 

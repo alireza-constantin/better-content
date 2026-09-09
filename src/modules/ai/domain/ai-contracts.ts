@@ -89,6 +89,17 @@ export type GenerationSettings = z.infer<typeof generationSettingsSchema>;
 export const safeProviderRequestCorrelationSchema = z.string().min(1);
 export type SafeProviderRequestCorrelation = z.infer<typeof safeProviderRequestCorrelationSchema>;
 
+/** Safe provider failure metadata retained for server-side diagnostics only. */
+export const providerFailureDiagnosticSchema = z
+  .object({
+    errorCategory: failureCategorySchema,
+    httpStatus: z.number().int().min(100).max(599).optional(),
+    providerErrorName: z.string().trim().min(1).max(80).optional(),
+    providerRequestCorrelation: safeProviderRequestCorrelationSchema.optional(),
+  })
+  .strict();
+export type ProviderFailureDiagnostic = z.infer<typeof providerFailureDiagnosticSchema>;
+
 export function parseGenerationLifecycle(input: unknown): GenerationLifecycle {
   return generationLifecycleSchema.parse(input);
 }

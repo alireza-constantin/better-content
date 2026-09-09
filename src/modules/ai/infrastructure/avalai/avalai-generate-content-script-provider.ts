@@ -4,7 +4,17 @@ import OpenAI from "openai";
 
 import { getAvalAIEnvironment } from "@/lib/env/server";
 import type { AvalAIEnvironment } from "@/lib/env/schema";
-import type { GenerationSettings, ProviderNeutralUsage } from "@/modules/ai/domain/ai-contracts";
+import type {
+  GenerationSettings,
+  ProviderFailureDiagnostic,
+  ProviderNeutralUsage,
+} from "@/modules/ai/domain/ai-contracts";
+import {
+  editDirectionTypes,
+  performanceDirectionTypes,
+  productionDirectionLimits,
+  productionDirectionValues,
+} from "@/modules/content/domain/content-script-contracts";
 import {
   createGenerateContentScriptFailure,
   createGenerateContentScriptSuccess,
@@ -18,6 +28,7 @@ import {
   AVALAI_MODEL,
   createAvalAIResponsesClient,
   createSafetyIdentifier,
+  extractAvalAIRequestId,
   type AvalAIResponsesClient,
   type AvalAITransportResponse,
 } from "./avalai-generate-ideas-provider";
@@ -35,6 +46,129 @@ export const avalAIContentScriptGenerationSettings: GenerationSettings = {
   serviceTier: "default",
 };
 
+type ProviderJsonSchema = Record<string, unknown>;
+
+const stringEnum = (values: readonly string[]): ProviderJsonSchema => ({
+  type: "string",
+  enum: [...values],
+});
+
+const nullableString = (maxLength: number): ProviderJsonSchema => ({
+  type: ["string", "null"],
+  maxLength,
+});
+
+const strictObject = (
+  properties: Record<string, ProviderJsonSchema>,
+  required = Object.keys(properties),
+): ProviderJsonSchema => ({
+  type: "object",
+  properties,
+  required,
+  additionalProperties: false,
+});
+
+const directionType = (type: string): ProviderJsonSchema => stringEnum([type]);
+const performanceDirectionType = (type: (typeof performanceDirectionTypes)[number]) =>
+  directionType(type);
+const editDirectionType = (type: (typeof editDirectionTypes)[number]) => directionType(type);
+
+const performanceDirectionItems: ProviderJsonSchema = {
+  anyOf: [
+    strictObject({
+      type: performanceDirectionType("PAUSE"),
+      duration: stringEnum(productionDirectionValues.duration),
+      nuance: nullableString(productionDirectionLimits.nuance),
+    }),
+    strictObject({
+      type: performanceDirectionType("EMPHASIS"),
+      strength: stringEnum(productionDirectionValues.strength),
+      nuance: nullableString(productionDirectionLimits.nuance),
+    }),
+    strictObject({
+      type: performanceDirectionType("DELIVERY"),
+      tone: {
+        ...stringEnum(productionDirectionValues.tone),
+        type: ["string", "null"],
+      },
+      pace: {
+        ...stringEnum(productionDirectionValues.pace),
+        type: ["string", "null"],
+      },
+      nuance: nullableString(productionDirectionLimits.nuance),
+    }),
+    strictObject({
+      type: performanceDirectionType("GESTURE"),
+      kind: stringEnum(productionDirectionValues.gesture),
+      nuance: nullableString(productionDirectionLimits.nuance),
+    }),
+    strictObject({
+      type: performanceDirectionType("POSITION"),
+      action: stringEnum(productionDirectionValues.position),
+      nuance: nullableString(productionDirectionLimits.nuance),
+    }),
+    strictObject({
+      type: performanceDirectionType("GAZE"),
+      target: stringEnum(productionDirectionValues.gaze),
+      nuance: nullableString(productionDirectionLimits.nuance),
+    }),
+    strictObject({
+      type: performanceDirectionType("PERFORMANCE_NOTE"),
+      text: { type: "string", maxLength: productionDirectionLimits.note },
+    }),
+  ],
+};
+
+const editDirectionItems: ProviderJsonSchema = {
+  anyOf: [
+    strictObject({
+      type: editDirectionType("TEXT_OVERLAY"),
+      text: { type: "string", maxLength: productionDirectionLimits.overlay },
+      placement: stringEnum(productionDirectionValues.placement),
+      nuance: nullableString(productionDirectionLimits.nuance),
+    }),
+    strictObject({
+      type: editDirectionType("ZOOM"),
+      mode: stringEnum(productionDirectionValues.zoomMode),
+      intensity: stringEnum(productionDirectionValues.zoomIntensity),
+      nuance: nullableString(productionDirectionLimits.nuance),
+    }),
+    strictObject({
+      type: editDirectionType("CUT"),
+      style: stringEnum(productionDirectionValues.cut),
+      nuance: nullableString(productionDirectionLimits.nuance),
+    }),
+    strictObject({
+      type: editDirectionType("BROLL_CUE"),
+      description: {
+        type: "string",
+        minLength: 1,
+        maxLength: productionDirectionLimits.note,
+      },
+      searchQuery: {
+        type: "string",
+        minLength: 1,
+        maxLength: productionDirectionLimits.searchQuery,
+      },
+    }),
+    strictObject({
+      type: editDirectionType("SOUND_CUE"),
+      kind: stringEnum(productionDirectionValues.soundKind),
+      description: { type: "string", maxLength: productionDirectionLimits.soundCue },
+      nuance: nullableString(productionDirectionLimits.nuance),
+    }),
+    strictObject({
+      type: editDirectionType("CAPTION_EMPHASIS"),
+      style: stringEnum(productionDirectionValues.caption),
+      nuance: nullableString(productionDirectionLimits.nuance),
+    }),
+    strictObject({
+      type: editDirectionType("EDIT_NOTE"),
+      text: { type: "string", maxLength: productionDirectionLimits.note },
+    }),
+  ],
+};
+
 const contentScriptProviderSchema = {
   type: "object",
   properties: {
@@ -44,16 +178,23 @@ const contentScriptProviderSchema = {
       properties: {
         blocks: {
           type: "array",
+          minItems: 1,
+          maxItems: 1000,
           items: {
-            type: "object",
-            properties: {
-              type: { type: "string", enum: ["paragraph"] },
-              text: { type: "string" },
-              performanceDirections: { type: "array" },
-              editDirections: { type: "array" },
-            },
-            required: ["type", "text", "performanceDirections", "editDirections"],
-            additionalProperties: false,
+            ...strictObject({
+              type: directionType("paragraph"),
+              text: { type: "string", minLength: 1, maxLength: 50_000 },
+              performanceDirections: {
+                type: "array",
+                maxItems: productionDirectionLimits.perBlockCategory,
+                items: performanceDirectionItems,
+              },
+              editDirections: {
+                type: "array",
+                maxItems: productionDirectionLimits.perBlockCategory,
+                items: editDirectionItems,
+              },
+            }),
           },
         },
       },
@@ -259,7 +400,87 @@ function parseCompletedResponse(
 
   const usage = mapUsage(response);
 
-  return createGenerateContentScriptSuccess(output, usage, providerRequestCorrelation);
+  return createGenerateContentScriptSuccess(
+    normalizeKnownNullableDirectionFields(output),
+    usage,
+    providerRequestCorrelation,
+  );
+}
+
+const nullablePerformanceFieldsByType: Readonly<Record<string, readonly string[] | undefined>> = {
+  PAUSE: ["nuance"],
+  EMPHASIS: ["nuance"],
+  DELIVERY: ["tone", "pace", "nuance"],
+  GESTURE: ["nuance"],
+  POSITION: ["nuance"],
+  GAZE: ["nuance"],
+};
+
+const nullableEditFieldsByType: Readonly<Record<string, readonly string[] | undefined>> = {
+  TEXT_OVERLAY: ["nuance"],
+  ZOOM: ["nuance"],
+  CUT: ["nuance"],
+  SOUND_CUE: ["nuance"],
+  CAPTION_EMPHASIS: ["nuance"],
+};
+
+function omitKnownNullableFields(
+  value: unknown,
+  fieldsByType: Readonly<Record<string, readonly string[] | undefined>>,
+): unknown {
+  if (!isRecord(value) || typeof value.type !== "string") {
+    return value;
+  }
+
+  const fields = fieldsByType[value.type];
+  if (!fields) {
+    return value;
+  }
+
+  const normalized = { ...value };
+  for (const field of fields) {
+    if (normalized[field] === null) {
+      delete normalized[field];
+    }
+  }
+
+  return normalized;
+}
+
+function normalizeKnownNullableDirectionFields(input: unknown): unknown {
+  if (!isRecord(input) || !isRecord(input.script) || !Array.isArray(input.script.blocks)) {
+    return input;
+  }
+
+  return {
+    ...input,
+    script: {
+      ...input.script,
+      blocks: input.script.blocks.map((block) => {
+        if (!isRecord(block)) {
+          return block;
+        }
+
+        return {
+          ...block,
+          ...(Array.isArray(block.performanceDirections)
+            ? {
+                performanceDirections: block.performanceDirections.map((direction) =>
+                  omitKnownNullableFields(direction, nullablePerformanceFieldsByType),
+                ),
+              }
+            : {}),
+          ...(Array.isArray(block.editDirections)
+            ? {
+                editDirections: block.editDirections.map((direction) =>
+                  omitKnownNullableFields(direction, nullableEditFieldsByType),
+                ),
+              }
+            : {}),
+        };
+      }),
+    },
+  };
 }
 
 function getErrorStatus(error: unknown): number | undefined {
@@ -281,6 +502,37 @@ function getErrorName(error: unknown): string | undefined {
 
   try {
     return typeof error.name === "string" ? error.name : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function normalizeProviderErrorName(error: unknown): string | undefined {
+  const name = getErrorName(error)?.trim();
+  if (!name) {
+    return undefined;
+  }
+
+  return name.replace(/[^a-zA-Z0-9_.-]/g, "_").slice(0, 80) || undefined;
+}
+
+function getProviderRequestCorrelation(error: unknown): string | undefined {
+  if (!isRecord(error) || !isRecord(error.headers)) {
+    return undefined;
+  }
+
+  const get = error.headers.get;
+  if (typeof get !== "function") {
+    return undefined;
+  }
+
+  try {
+    return extractAvalAIRequestId({
+      get: (name) => {
+        const value = get.call(error.headers, name);
+        return typeof value === "string" ? value : null;
+      },
+    });
   } catch {
     return undefined;
   }
@@ -313,18 +565,39 @@ function mapAvalAIError(error: unknown): Parameters<typeof createGenerateContent
   return "UNKNOWN";
 }
 
+function getProviderFailureDiagnostic(error: unknown): ProviderFailureDiagnostic {
+  const errorCategory = mapAvalAIError(error);
+  const status = getErrorStatus(error);
+  const httpStatus =
+    status !== undefined && Number.isInteger(status) && status >= 100 && status <= 599
+      ? status
+      : undefined;
+  const providerErrorName = normalizeProviderErrorName(error);
+  const providerRequestCorrelation = getProviderRequestCorrelation(error);
+
+  return {
+    errorCategory,
+    ...(httpStatus === undefined ? {} : { httpStatus }),
+    ...(providerErrorName === undefined ? {} : { providerErrorName }),
+    ...(providerRequestCorrelation === undefined ? {} : { providerRequestCorrelation }),
+  };
+}
+
 export type AvalAIGenerateContentScriptProviderOptions = Readonly<{
   userId: string;
   client?: AvalAIResponsesClient;
   environment?: AvalAIEnvironment;
   /** Adapter-local observability; it receives only the safe canonical ID. */
   onProviderRequestId?: (providerRequestId: string) => void;
+  /** Adapter-local observability; it receives only safe failure metadata. */
+  onProviderFailure?: (diagnostic: ProviderFailureDiagnostic) => void;
 }>;
 
 export class AvalAIGenerateContentScriptProvider implements GenerateContentScriptProvider {
   private readonly client: AvalAIResponsesClient;
   private readonly safetyIdentifier: string;
   private readonly onProviderRequestId: ((providerRequestId: string) => void) | undefined;
+  private readonly onProviderFailure: ((diagnostic: ProviderFailureDiagnostic) => void) | undefined;
 
   constructor(options: AvalAIGenerateContentScriptProviderOptions) {
     const environment = options.environment ?? getAvalAIEnvironment();
@@ -335,6 +608,7 @@ export class AvalAIGenerateContentScriptProvider implements GenerateContentScrip
       environment.AI_SAFETY_IDENTIFIER_SECRET,
     );
     this.onProviderRequestId = options.onProviderRequestId;
+    this.onProviderFailure = options.onProviderFailure;
   }
 
   async generateContentScript(
@@ -365,7 +639,13 @@ export class AvalAIGenerateContentScriptProvider implements GenerateContentScrip
         providerRequestCorrelation,
       );
     } catch (error) {
-      return createGenerateContentScriptFailure(mapAvalAIError(error));
+      const diagnostic = getProviderFailureDiagnostic(error);
+      try {
+        this.onProviderFailure?.(diagnostic);
+      } catch {
+        // Observability must never change the provider result.
+      }
+      return createGenerateContentScriptFailure(diagnostic.errorCategory);
     }
   }
 }

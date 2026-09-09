@@ -3,6 +3,7 @@ import "server-only";
 import { cookies } from "next/headers";
 
 import { createAvalAIGenerateContentScriptProvider } from "@/modules/ai/infrastructure/avalai";
+import type { ProviderFailureDiagnostic } from "@/modules/ai/domain/ai-contracts";
 import {
   createFakeGenerateContentScriptProvider,
   fakeGenerateContentScriptScenarios,
@@ -27,7 +28,10 @@ function getE2eContentProviderScenario(
     : "success";
 }
 
-async function createContentGenerationProvider(userId: string) {
+async function createContentGenerationProvider(
+  userId: string,
+  onProviderFailure?: (diagnostic: ProviderFailureDiagnostic) => void,
+) {
   if (process.env.BETTER_CONTENT_E2E === "1") {
     const cookieStore = await cookies();
 
@@ -39,7 +43,7 @@ async function createContentGenerationProvider(userId: string) {
     });
   }
 
-  return createAvalAIGenerateContentScriptProvider({ userId });
+  return createAvalAIGenerateContentScriptProvider({ userId, onProviderFailure });
 }
 
 const contentGenerationApplicationService = createContentGenerationApplicationService({

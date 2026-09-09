@@ -14,6 +14,9 @@ const logContextKeys = [
   "safeErrorMessage",
   "transition",
   "errorCategory",
+  "httpStatus",
+  "providerErrorName",
+  "providerRequestCorrelation",
   "durationMs",
 ] as const;
 
@@ -31,6 +34,9 @@ export type LogContext = Readonly<{
   safeErrorMessage?: string;
   transition?: string;
   errorCategory?: string;
+  httpStatus?: number;
+  providerErrorName?: string;
+  providerRequestCorrelation?: string;
   durationMs?: number;
 }>;
 
